@@ -464,9 +464,9 @@ public partial class MainWindow : Window
                 if (group.Messages.Count == 1)
                 {
                     // Single-message conversation: open the message directly.
-                    var msg = group.Messages[0];
-                    _vm.SelectedMessage = msg;
-                    await _vm.SelectMessageCommand.ExecuteAsync(msg);
+                    var singleMsg = group.Messages[0];
+                    _vm.SelectedMessage = singleMsg;
+                    await _vm.SelectMessageCommand.ExecuteAsync(singleMsg);
                     if (_vm.IsMessageOpen && _vm.MessageDetail != null)
                         await ShowMessageBodyAsync(_vm.MessageDetail);
                 }
