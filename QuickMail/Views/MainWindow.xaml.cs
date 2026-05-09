@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -488,9 +489,46 @@ public partial class MainWindow : Window
             }
             else if (ConversationTree.SelectedItem is ConversationGroup group)
             {
+                var targetIdx = _vm.Conversations.IndexOf(group);
                 await _vm.DeleteMessagesAsync(group.Messages);
+                LandOnConversationAfterRebuild(targetIdx);
             }
         }
+    }
+
+    // After an async conversation rebuild, selects and focuses the conversation
+    // at the given index (clamped to the new list size).
+    private void LandOnConversationAfterRebuild(int targetIdx)
+    {
+        void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(_vm.Conversations)) return;
+            _vm.PropertyChanged -= OnPropertyChanged;
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_vm.Conversations.Count == 0) return;
+                var idx = Math.Max(0, Math.Min(targetIdx, _vm.Conversations.Count - 1));
+                var conv = _vm.Conversations[idx];
+                if (ConversationTree.ItemContainerGenerator.ContainerFromItem(conv) is TreeViewItem tvi)
+                {
+                    tvi.IsSelected = true;
+                    tvi.Focus();
+                }
+                else
+                {
+                    // Container not yet realized — retry at a lower priority.
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (ConversationTree.ItemContainerGenerator.ContainerFromItem(conv) is TreeViewItem tvi2)
+                        {
+                            tvi2.IsSelected = true;
+                            tvi2.Focus();
+                        }
+                    }, DispatcherPriority.Background);
+                }
+            }, DispatcherPriority.Input);
+        }
+        _vm.PropertyChanged += OnPropertyChanged;
     }
 
     private void OpenComposeWindow(ComposeModel composeModel)
