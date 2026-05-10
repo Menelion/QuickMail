@@ -10,6 +10,7 @@ public partial class ComposeWindow : Window
     {
         InitializeComponent();
         DataContext = vm;
+        Loaded += (_, _) => ToBox.Focus();
     }
 
     // Alt+U → Subject field; Alt+M → From combo.

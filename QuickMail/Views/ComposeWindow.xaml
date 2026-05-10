@@ -74,6 +74,7 @@
                        x:Name="ToLabel" Text="_To:"
                        VerticalAlignment="Center" Margin="0,4"/>
             <TextBox Grid.Row="1" Grid.Column="1"
+                     x:Name="ToBox"
                      Text="{Binding To, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.LabeledBy="{Binding ElementName=ToLabel}"
                      AutomationProperties.HelpText="Separate multiple addresses with semicolons"
