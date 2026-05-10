@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using QuickMail.ViewModels;
@@ -10,6 +11,11 @@ public partial class ComposeWindow : Window
     {
         InitializeComponent();
         DataContext = vm;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.StatusText) && !string.IsNullOrEmpty(vm.StatusText))
+                AccessibilityHelper.Announce(this, vm.StatusText);
+        };
         Loaded += (_, _) => ToBox.Focus();
     }
 

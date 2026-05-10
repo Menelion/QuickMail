@@ -93,7 +93,6 @@
         <!-- Status text -->
         <TextBlock Grid.Row="1"
                    Text="{Binding StatusText}"
-                   AutomationProperties.LiveSetting="Polite"
                    AutomationProperties.Name="Add account status"
                    Foreground="DarkBlue"
                    Margin="0,8,0,4"

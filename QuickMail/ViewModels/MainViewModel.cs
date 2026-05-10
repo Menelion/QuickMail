@@ -729,13 +729,12 @@ public partial class MainViewModel : ObservableObject
     public event Action<ComposeModel>? ComposeRequested;
     public event Action? ManageAccountsRequested;
     public event Action? MessageListFocusRequested;
-
-    [ObservableProperty] private string _announcementText = string.Empty;
+    public event EventHandler<string>? AnnouncementRequested;
 
     private void Announce(string text)
     {
-        AnnouncementText = string.Empty;
-        AnnouncementText = text;
+        if (!string.IsNullOrEmpty(text))
+            AnnouncementRequested?.Invoke(this, text);
     }
 
     [RelayCommand]

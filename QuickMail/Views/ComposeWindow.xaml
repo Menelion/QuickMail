@@ -35,7 +35,6 @@
                     TabIndex="7"/>
             <TextBlock VerticalAlignment="Center"
                        Text="{Binding StatusText}"
-                       AutomationProperties.LiveSetting="Assertive"
                        AutomationProperties.Name="Send status"
                        Foreground="DarkRed"/>
         </DockPanel>

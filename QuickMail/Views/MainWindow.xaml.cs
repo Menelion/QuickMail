@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         vm.ComposeRequested += OpenComposeWindow;
         vm.ManageAccountsRequested += OpenAccountManager;
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
+        vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
 
         // Re-focus the active message panel whenever the Messages collection is replaced
         // (happens after Refresh, Load More, and folder changes).

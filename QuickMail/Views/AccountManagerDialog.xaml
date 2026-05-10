@@ -146,7 +146,6 @@
                     MinWidth="80"/>
             <TextBlock VerticalAlignment="Center"
                        Text="{Binding StatusText}"
-                       AutomationProperties.LiveSetting="Polite"
                        AutomationProperties.Name="Account manager status"
                        Foreground="DarkBlue"/>
         </DockPanel>
