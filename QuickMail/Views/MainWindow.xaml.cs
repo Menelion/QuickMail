@@ -76,7 +76,7 @@ public partial class MainWindow : Window
         // (happens after Refresh, Load More, and folder changes).
         vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.Messages) && IsActive)
+            if (e.PropertyName is nameof(MainViewModel.Messages) or nameof(MainViewModel.Conversations) && IsActive)
                 Dispatcher.InvokeAsync(FocusActiveMessagePanel, DispatcherPriority.Input);
         };
 
@@ -137,7 +137,7 @@ public partial class MainWindow : Window
 
         // Show local cache immediately so the UI is never blank on startup.
         await _vm.InitialLoadAsync();
-        FocusMessageListFirstItem();
+        FocusActiveMessagePanel();
 
         // Connect accounts and sync new mail in the background; messages trickle in via FolderSynced.
         _ = _vm.StartBackgroundSyncAsync();

@@ -258,6 +258,7 @@
                               BorderThickness="0"
                               TabIndex="3"
                               KeyboardNavigation.TabNavigation="Once"
+                              KeyboardNavigation.DirectionalNavigation="Contained"
                               GotKeyboardFocus="List_GotKeyboardFocus"
                               PreviewKeyDown="MessageList_PreviewKeyDown"
                               MouseLeftButtonUp="MessageList_MouseLeftButtonUp">
@@ -333,6 +334,7 @@
                               BorderThickness="0"
                               TabIndex="3"
                               KeyboardNavigation.TabNavigation="Once"
+                              KeyboardNavigation.DirectionalNavigation="Contained"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ScrollViewer.CanContentScroll="True"
