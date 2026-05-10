@@ -144,17 +144,38 @@ public partial class MainViewModel : ObservableObject
         if (_cachedFolders.Count == 0) return;
 
         StatusText = "Syncing mail…";
+        using var announceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var announceTask = AnnounceLoadingProgressAsync(announceCts.Token);
         try
         {
             await _syncService.SyncAllAccountsAsync(Accounts, _cachedFolders, ct);
-            StatusText = $"{Messages.Count} messages.";
+            await announceCts.CancelAsync();
+            await announceTask;
+            var count = Messages.Count;
+            StatusText = $"{count} messages.";
+            Announce($"{count} {(count == 1 ? "message" : "messages")} loaded.");
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { await announceCts.CancelAsync(); }
         catch (Exception ex)
         {
+            await announceCts.CancelAsync();
             LogService.Log("BackgroundSync", ex);
             StatusText = $"Sync error: {ex.Message}";
         }
+    }
+
+    private async Task AnnounceLoadingProgressAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(10_000, ct);
+                var count = Messages.Count;
+                Announce($"{count} {(count == 1 ? "message" : "messages")} loaded so far.");
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     // ── FolderSynced merge ───────────────────────────────────────────────────────
@@ -694,6 +715,14 @@ public partial class MainViewModel : ObservableObject
     public event Action? ManageAccountsRequested;
     public event Action? MessageListFocusRequested;
 
+    [ObservableProperty] private string _announcementText = string.Empty;
+
+    private void Announce(string text)
+    {
+        AnnouncementText = string.Empty;
+        AnnouncementText = text;
+    }
+
     [RelayCommand]
     private async Task Reply()
     {
@@ -757,12 +786,13 @@ public partial class MainViewModel : ObservableObject
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            int totalDeleted = 0;
             foreach (var account in accountsToEmpty)
-                await _imap.EmptyTrashAsync(account.Id, cts.Token);
+                totalDeleted += await _imap.EmptyTrashAsync(account.Id, cts.Token);
 
-            StatusText = accountsToEmpty.Count == 1
-                ? "Trash emptied."
-                : $"Trash emptied for {accountsToEmpty.Count} accounts.";
+            var msg = totalDeleted == 1 ? "1 message deleted from trash." : $"{totalDeleted} messages deleted from trash.";
+            StatusText = msg;
+            Announce(msg);
         }
         catch (OperationCanceledException)
         {

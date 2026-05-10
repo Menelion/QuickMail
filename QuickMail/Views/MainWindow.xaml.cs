@@ -613,4 +613,5 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true)
             _vm.RefreshAccountList();
     }
+
 }

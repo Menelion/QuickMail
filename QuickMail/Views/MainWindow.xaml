@@ -436,6 +436,12 @@
                            AutomationProperties.LiveSetting="Polite"
                            AutomationProperties.Name="Status"/>
             </StatusBarItem>
+            <!-- Assertive live region for screen-reader announcements (visually hidden) -->
+            <StatusBarItem Opacity="0" Width="1">
+                <TextBlock Text="{Binding AnnouncementText}"
+                           AutomationProperties.LiveSetting="Assertive"
+                           AutomationProperties.Name="Announcement"/>
+            </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
                 <ProgressBar Width="80" Height="14"
                              IsIndeterminate="True"

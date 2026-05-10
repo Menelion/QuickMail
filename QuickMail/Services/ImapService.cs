@@ -297,7 +297,7 @@ public class ImapService : IImapService
         finally { await folder.CloseAsync(false, ct); }
     }
 
-    public async Task EmptyTrashAsync(Guid accountId, CancellationToken ct = default)
+    public async Task<int> EmptyTrashAsync(Guid accountId, CancellationToken ct = default)
     {
         var client = await GetOrReconnectAsync(accountId, ct);
         var trash  = FindSpecialFolder(client, SpecialFolder.Trash, SpecialFolder.Junk);
@@ -305,17 +305,18 @@ public class ImapService : IImapService
         if (trash == null)
         {
             LogService.Log($"EmptyTrash: no Trash folder found for account {accountId}");
-            return;
+            return 0;
         }
 
         await trash.OpenAsync(FolderAccess.ReadWrite, ct);
         try
         {
             var uids = await trash.SearchAsync(SearchQuery.All, ct);
-            if (uids.Count == 0) return;
+            if (uids.Count == 0) return 0;
             LogService.Log($"EmptyTrash: expunging {uids.Count} messages from {trash.FullName}");
             await trash.AddFlagsAsync(uids, MessageFlags.Deleted, true, ct);
             await trash.ExpungeAsync(ct);
+            return uids.Count;
         }
         finally { await trash.CloseAsync(false, ct); }
     }
