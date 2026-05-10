@@ -83,6 +83,16 @@ public partial class MainWindow : Window
 
         PreviewKeyDown += OnWindowKeyDown;
         Loaded += OnLoaded;
+
+        // Debug: trace every SelectionChanged on the message list so we can see
+        // when and why the selection is reset (only fires when /debug is active).
+        MessageList.SelectionChanged += (_, args) =>
+        {
+            LogService.Debug(
+                $"MessageList.SelectionChanged — added:{args.AddedItems.Count} removed:{args.RemovedItems.Count} " +
+                $"total selected:{MessageList.SelectedItems.Count} " +
+                $"focusedEl:{Keyboard.FocusedElement?.GetType().Name ?? "null"}");
+        };
     }
 
     // On startup: initialise WebView2, connect to first account, open INBOX, focus message list
@@ -336,7 +346,8 @@ public partial class MainWindow : Window
         }
     }
 
-    // Enter on a message: load body; Delete: delete all selected messages
+    // Enter on a message: load body; Delete: delete all selected messages;
+    // Shift+Up/Down: extend consecutive selection without opening the reading pane.
     private async void MessageList_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && MessageList.SelectedItem is MailMessageSummary summary)
@@ -352,9 +363,62 @@ public partial class MainWindow : Window
             var toDelete = MessageList.SelectedItems
                 .OfType<MailMessageSummary>()
                 .ToList();
+            LogService.Debug($"Delete key: SelectedItems.Count={MessageList.SelectedItems.Count} toDelete={toDelete.Count}");
             await _vm.DeleteMessagesAsync(toDelete);
             FocusMessageListFirstItem();
         }
+        else if ((e.Key == Key.Up || e.Key == Key.Down) && Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            e.Handled = true;
+            ExtendMessageSelection(e.Key == Key.Down ? 1 : -1);
+        }
+    }
+
+    // Extends (or shrinks) the MessageList selection by one step in the given direction.
+    // Shift+Down adds the next item; Shift+Up adds the previous item (or de-selects
+    // the focused item if moving back toward the anchor).
+    private void ExtendMessageSelection(int direction)
+    {
+        // Prefer the focused container's index so repeated Shift+Arrow calls chain correctly.
+        int focusedIndex = -1;
+        if (Keyboard.FocusedElement is ListViewItem focused)
+            focusedIndex = MessageList.ItemContainerGenerator.IndexFromContainer(focused);
+        if (focusedIndex < 0)
+            focusedIndex = MessageList.SelectedIndex;
+        if (focusedIndex < 0) return;
+
+        int targetIndex = Math.Max(0, Math.Min(MessageList.Items.Count - 1, focusedIndex + direction));
+        if (targetIndex == focusedIndex) return;
+
+        var targetItem = MessageList.Items[targetIndex] as MailMessageSummary;
+        if (targetItem == null) return;
+
+        LogService.Debug(
+            $"ExtendMessageSelection dir={direction} focusedIdx={focusedIndex} targetIdx={targetIndex} " +
+            $"selectedBefore={MessageList.SelectedItems.Count} targetAlreadySelected={MessageList.SelectedItems.Contains(targetItem)}");
+
+        if (MessageList.SelectedItems.Contains(targetItem))
+        {
+            // Moving back into an already-selected item: de-select the item we're leaving.
+            var leavingItem = MessageList.Items[focusedIndex] as MailMessageSummary;
+            if (leavingItem != null && MessageList.SelectedItems.Count > 1)
+                MessageList.SelectedItems.Remove(leavingItem);
+        }
+        else
+        {
+            MessageList.SelectedItems.Add(targetItem);
+        }
+
+        LogService.Debug($"ExtendMessageSelection after add/remove: selectedNow={MessageList.SelectedItems.Count}");
+
+        MessageList.ScrollIntoView(targetItem);
+        Dispatcher.InvokeAsync(() =>
+        {
+            LogService.Debug($"ExtendMessageSelection focus dispatch: selectedBeforeFocus={MessageList.SelectedItems.Count}");
+            if (MessageList.ItemContainerGenerator.ContainerFromIndex(targetIndex) is ListViewItem container)
+                container.Focus();
+            LogService.Debug($"ExtendMessageSelection after Focus(): selectedAfterFocus={MessageList.SelectedItems.Count}");
+        }, DispatcherPriority.Input);
     }
 
     // Render the message body in the browser and move focus into it

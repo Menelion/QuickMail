@@ -11,6 +11,13 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // /debug enables verbose debug logging to the log file.
+        if (e.Args.Contains("/debug", StringComparer.OrdinalIgnoreCase))
+        {
+            LogService.DebugMode = true;
+            LogService.Log("Debug mode enabled.");
+        }
+
         var accountService    = new AccountService();
         var credentialService = new CredentialService();
         var imapService       = new ImapService();

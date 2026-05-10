@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MailKit.Net.Smtp;
@@ -9,10 +10,14 @@ namespace QuickMail.Services;
 
 public class SmtpService : ISmtpService
 {
+    private static readonly string UserAgent =
+        "QuickMail/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0");
+
     public async Task SendAsync(ComposeModel compose, AccountModel account, string password, CancellationToken ct = default)
     {
         var message = new MimeMessage();
 
+        message.Headers.Add(HeaderId.UserAgent, UserAgent);
         message.From.Add(new MailboxAddress(account.DisplayName, account.Username));
         AddAddresses(message.To, compose.To);
         AddAddresses(message.Cc, compose.Cc);

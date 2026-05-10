@@ -5,12 +5,16 @@ namespace QuickMail.Services;
 
 /// <summary>
 /// Simple append-only file logger. Log is written to %AppData%\QuickMail\quickmail.log.
+/// Pass /debug on the command line to also enable Debug() calls.
 /// </summary>
 public static class LogService
 {
     private static readonly string LogFile = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "QuickMail", "quickmail.log");
+
+    /// <summary>Set to true by App.xaml.cs when /debug is on the command line.</summary>
+    public static bool DebugMode { get; set; }
 
     public static void Log(string message)
     {
@@ -24,4 +28,10 @@ public static class LogService
 
     public static void Log(string context, Exception ex) =>
         Log($"[ERROR] {context}: {ex.GetType().Name}: {ex.Message}");
+
+    /// <summary>Only writes when /debug was passed on the command line.</summary>
+    public static void Debug(string message)
+    {
+        if (DebugMode) Log($"[DEBUG] {message}");
+    }
 }
