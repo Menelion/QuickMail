@@ -97,17 +97,24 @@ public partial class MainWindow : Window
             MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
             MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // Inject Escape relay into every page at the host level — runs before any CSP.
+            // Inject Escape and F6 relay into every page at the host level — runs before any CSP.
             await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                "window.addEventListener('keydown',function(e){" +
-                "if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}});");
+                "window.addEventListener('keydown',function(e){"
+                +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
+                +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
+                +"});");
 
-            // JavaScript in every page posts a message when Escape is pressed,
-            // which we relay back to WPF to return focus to the message list.
+            // JavaScript in every page posts a message when Escape or F6 is pressed,
+            // which we relay back to WPF to move focus appropriately.
             MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
             {
-                if (args.TryGetWebMessageAsString() == "escape")
+                var msg = args.TryGetWebMessageAsString();
+                if (msg == "escape")
                     Dispatcher.InvokeAsync(ReturnFocusToMessageList, DispatcherPriority.Input);
+                else if (msg == "f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
+                else if (msg == "shift-f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
             };
         }
         catch (Exception ex)
@@ -168,6 +175,14 @@ public partial class MainWindow : Window
                         e.Handled = true;
                         break;
                 }
+                break;
+
+            case ModifierKeys.None:
+                if (e.Key == Key.F6) { e.Handled = true; await CycleFocusAsync(true); }
+                break;
+
+            case ModifierKeys.Shift:
+                if (e.Key == Key.F6) { e.Handled = true; await CycleFocusAsync(false); }
                 break;
         }
     }
@@ -411,6 +426,57 @@ public partial class MainWindow : Window
             FocusConversationTreeFirstItem();
         else
             FocusMessageListFirstItem();
+    }
+
+    // ── F6 pane-cycling helpers ──────────────────────────────────────────────
+
+    // Returns the index of the pane that currently holds keyboard focus:
+    //   0 = Toolbar, 1 = Account list, 2 = Folder list,
+    //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2).
+    // Falls back to 0 if no match (e.g. focus is on a dialog or status bar).
+    private int GetFocusedPaneIndex()
+    {
+        if (MainToolbar.IsKeyboardFocusWithin)  return 0;
+        if (AccountList.IsKeyboardFocusWithin)  return 1;
+        if (FolderList.IsKeyboardFocusWithin)   return 2;
+        if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin) return 3;
+        if (MessageBody.IsKeyboardFocusWithin)  return 4;
+        return 0;
+    }
+
+    // Moves keyboard focus to the pane at the given index.
+    private async Task FocusPaneAtAsync(int index)
+    {
+        switch (index)
+        {
+            case 0: ToolbarFirstButton.Focus(); break;
+            case 1: AccountList.Focus(); break;
+            case 2: FolderList.Focus(); break;
+            case 3: FocusActiveMessagePanel(); break;
+            case 4:
+                if (_vm.IsMessageOpen && _webViewReady)
+                {
+                    MessageBody.Focus();
+                    await MessageBody.CoreWebView2.ExecuteScriptAsync("document.body.focus()");
+                }
+                else
+                {
+                    FocusActiveMessagePanel();
+                }
+                break;
+        }
+    }
+
+    // Cycles keyboard focus forward (F6) or backward (Shift+F6) through the pane ring.
+    // The reading pane (index 4) is included only when a message is open.
+    private async Task CycleFocusAsync(bool forward)
+    {
+        int count   = (_vm.IsMessageOpen && _webViewReady) ? 5 : 4;
+        int current = Math.Min(GetFocusedPaneIndex(), count - 1);
+        int next    = forward
+            ? (current + 1) % count
+            : (current - 1 + count) % count;
+        await FocusPaneAtAsync(next);
     }
 
     // Focuses the first (or currently selected) TreeViewItem in the conversation tree.
