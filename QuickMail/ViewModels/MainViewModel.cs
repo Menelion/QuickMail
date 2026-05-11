@@ -79,7 +79,7 @@ public partial class MainViewModel : ObservableObject
     private bool _isMessageOpen;
 
     [ObservableProperty]
-    private bool _isConversationView = true;
+    private bool _isConversationView = false;
 
     [ObservableProperty]
     private ObservableCollection<ConversationGroup> _conversations = [];

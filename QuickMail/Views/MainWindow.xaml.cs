@@ -106,6 +106,15 @@ public partial class MainWindow : Window
                 $"total selected:{MessageList.SelectedItems.Count} " +
                 $"focusedEl:{Keyboard.FocusedElement?.GetType().Name ?? "null"}");
         };
+
+        // Announce the newly selected message to the screen reader whenever the selection
+        // changes via keyboard (arrow keys, etc.).  WPF ListView does not reliably fire
+        // UIA focus events on arrow-key navigation, so RaiseNotificationEvent is required.
+        MessageList.SelectionChanged += (_, _) =>
+        {
+            if (MessageList.IsKeyboardFocusWithin && MessageList.SelectedItem is MailMessageSummary msg)
+                AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(msg), interrupt: true);
+        };
     }
 
     // On startup: initialise WebView2, connect to first account, open INBOX, focus message list
@@ -591,10 +600,25 @@ public partial class MainWindow : Window
 
     // Sync the ViewModel's SelectedMessage when the user navigates to a message leaf node,
     // so Reply/Forward/Delete commands always operate on the right message.
+    // Also announces the new item to the screen reader — WPF ListView/TreeView do not
+    // reliably fire UIA focus events on arrow-key navigation, so we use RaiseNotificationEvent.
     private void ConversationTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is MailMessageSummary msg)
             _vm.SelectedMessage = msg;
+
+        if (ConversationTree.IsKeyboardFocusWithin)
+        {
+            switch (e.NewValue)
+            {
+                case MailMessageSummary m:
+                    AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(m), interrupt: true);
+                    break;
+                case ConversationGroup grp:
+                    AccessibilityHelper.Announce(this, grp.AutomationName, interrupt: true);
+                    break;
+            }
+        }
     }
 
     // Keyboard actions in the conversation tree.
@@ -647,10 +671,13 @@ public partial class MainWindow : Window
         }
     }
 
+    // Builds the screen-reader announcement string for a single message row.
+    private static string MessageSummaryAnnouncement(MailMessageSummary msg) =>
+        $"{msg.ReadStatusLabel}. {msg.From}. {msg.Subject}. {msg.DateDisplay}.";
+
     // After an async conversation rebuild, selects and focuses the conversation
     // at the given index (clamped to the new list size).
-    private void LandOnConversationAfterRebuild(int targetIdx)
-    {
+    private void LandOnConversationAfterRebuild(int targetIdx)    {
         void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != nameof(_vm.Conversations)) return;
