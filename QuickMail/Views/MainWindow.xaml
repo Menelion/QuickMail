@@ -332,7 +332,8 @@
                             <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
                                 <Setter Property="AutomationProperties.Name">
                                     <Setter.Value>
-                                        <MultiBinding StringFormat="{}{0}. {1}. {2}. {3}.">
+                                        <MultiBinding StringFormat="{}{0}. {1}. {2}. {3}. {4}.">
+                                            <Binding Path="ReadStatusLabel"/>
                                             <Binding Path="From"/>
                                             <Binding Path="Subject"/>
                                             <Binding Path="Preview"/>
@@ -365,7 +366,8 @@
                                    BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                 <Setter Property="AutomationProperties.Name">
                                     <Setter.Value>
-                                        <MultiBinding StringFormat="{}{0}. {1}. {2}. {3}.">
+                                        <MultiBinding StringFormat="{}{0}. {1}. {2}. {3}. {4}.">
+                                            <Binding Path="ReadStatusLabel"/>
                                             <Binding Path="From"/>
                                             <Binding Path="Subject"/>
                                             <Binding Path="Preview"/>

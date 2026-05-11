@@ -125,7 +125,8 @@ public partial class MainViewModel : ObservableObject
         _configService  = configService;
 
         var cfg = _configService.Load();
-        _showMessageStatus = cfg.ShowMessageStatus;
+        _showMessageStatus  = cfg.ShowMessageStatus;
+        _isConversationView = cfg.ConversationView;
 
         _syncService.FolderSynced    += OnFolderSynced;
         _syncService.MessagesRemoved += OnMessagesRemoved;
@@ -393,6 +394,10 @@ public partial class MainViewModel : ObservableObject
             ScheduleConversationRebuild();
         else
             Conversations = [];
+
+        var cfg = _configService.Load();
+        cfg.ConversationView = value;
+        _configService.Save(cfg);
     }
 
     /// <summary>Called by MVVM Toolkit whenever the Messages property is replaced.</summary>

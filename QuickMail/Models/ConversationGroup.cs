@@ -45,10 +45,11 @@ public sealed class ConversationGroup : INotifyPropertyChanged
         get
         {
             var countWord = Count == 1 ? "message" : "messages";
-            var sender  = string.IsNullOrWhiteSpace(LastSenderName) ? string.Empty : $" {LastSenderName}.";
+            var sender    = string.IsNullOrWhiteSpace(LastSenderName) ? string.Empty : $" {LastSenderName}.";
+            var unread    = HasUnread ? " Has unread." : string.Empty;
             return string.IsNullOrWhiteSpace(Preview)
-                ? $"{Subject}. {Count} {countWord}.{sender} {DateDisplay}."
-                : $"{Subject}. {Count} {countWord}.{sender} {Preview}. {DateDisplay}.";
+                ? $"{Subject}. {Count} {countWord}.{sender}{unread} {DateDisplay}."
+                : $"{Subject}. {Count} {countWord}.{sender}{unread} {Preview}. {DateDisplay}.";
         }
     }
 

@@ -14,14 +14,17 @@ public partial class MailMessageSummary : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusDisplay))]
+    [NotifyPropertyChangedFor(nameof(ReadStatusLabel))]
     private bool _isRead;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusDisplay))]
+    [NotifyPropertyChangedFor(nameof(ReadStatusLabel))]
     private bool _isReplied;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusDisplay))]
+    [NotifyPropertyChangedFor(nameof(ReadStatusLabel))]
     private bool _isForwarded;
 
     [ObservableProperty]
@@ -39,6 +42,21 @@ public partial class MailMessageSummary : ObservableObject
             if (IsForwarded) return "Fwd";
             if (!IsRead)     return "New";
             return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Human-readable read/status label for accessibility announcements.
+    /// Returns "replied", "forwarded", "unread", or "read".
+    /// </summary>
+    public string ReadStatusLabel
+    {
+        get
+        {
+            if (IsReplied)   return "replied";
+            if (IsForwarded) return "forwarded";
+            if (!IsRead)     return "unread";
+            return "read";
         }
     }
 

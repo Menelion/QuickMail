@@ -121,6 +121,11 @@ public class ConfigService : IConfigService
                             || value.Equals("true", StringComparison.OrdinalIgnoreCase)
                             || value == "1";
                         break;
+                    case "conversationview":
+                        config.ConversationView = value.Equals("on", StringComparison.OrdinalIgnoreCase)
+                            || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                            || value == "1";
+                        break;
                 }
             }
             else if (section == "account" && acctGuid != Guid.Empty)
@@ -162,6 +167,11 @@ public class ConfigService : IConfigService
         sb.AppendLine($"ShowMessageStatus = {(config.ShowMessageStatus ? "on" : "off")}");
         sb.AppendLine("# Show a status column in the message list.");
         sb.AppendLine("# When on, the first column shows the message status: New, Replied, Fwd, or blank (read).");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"ConversationView = {(config.ConversationView ? "on" : "off")}");
+        sb.AppendLine("# Group messages into conversation threads instead of a flat list.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 

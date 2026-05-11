@@ -14,6 +14,9 @@ public class ConfigModel
     /// <summary>Whether to display the message-status column in the message list.</summary>
     public bool ShowMessageStatus { get; set; } = true;
 
+    /// <summary>Whether to display messages grouped into conversations instead of a flat list.</summary>
+    public bool ConversationView { get; set; } = false;
+
     // ── Per-account overrides ─────────────────────────────────────────────────────
 
     public Dictionary<Guid, AccountOverrideConfig> Accounts { get; set; } = [];
