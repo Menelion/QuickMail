@@ -151,7 +151,12 @@ public partial class MainWindow : Window
             {
                 var msg = args.TryGetWebMessageAsString();
                 if (msg == "escape")
-                    Dispatcher.InvokeAsync(ReturnFocusToMessageList, DispatcherPriority.Input);
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        _vm.IsMessageOpen = false;
+                        _vm.MessageDetail = null;
+                        ReturnFocusToMessageList();
+                    }, DispatcherPriority.Input);
                 else if (msg == "f6")
                     Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
                 else if (msg == "shift-f6")
@@ -220,6 +225,13 @@ public partial class MainWindow : Window
 
             case ModifierKeys.None:
                 if (e.Key == Key.F6) { e.Handled = true; await CycleFocusAsync(true); }
+                else if (e.Key == Key.Escape && _vm.IsMessageOpen)
+                {
+                    _vm.IsMessageOpen = false;
+                    _vm.MessageDetail = null;
+                    ReturnFocusToMessageList();
+                    e.Handled = true;
+                }
                 break;
 
             case ModifierKeys.Shift:

@@ -25,6 +25,7 @@
         <KeyBinding Key="F5"                        Command="{Binding RefreshCommand}"          />
         <KeyBinding Key="M"  Modifiers="Ctrl"       Command="{Binding LoadMoreMessagesCommand}" />
         <KeyBinding Key="E"  Modifiers="Ctrl+Shift" Command="{Binding EmptyTrashCommand}"       />
+        <KeyBinding Key="F1"                        Command="{Binding ViewUserGuideCommand}"    />
     </Window.InputBindings>
 
     <Grid>
@@ -97,6 +98,12 @@
                     AutomationProperties.Name="Manage email accounts"
                     ToolTip="Manage email accounts"
                     Content="Accoun_ts"/>
+            <Separator/>
+            <Button Style="{StaticResource ToolbarButton}"
+                    Command="{Binding ViewUserGuideCommand}"
+                    AutomationProperties.Name="View User Guide (F1)"
+                    ToolTip="View User Guide (F1)"
+                    Content="User _Guide"/>
         </ToolBar>
 
         <!-- ── Three-pane layout (Outlook-style): Accounts+Folders left | Messages right ── -->
