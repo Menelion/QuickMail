@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using QuickMail.Models;
@@ -60,6 +62,8 @@ public class LocalStoreService : ILocalStoreService
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN preview_text  TEXT    NOT NULL DEFAULT '';");
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN is_replied    INTEGER NOT NULL DEFAULT 0;");
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN is_forwarded  INTEGER NOT NULL DEFAULT 0;");
+        RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN has_attachments INTEGER NOT NULL DEFAULT 0;");
+        RunMigration(conn, "ALTER TABLE MessageDetail ADD COLUMN attachments_json TEXT DEFAULT NULL;");
     }
 
     private static void RunMigration(SqliteConnection conn, string sql)
@@ -189,27 +193,47 @@ public class LocalStoreService : ILocalStoreService
 
     public async Task UpsertDetailAsync(MailMessageDetail d)
     {
+        var attJson = d.Attachments.Count > 0
+            ? JsonSerializer.Serialize(d.Attachments.Select(a => new { a.FileName, a.ContentType, a.FileSize, a.PartSpecifier }))
+            : null;
+
         await using var conn = await OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO MessageDetail(unique_id, account_id, folder_name, to_addr, cc, reply_to, plain_body, html_body)
-            VALUES($uid, $aid, $fn, $to, $cc, $rt, $plain, $html)
+            INSERT INTO MessageDetail(unique_id, account_id, folder_name, to_addr, cc, reply_to, plain_body, html_body, attachments_json)
+            VALUES($uid, $aid, $fn, $to, $cc, $rt, $plain, $html, $attjson)
             ON CONFLICT(unique_id, account_id, folder_name) DO UPDATE SET
-                to_addr    = excluded.to_addr,
-                cc         = excluded.cc,
-                reply_to   = excluded.reply_to,
-                plain_body = excluded.plain_body,
-                html_body  = excluded.html_body;
+                to_addr          = excluded.to_addr,
+                cc               = excluded.cc,
+                reply_to         = excluded.reply_to,
+                plain_body       = excluded.plain_body,
+                html_body        = excluded.html_body,
+                attachments_json = excluded.attachments_json;
             """;
-        cmd.Parameters.AddWithValue("$uid",   (long)d.UniqueId);
-        cmd.Parameters.AddWithValue("$aid",   d.AccountId.ToString());
-        cmd.Parameters.AddWithValue("$fn",    d.FolderName);
-        cmd.Parameters.AddWithValue("$to",    d.To);
-        cmd.Parameters.AddWithValue("$cc",    d.Cc);
-        cmd.Parameters.AddWithValue("$rt",    d.ReplyTo);
-        cmd.Parameters.AddWithValue("$plain", d.PlainTextBody);
-        cmd.Parameters.AddWithValue("$html",  d.HtmlBody);
+        cmd.Parameters.AddWithValue("$uid",    (long)d.UniqueId);
+        cmd.Parameters.AddWithValue("$aid",    d.AccountId.ToString());
+        cmd.Parameters.AddWithValue("$fn",     d.FolderName);
+        cmd.Parameters.AddWithValue("$to",     d.To);
+        cmd.Parameters.AddWithValue("$cc",     d.Cc);
+        cmd.Parameters.AddWithValue("$rt",     d.ReplyTo);
+        cmd.Parameters.AddWithValue("$plain",  d.PlainTextBody);
+        cmd.Parameters.AddWithValue("$html",   d.HtmlBody);
+        cmd.Parameters.AddWithValue("$attjson", (object?)attJson ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync();
+
+        // Update the summary's has_attachments flag
+        await using var cmd2 = conn.CreateCommand();
+        cmd2.CommandText =
+            "UPDATE MessageSummary SET has_attachments=$ha " +
+            "WHERE unique_id=$uid AND account_id=$aid AND folder_name=$fn;";
+        cmd2.Parameters.AddWithValue("$ha",  d.Attachments.Count > 0 ? 1 : 0);
+        cmd2.Parameters.AddWithValue("$uid", (long)d.UniqueId);
+        cmd2.Parameters.AddWithValue("$aid", d.AccountId.ToString());
+        cmd2.Parameters.AddWithValue("$fn",  d.FolderName);
+        await cmd2.ExecuteNonQueryAsync();
+
+        await tx.CommitAsync();
     }
 
     public async Task<MailMessageDetail?> LoadDetailAsync(Guid accountId, string folderName, uint uniqueId)
@@ -218,7 +242,7 @@ public class LocalStoreService : ILocalStoreService
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT d.to_addr, d.cc, d.reply_to, d.plain_body, d.html_body,
-                   s.from_disp, s.subject, s.date_ticks, s.is_read
+                   s.from_disp, s.subject, s.date_ticks, s.is_read, d.attachments_json
             FROM MessageDetail d
             JOIN MessageSummary s USING (unique_id, account_id, folder_name)
             WHERE d.unique_id=$uid AND d.account_id=$aid AND d.folder_name=$fn;
@@ -229,6 +253,25 @@ public class LocalStoreService : ILocalStoreService
 
         await using var r = await cmd.ExecuteReaderAsync();
         if (!await r.ReadAsync()) return null;
+
+        List<AttachmentModel> attachments = [];
+        if (!r.IsDBNull(9))
+        {
+            var json = r.GetString(9);
+            try
+            {
+                var metas = JsonSerializer.Deserialize<List<AttachmentMeta>>(json);
+                if (metas != null)
+                    attachments = metas.Select(m => new AttachmentModel
+                    {
+                        FileName      = m.FileName,
+                        ContentType   = m.ContentType,
+                        FileSize      = m.FileSize,
+                        PartSpecifier = m.PartSpecifier,
+                    }).ToList();
+            }
+            catch { /* corrupt json — ignore */ }
+        }
 
         return new MailMessageDetail
         {
@@ -244,6 +287,7 @@ public class LocalStoreService : ILocalStoreService
             Subject       = r.GetString(6),
             Date          = new DateTimeOffset(r.GetInt64(7), TimeSpan.Zero),
             IsRead        = r.GetInt64(8) != 0,
+            Attachments   = attachments,
         };
     }
 
@@ -313,4 +357,11 @@ public class LocalStoreService : ILocalStoreService
         await c.OpenAsync();
         return c;
     }
+
+    /// <summary>Lightweight DTO for serializing attachment metadata to JSON (no Content bytes).</summary>
+    private sealed record AttachmentMeta(
+        string  FileName,
+        string  ContentType,
+        long    FileSize,
+        string? PartSpecifier);
 }

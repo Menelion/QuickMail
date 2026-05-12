@@ -1,3 +1,5 @@
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,8 +32,31 @@ public class SmtpService : ISmtpService
         if (!string.IsNullOrEmpty(compose.InReplyToMessageId))
             message.InReplyTo = compose.InReplyToMessageId;
 
-        var body = new TextPart("plain") { Text = compose.Body };
-        message.Body = body;
+        var loadedAttachments = compose.Attachments.Where(a => a.IsLoaded).ToList();
+        if (loadedAttachments.Count > 0)
+        {
+            var multipart = new Multipart("mixed");
+            multipart.Add(new TextPart("plain") { Text = compose.Body });
+            foreach (var att in loadedAttachments)
+            {
+                var slash = att.ContentType.IndexOf('/');
+                var mediaType    = slash >= 0 ? att.ContentType[..slash] : "application";
+                var mediaSubtype = slash >= 0 ? att.ContentType[(slash + 1)..] : "octet-stream";
+                var mimePart = new MimePart(mediaType, mediaSubtype)
+                {
+                    Content                 = new MimeContent(new MemoryStream(att.Content!)),
+                    ContentDisposition      = new ContentDisposition(ContentDisposition.Attachment),
+                    ContentTransferEncoding = ContentEncoding.Base64,
+                    FileName                = att.FileName,
+                };
+                multipart.Add(mimePart);
+            }
+            message.Body = multipart;
+        }
+        else
+        {
+            message.Body = new TextPart("plain") { Text = compose.Body };
+}
 
         using var client = new SmtpClient();
 

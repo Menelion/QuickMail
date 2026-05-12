@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using QuickMail.Models;
 using QuickMail.Services;
 
@@ -564,6 +568,7 @@ public partial class MainViewModel : ObservableObject
             MessageDetail = detail;
             IsMessageOpen = true;
             summary.IsRead = true;
+            summary.HasAttachments = detail.Attachments.Count > 0;
             _ = _localStore.UpdateIsReadAsync(summary.AccountId, summary.FolderName, summary.UniqueId, true);
 
             // Extract preview and persist if not already set.
@@ -776,7 +781,44 @@ public partial class MainViewModel : ObservableObject
     {
         var detail = await EnsureDetailAsync();
         if (detail == null || SelectedAccount == null) return;
-        ComposeRequested?.Invoke(ComposeViewModel.CreateForward(detail, SelectedAccount.Id));
+
+        var model = ComposeViewModel.CreateForward(detail, SelectedAccount.Id);
+
+        // Hydrate attachment bytes so the forwarded message can include them.
+        if (detail.Attachments.Count > 0)
+        {
+            IsBusy = true;
+            StatusText = "Preparing forward…";
+            try
+            {
+                var summary = SelectedMessage!;
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                foreach (var att in detail.Attachments)
+                {
+                    if (!att.IsLoaded && att.PartSpecifier != null)
+                    {
+                        try
+                        {
+                            att.Content = await _imap.DownloadAttachmentAsync(
+                                summary.AccountId, summary.FolderName, summary.UniqueId,
+                                att.PartSpecifier, cts.Token);
+                        }
+                        catch (Exception ex)
+                        {
+                            LogService.Log($"Forward: failed to download '{att.FileName}'", ex);
+                        }
+                    }
+                }
+                model.Attachments = detail.Attachments;
+            }
+            finally
+            {
+                IsBusy = false;
+                StatusText = string.Empty;
+            }
+        }
+
+        ComposeRequested?.Invoke(model);
     }
 
     // Returns MessageDetail if already loaded for the selected message,
@@ -831,6 +873,82 @@ public partial class MainViewModel : ObservableObject
         ComposeRequested?.Invoke(new ComposeModel { AccountId = account.Id });
     }
 
+    /// <summary>True when the currently selected folder is a Drafts folder.</summary>
+    public bool IsSelectedFolderDrafts =>
+        SelectedFolder != null &&
+        (SelectedFolder.DisplayName.Contains("draft", StringComparison.OrdinalIgnoreCase) ||
+         SelectedFolder.FullName.Contains("draft", StringComparison.OrdinalIgnoreCase));
+
+    [RelayCommand]
+    private async Task OpenDraftAsync()
+    {
+        var summary = SelectedMessage;
+        if (summary == null || SelectedAccount == null) return;
+
+        IsBusy = true;
+        StatusText = "Opening draft…";
+        try
+        {
+            _messageCts?.Cancel();
+            _messageCts = new CancellationTokenSource();
+
+            var detail = await _localStore.LoadDetailAsync(
+                summary.AccountId, summary.FolderName, summary.UniqueId);
+
+            if (detail == null)
+            {
+                detail = await _imap.GetMessageDetailAsync(
+                    summary.AccountId, summary.FolderName, summary.UniqueId, _messageCts.Token);
+            }
+
+            var model = new ComposeModel
+            {
+                AccountId       = summary.AccountId,
+                To              = detail.To,
+                Cc              = detail.Cc,
+                Subject         = detail.Subject,
+                Body            = detail.PlainTextBody,
+                DraftUid        = summary.UniqueId,
+                DraftFolderName = summary.FolderName,
+            };
+
+            // Eagerly hydrate attachment bytes so ComposeWindow can re-send them
+            foreach (var att in detail.Attachments)
+            {
+                if (!att.IsLoaded && att.PartSpecifier != null)
+                {
+                    try
+                    {
+                        att.Content = await _imap.DownloadAttachmentAsync(
+                            summary.AccountId, summary.FolderName, summary.UniqueId,
+                            att.PartSpecifier, _messageCts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.Log($"OpenDraft: failed to hydrate attachment '{att.FileName}'", ex);
+                    }
+                }
+            }
+            model.Attachments = detail.Attachments;
+
+            StatusText = string.Empty;
+            ComposeRequested?.Invoke(model);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Draft load cancelled.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to open draft: {ex.Message}";
+            LogService.Log("OpenDraft", ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     [RelayCommand]
     private async Task EmptyTrashAsync()
     {
@@ -870,6 +988,125 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void ManageAccounts() => ManageAccountsRequested?.Invoke();
+
+    // ── Attachment commands ─────────────────────────────────────────────────────
+
+    private static readonly string[] DangerousExtensions =
+        [".exe", ".bat", ".cmd", ".ps1", ".msi", ".scr", ".vbs", ".js", ".jar"];
+
+    [RelayCommand]
+    private async Task SaveAttachmentAsync(AttachmentModel? attachment)
+    {
+        if (attachment == null || MessageDetail == null) return;
+        var att = attachment;
+        if (!att.IsLoaded)
+        {
+            if (att.PartSpecifier == null) return;
+            IsBusy = true;
+            StatusText = $"Downloading {att.FileName}…";
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                att.Content = await _imap.DownloadAttachmentAsync(
+                    MessageDetail.AccountId, MessageDetail.FolderName,
+                    MessageDetail.UniqueId, att.PartSpecifier, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Download failed: {ex.Message}";
+                IsBusy = false;
+                return;
+            }
+            IsBusy = false;
+        }
+
+        var dlg = new SaveFileDialog
+        {
+            FileName = att.FileName,
+            Title    = "Save Attachment",
+        };
+        if (dlg.ShowDialog() != true) return;
+        await File.WriteAllBytesAsync(dlg.FileName, att.Content!);
+        StatusText = $"Saved {att.FileName}.";
+    }
+
+    [RelayCommand]
+    private async Task SaveAllAttachmentsAsync()
+    {
+        if (MessageDetail == null || MessageDetail.Attachments.Count == 0) return;
+
+        var dlg = new OpenFolderDialog { Title = "Choose folder to save attachments" };
+        if (dlg.ShowDialog() != true) return;
+        var folder = dlg.FolderName;
+
+        IsBusy = true;
+        StatusText = "Saving attachments…";
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            foreach (var att in MessageDetail.Attachments)
+            {
+                if (!att.IsLoaded && att.PartSpecifier != null)
+                    att.Content = await _imap.DownloadAttachmentAsync(
+                        MessageDetail.AccountId, MessageDetail.FolderName,
+                        MessageDetail.UniqueId, att.PartSpecifier, cts.Token);
+
+                if (att.Content != null)
+                    await File.WriteAllBytesAsync(Path.Combine(folder, att.FileName), att.Content);
+            }
+            StatusText = "All attachments saved.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Save all failed: {ex.Message}";
+            LogService.Log("SaveAllAttachments", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task OpenAttachmentAsync(AttachmentModel? attachment)
+    {
+        if (attachment == null || MessageDetail == null) return;
+        var att = attachment;
+        if (!att.IsLoaded)
+        {
+            if (att.PartSpecifier == null) return;
+            IsBusy = true;
+            StatusText = $"Downloading {att.FileName}…";
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                att.Content = await _imap.DownloadAttachmentAsync(
+                    MessageDetail.AccountId, MessageDetail.FolderName,
+                    MessageDetail.UniqueId, att.PartSpecifier, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Download failed: {ex.Message}";
+                IsBusy = false;
+                return;
+            }
+            IsBusy = false;
+        }
+
+        var ext = Path.GetExtension(att.FileName).ToLowerInvariant();
+        if (DangerousExtensions.Contains(ext))
+        {
+            var result = MessageBox.Show(
+                $"'{att.FileName}' is an executable file type. Opening it could be dangerous. Continue?",
+                "Security Warning",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "QuickMail");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = Path.Combine(tempDir, att.FileName);
+        await File.WriteAllBytesAsync(tempPath, att.Content!);
+        Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+    }
 
     public void RefreshAccountList()
     {

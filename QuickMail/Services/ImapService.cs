@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -251,6 +252,8 @@ public class ImapService : IImapService
 
             await folder.AddFlagsAsync(mailKitUid, MessageFlags.Seen, true, ct);
 
+            var attachments = ExtractAttachments(s.Body);
+
             return new MailMessageDetail
             {
                 UniqueId      = uid,
@@ -265,7 +268,8 @@ public class ImapService : IImapService
                 IsRead        = true,
                 MessageId     = s.Envelope?.MessageId ?? string.Empty,
                 PlainTextBody = plainText,
-                HtmlBody      = htmlText
+                HtmlBody      = htmlText,
+                Attachments   = attachments,
             };
         }
         finally { await folder.CloseAsync(false, ct); }
@@ -309,6 +313,96 @@ public class ImapService : IImapService
             else               await folder.AddFlagsAsync(new UniqueId(uid), MessageFlags.Deleted, true, ct);
         }
         finally { await folder.CloseAsync(false, ct); }
+    }
+
+    // ── Drafts ───────────────────────────────────────────────────────────────────
+
+    public async Task<string?> FindDraftsFolderNameAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var drafts = FindSpecialFolder(client, SpecialFolder.Drafts);
+        return drafts?.FullName;
+    }
+
+    public async Task<uint> AppendDraftAsync(
+        Guid accountId, ComposeModel draft, uint? replaceUid, CancellationToken ct = default)
+    {
+        var client  = await GetOrReconnectAsync(accountId, ct);
+        var account = _accounts[accountId];
+
+        var draftsFolder = FindSpecialFolder(client, SpecialFolder.Drafts)
+            ?? throw new InvalidOperationException("No Drafts folder found for this account.");
+
+        // Build the MIME message from compose fields
+        var msg = new MimeMessage();
+        msg.From.Add(new MailboxAddress(account.DisplayName, account.Username));
+
+        static void AddAddresses(InternetAddressList list, string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return;
+            foreach (var part in raw.Split(';', ',').Select(a => a.Trim()).Where(a => a.Length > 0))
+            {
+                try { list.Add(InternetAddress.Parse(part)); }
+                catch { /* skip unparseable address */ }
+            }
+        }
+
+        AddAddresses(msg.To,  draft.To);
+        AddAddresses(msg.Cc,  draft.Cc);
+        AddAddresses(msg.Bcc, draft.Bcc);
+
+        msg.Subject = draft.Subject;
+
+        if (!string.IsNullOrEmpty(draft.InReplyToMessageId))
+            msg.InReplyTo = draft.InReplyToMessageId;
+
+        var loadedAttachments = draft.Attachments.Where(a => a.IsLoaded).ToList();
+        if (loadedAttachments.Count > 0)
+        {
+            var multipart = new Multipart("mixed");
+            multipart.Add(new TextPart("plain") { Text = draft.Body });
+            foreach (var att in loadedAttachments)
+            {
+                var slash = att.ContentType.IndexOf('/');
+                var mediaType    = slash >= 0 ? att.ContentType[..slash] : "application";
+                var mediaSubtype = slash >= 0 ? att.ContentType[(slash + 1)..] : "octet-stream";
+                var mimePart = new MimePart(mediaType, mediaSubtype)
+                {
+                    Content                  = new MimeContent(new MemoryStream(att.Content!)),
+                    ContentDisposition       = new ContentDisposition(ContentDisposition.Attachment),
+                    ContentTransferEncoding  = ContentEncoding.Base64,
+                    FileName                 = att.FileName,
+                };
+                multipart.Add(mimePart);
+            }
+            msg.Body = multipart;
+        }
+        else
+        {
+            msg.Body = new TextPart("plain") { Text = draft.Body };
+        }
+
+        // Delete the old draft revision before appending the new one
+        if (replaceUid.HasValue)
+        {
+            await draftsFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+            try
+            {
+                await draftsFolder.AddFlagsAsync(new UniqueId(replaceUid.Value), MessageFlags.Deleted, true, ct);
+                await draftsFolder.ExpungeAsync(ct);
+            }
+            finally { await draftsFolder.CloseAsync(false, ct); }
+        }
+
+        // Append the new draft and return its server-assigned UID
+        await draftsFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+        try
+        {
+            var newUid = await draftsFolder.AppendAsync(msg, MessageFlags.Draft, ct);
+            LogService.Log($"AppendDraft: saved draft to {draftsFolder.FullName} UID={newUid?.Id}");
+            return newUid?.Id ?? 0;
+        }
+        finally { await draftsFolder.CloseAsync(false, ct); }
     }
 
     public async Task<int> EmptyTrashAsync(Guid accountId, CancellationToken ct = default)
@@ -408,6 +502,38 @@ public class ImapService : IImapService
         finally { await folder.CloseAsync(false, ct); }
     }
 
+    // ── Attachment download ───────────────────────────────────────────────────────
+
+    public async Task<byte[]> DownloadAttachmentAsync(
+        Guid accountId, string folderName, uint uid, string partSpecifier, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var folder = await client.GetFolderAsync(folderName, ct);
+        await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+        try
+        {
+            var mailKitUid = new UniqueId(uid);
+            var summaries  = await folder.FetchAsync(
+                new[] { mailKitUid },
+                MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure,
+                ct);
+
+            var s        = summaries.FirstOrDefault()
+                ?? throw new InvalidOperationException($"Message UID {uid} not found.");
+            var bodyPart = FindBodyPartBySpecifier(s.Body, partSpecifier)
+                ?? throw new InvalidOperationException($"Body part '{partSpecifier}' not found.");
+
+            var decoded = await folder.GetBodyPartAsync(mailKitUid, bodyPart, ct);
+            using var stream = new MemoryStream();
+            if (decoded is MimePart mp)
+                mp.Content.DecodeTo(stream);
+            else if (decoded is MessagePart msgPart)
+                await msgPart.Message.WriteToAsync(stream, ct);
+            return stream.ToArray();
+        }
+        finally { await folder.CloseAsync(false, ct); }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -465,6 +591,61 @@ public class ImapService : IImapService
             try { return client.GetFolder(sf); }
             catch { /* not available */ }
         }
+        return null;
+    }
+
+    private static List<AttachmentModel> ExtractAttachments(BodyPart? body)
+    {
+        var result = new List<AttachmentModel>();
+        if (body != null) CollectAttachments(body, result);
+        return result;
+    }
+
+    private static void CollectAttachments(BodyPart part, List<AttachmentModel> result)
+    {
+        if (part is BodyPartMultipart multi)
+        {
+            // Skip alternative (body variants) and related (inline images) — recurse into everything else
+            var subtype = multi.ContentType.MediaSubtype;
+            if (subtype.Equals("alternative", StringComparison.OrdinalIgnoreCase) ||
+                subtype.Equals("related",     StringComparison.OrdinalIgnoreCase))
+                return;
+            foreach (var child in multi.BodyParts)
+                CollectAttachments(child, result);
+        }
+        else if (part is BodyPartBasic basic)
+        {
+            var disposition = basic.ContentDisposition?.Disposition ?? string.Empty;
+            var fileName    = basic.ContentDisposition?.FileName ?? basic.ContentType.Name;
+
+            bool isExplicit = disposition.Equals("attachment", StringComparison.OrdinalIgnoreCase);
+            bool isTextBody = basic is BodyPartText bt &&
+                              (bt.ContentType.MediaSubtype.Equals("plain", StringComparison.OrdinalIgnoreCase) ||
+                               bt.ContentType.MediaSubtype.Equals("html",  StringComparison.OrdinalIgnoreCase));
+
+            if (isExplicit || (!isTextBody && !string.IsNullOrEmpty(fileName)))
+            {
+                result.Add(new AttachmentModel
+                {
+                    FileName      = fileName ?? $"attachment.{basic.ContentType.MediaSubtype}",
+                    ContentType   = basic.ContentType.MimeType,
+                    FileSize      = (long)basic.Octets,
+                    PartSpecifier = basic.PartSpecifier,
+                });
+            }
+        }
+    }
+
+    private static BodyPart? FindBodyPartBySpecifier(BodyPart? part, string specifier)
+    {
+        if (part == null) return null;
+        if (part.PartSpecifier == specifier) return part;
+        if (part is BodyPartMultipart multi)
+            foreach (var child in multi.BodyParts)
+            {
+                var found = FindBodyPartBySpecifier(child, specifier);
+                if (found != null) return found;
+            }
         return null;
     }
 

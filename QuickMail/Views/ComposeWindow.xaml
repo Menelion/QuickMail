@@ -11,11 +11,15 @@
         PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.InputBindings>
-        <KeyBinding Key="Escape" Command="{Binding CancelCommand}"/>
-        <KeyBinding Key="S" Modifiers="Alt" Command="{Binding SendCommand}"/>
+        <KeyBinding Key="S" Modifiers="Alt"  Command="{Binding SendCommand}"/>
+        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveDraftCommand}"/>
+        <KeyBinding Key="A" Modifiers="Ctrl+Shift" Command="{Binding AddAttachmentsCommand}"/>
     </Window.InputBindings>
 
-    <DockPanel Margin="10">
+    <DockPanel Margin="10"
+               AllowDrop="True"
+               DragOver="Window_DragOver"
+               Drop="Window_Drop">
 
         <!-- Status / progress bar -->
         <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
@@ -25,6 +29,12 @@
                     AutomationProperties.Name="Cancel and close compose window"
                     IsCancel="True"
                     MinWidth="80" Margin="6,0,0,0"
+                    TabIndex="9"/>
+            <Button DockPanel.Dock="Right"
+                    Content="Save Draft (Ctrl+S)"
+                    Command="{Binding SaveDraftCommand}"
+                    AutomationProperties.Name="Save as draft (Ctrl+S)"
+                    MinWidth="100" Margin="6,0,0,0"
                     TabIndex="8"/>
             <Button DockPanel.Dock="Right"
                     Content="Send (Alt+S)"
@@ -42,6 +52,9 @@
         <!-- Form fields -->
         <Grid>
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -110,8 +123,75 @@
 
             <Separator Grid.Row="5" Grid.ColumnSpan="2" Margin="0,4"/>
 
+            <!-- Attachments -->
+            <Button Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
+                    Content="Add Files… (Ctrl+Shift+A)"
+                    Command="{Binding AddAttachmentsCommand}"
+                    AutomationProperties.Name="Add file attachments (Ctrl+Shift+A)"
+                    HorizontalAlignment="Left"
+                    Margin="0,2" TabIndex="5"/>
+            <ListBox Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2"
+                     x:Name="AttachmentList"
+                     ItemsSource="{Binding Attachments}"
+                     SelectionMode="Single"
+                     MaxHeight="80"
+                     Margin="0,2"
+                     TabIndex="6"
+                     KeyboardNavigation.TabNavigation="Once"
+                     KeyboardNavigation.DirectionalNavigation="Contained"
+                     AutomationProperties.Name="Attachments"
+                     PreviewKeyDown="AttachmentList_PreviewKeyDown">
+                <ListBox.Style>
+                    <Style TargetType="ListBox">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Attachments.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.Style>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding FileName, StringFormat='{}{0}'}"
+                                   ToolTip="{Binding FileSizeDisplay}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="_Open"
+                                  Command="{Binding PlacementTarget.DataContext.OpenComposeAttachmentCommand,
+                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.SelectedItem,
+                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                        <MenuItem Header="_Remove"
+                                  Command="{Binding PlacementTarget.DataContext.RemoveAttachmentCommand,
+                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.SelectedItem,
+                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    </ContextMenu>
+                </ListBox.ContextMenu>
+            </ListBox>
+
+            <!-- Attachment summary: file count and total size -->
+            <TextBlock Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="{Binding AttachmentSummaryText}"
+                       FontSize="11"
+                       Foreground="Gray"
+                       VerticalAlignment="Bottom"
+                       Margin="2,0,0,2">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Attachments.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
             <!-- Body -->
-            <TextBox Grid.Row="6" Grid.ColumnSpan="2"
+            <TextBox Grid.Row="9" Grid.ColumnSpan="2"
                      x:Name="BodyBox"
                      Text="{Binding Body, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.Name="Message body. Alt+U for Subject, Alt+M for From, Alt+S to send."
@@ -119,7 +199,7 @@
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
                      FontFamily="Segoe UI"
-                     Margin="0,4" TabIndex="5"
+                     Margin="0,4" TabIndex="7"
                      VerticalAlignment="Stretch"/>
         </Grid>
     </DockPanel>

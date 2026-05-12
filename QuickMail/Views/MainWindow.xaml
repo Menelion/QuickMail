@@ -211,6 +211,43 @@
                                 </TextBlock.Style>
                             </TextBlock>
                             <TextBlock Text="{Binding MessageDetail.Date, StringFormat='Date: {0:f}', FallbackValue=''}"/>
+
+                            <!-- Attachments (visible when selected message has attachments) -->
+                            <ListBox x:Name="ReadingPaneAttachmentList"
+                                     ItemsSource="{Binding MessageDetail.Attachments}"
+                                     SelectionMode="Single"
+                                     BorderThickness="0"
+                                     Margin="0,4,0,0"
+                                     Visibility="{Binding SelectedMessage.HasAttachments,
+                                                  Converter={StaticResource BoolToVisibilityConverter},
+                                                  FallbackValue=Collapsed}"
+                                     KeyboardNavigation.TabNavigation="Once"
+                                     KeyboardNavigation.DirectionalNavigation="Contained"
+                                     AutomationProperties.Name="Attachments">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FileName}" ToolTip="{Binding FileSizeDisplay}"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                                <ListBox.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="_Save…"
+                                                  Command="{Binding PlacementTarget.DataContext.SaveAttachmentCommand,
+                                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.SelectedItem,
+                                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <MenuItem Header="Save _All…"
+                                                  Command="{Binding PlacementTarget.DataContext.SaveAllAttachmentsCommand,
+                                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <MenuItem Header="_Open"
+                                                  Command="{Binding PlacementTarget.DataContext.OpenAttachmentCommand,
+                                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding PlacementTarget.SelectedItem,
+                                                            RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
+                            </ListBox>
+
                             <Separator Margin="0,4,0,0"/>
                         </StackPanel>
                         <!-- WebView2: real browser, proper arrow-key caret nav, screen-reader virtual cursor -->
@@ -323,6 +360,29 @@
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding DateDisplay}" TextAlignment="Right"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Width="24">
+                                    <GridViewColumn.Header>
+                                        <TextBlock Text="&#x1F4CE;" FontSize="11"
+                                                   ToolTip="Has attachments"
+                                                   AutomationProperties.IsColumnHeader="True"/>
+                                    </GridViewColumn.Header>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="&#x1F4CE;" FontSize="11" TextAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasAttachments}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>

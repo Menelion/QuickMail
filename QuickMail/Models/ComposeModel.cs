@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace QuickMail.Models;
 
@@ -12,4 +13,12 @@ public class ComposeModel
     public string Body { get; set; } = string.Empty;
     /// <summary>RFC 2822 Message-ID of the message being replied to.</summary>
     public string? InReplyToMessageId { get; set; }
+
+    /// <summary>UID of the existing draft on the server (null when composing new).</summary>
+    public uint? DraftUid { get; set; }
+
+    /// <summary>Folder name of the existing draft (null when composing new).</summary>
+    public string? DraftFolderName { get; set; }
+
+    public List<AttachmentModel> Attachments { get; set; } = [];
 }

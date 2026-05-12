@@ -38,4 +38,17 @@ public interface IImapService : IDisposable
         int maxLines, CancellationToken ct = default);
 
     Task<int> PollAsync(Guid accountId, string folderName, CancellationToken ct = default);
+
+    /// <summary>Returns the full name of the Drafts folder, or null if none.</summary>
+    Task<string?> FindDraftsFolderNameAsync(Guid accountId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Saves a draft to the server Drafts folder.
+    /// If <paramref name="replaceUid"/> is provided the old draft is deleted first.
+    /// Returns the UID of the newly appended message.
+    /// </summary>
+    Task<uint> AppendDraftAsync(Guid accountId, ComposeModel draft, uint? replaceUid, CancellationToken ct = default);
+
+    /// <summary>Downloads and decodes a single attachment by its IMAP body-part specifier.</summary>
+    Task<byte[]> DownloadAttachmentAsync(Guid accountId, string folderName, uint uid, string partSpecifier, CancellationToken ct = default);
 }

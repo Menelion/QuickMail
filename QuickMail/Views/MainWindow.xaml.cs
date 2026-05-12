@@ -366,9 +366,16 @@ public partial class MainWindow : Window
     {
         if (MessageList.SelectedItem is MailMessageSummary summary)
         {
-            await _vm.SelectMessageCommand.ExecuteAsync(summary);
-            if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                await ShowMessageBodyAsync(_vm.MessageDetail);
+            if (_vm.IsSelectedFolderDrafts)
+            {
+                await _vm.OpenDraftCommand.ExecuteAsync(null);
+            }
+            else
+            {
+                await _vm.SelectMessageCommand.ExecuteAsync(summary);
+                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+                    await ShowMessageBodyAsync(_vm.MessageDetail);
+            }
         }
     }
 
@@ -380,9 +387,16 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter && MessageList.SelectedItem is MailMessageSummary summary)
         {
             e.Handled = true;
-            await _vm.SelectMessageCommand.ExecuteAsync(summary);
-            if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                await ShowMessageBodyAsync(_vm.MessageDetail);
+            if (_vm.IsSelectedFolderDrafts)
+            {
+                await _vm.OpenDraftCommand.ExecuteAsync(null);
+            }
+            else
+            {
+                await _vm.SelectMessageCommand.ExecuteAsync(summary);
+                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+                    await ShowMessageBodyAsync(_vm.MessageDetail);
+            }
         }
         else if (e.Key == Key.Delete && MessageList.SelectedItems.Count > 0)
         {
@@ -714,7 +728,7 @@ public partial class MainWindow : Window
 
     private void OpenComposeWindow(ComposeModel composeModel)
     {
-        var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials);
+        var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap);
         composeVm.Seed(composeModel);
         var window = new ComposeWindow(composeVm) { Owner = this };
         composeVm.CloseRequested += window.Close;

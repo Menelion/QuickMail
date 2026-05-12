@@ -30,6 +30,9 @@ public partial class MailMessageSummary : ObservableObject
     [ObservableProperty]
     private string _preview = string.Empty;
 
+    [ObservableProperty]
+    private bool _hasAttachments;
+
     /// <summary>
     /// Single-word status shown in the status column.
     /// Priority: Replied > Fwd > New > (blank for read with no special flag).
