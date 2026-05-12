@@ -44,15 +44,24 @@ public partial class ComposeWindow : Window
         if (result == MessageBoxResult.Cancel)
             return; // stay open
 
-        if (result == MessageBoxResult.Yes)
+        if (result == MessageBoxResult.No)
         {
-            await _vm.SaveDraftCommand.ExecuteAsync(null);
-            // Only close if the save succeeded (status won't say "failed")
-            if (_vm.StatusText.Contains("failed", System.StringComparison.OrdinalIgnoreCase))
-                return;
+            // Synchronous path — still inside the original Close() call stack.
+            // Setting e.Cancel = false lets that Close() proceed normally
+            // without a nested Close() call, which would crash WPF.
+            Closing -= OnWindowClosing;
+            e.Cancel = false;
+            return;
         }
 
-        // Detach the handler so the second Close() call doesn't re-enter
+        // result == Yes: save the draft first
+        await _vm.SaveDraftCommand.ExecuteAsync(null);
+        // Only close if the save succeeded (status won't say "failed")
+        if (_vm.StatusText.Contains("failed", System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // After an await the original Close() has already returned (e.Cancel was true),
+        // so we need a fresh Close() here to actually close the window.
         Closing -= OnWindowClosing;
         Close();
     }
