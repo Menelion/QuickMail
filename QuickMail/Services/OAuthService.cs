@@ -86,7 +86,9 @@ public class OAuthService : IOAuthService
         var builder = _msal.AcquireTokenInteractive(Scopes)
             // Opens the system default browser; no embedded WebView dependency
             .WithUseEmbeddedWebView(false)
-            .WithPrompt(Prompt.SelectAccount);
+            // Force credential entry when a specific account is expected,
+            // so the browser cannot silently reuse a different cached account.
+            .WithPrompt(string.IsNullOrEmpty(account.Username) ? Prompt.SelectAccount : Prompt.ForceLogin);
 
         if (!string.IsNullOrEmpty(account.Username))
             builder = builder.WithLoginHint(account.Username);
