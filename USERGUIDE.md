@@ -17,6 +17,7 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 - [Security](#security)
 - [Keyboard shortcut reference](#keyboard-shortcut-reference)
 - [Data storage](#data-storage)
+- [Configuration file](#configuration-file)
 
 ---
 
@@ -41,8 +42,8 @@ A toolbar at the top provides buttons for the most common actions.
 
 This covers most email providers: Gmail (with app passwords), Fastmail, Zoho, self-hosted servers, and so on.
 
-1. Click **Accounts** in the toolbar.
-2. In the Account Manager dialog, click **Add Account**.
+1. Activate **Accounts** in the toolbar.
+2. In the Account Manager dialog, activate **Add Account**.
 3. Fill in the following fields:
 
    | Field | What to enter |
@@ -54,8 +55,8 @@ This covers most email providers: Gmail (with app passwords), Fastmail, Zoho, se
    | **SMTP Host / Port** | Your provider's outgoing mail server (e.g. `smtp.gmail.com`, port `587`) |
    | **Password** | Your account password (stored securely — see [Security](#security)) |
 
-4. Click **Test Connection** to check that everything is correct.
-5. Click **Save**.
+4. Activate **Test Connection** to check that everything is correct.
+5. Activate **Save**.
 
 ### Outlook.com / Microsoft personal accounts (OAuth2)
 
@@ -65,13 +66,13 @@ Outlook.com requires **OAuth2 / Modern Authentication**. A plain password will n
 > Go to **[Outlook.com Settings → Mail → Sync email → POP and IMAP](https://outlook.live.com/mail/0/options/mail/accounts/popImap)** and turn IMAP on.
 > Microsoft's help article: https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040
 
-1. Click **Accounts** in the toolbar, then **Add Account**.
+1. Activate **Accounts** in the toolbar, then activate **Add Account**.
 2. Enter your **Display Name** and **Email Address**.
 3. Change **Authentication** to **Microsoft OAuth2 (Outlook.com)**.
    - The IMAP and SMTP server fields fill in automatically with the correct Outlook.com values.
-4. Click **Sign in with Microsoft**. A browser window opens.
+4. Activate **Sign in with Microsoft**. A browser window opens.
 5. Sign in with your Microsoft account and grant the requested permissions. The browser window closes automatically when done.
-6. Click **Save**.
+6. Activate **Save**.
 
 Your Microsoft password is never seen or stored by QuickMail — only an encrypted OAuth2 token is kept locally.
 
@@ -81,8 +82,8 @@ Your Microsoft password is never seen or stored by QuickMail — only an encrypt
 
 - Open **Accounts** from the toolbar to see all configured accounts.
 - Select an account in the list to edit its settings.
-- Click **Remove Account** to delete an account. You will be asked to confirm before anything is removed.
-- Changes take effect after you click **Save** and close the dialog.
+- Activate **Remove Account** to delete an account. You will be asked to confirm before anything is removed.
+- Changes take effect after you activate **Save** and close the dialog.
 
 ---
 
@@ -90,7 +91,7 @@ Your Microsoft password is never seen or stored by QuickMail — only an encrypt
 
 ### Refreshing / checking for new mail
 
-- Press **F5** or click **Refresh** in the toolbar to fetch new messages for the current folder.
+- Press **F5** or activate **Refresh** in the toolbar to fetch new messages for the current folder.
 - QuickMail also checks for new mail automatically in the background while the app is running.
 
 ### Navigating the panes
@@ -100,7 +101,7 @@ Your Microsoft password is never seen or stored by QuickMail — only an encrypt
 | Focus the account list | `Ctrl+1`, then use **Up/Down** arrow keys |
 | Focus the folder list | `Ctrl+2`, then use **Up/Down** + **Enter** to open a folder |
 | Focus the message list | `Ctrl+3`, then use **Up/Down** to move between messages |
-| Open a message in the reading pane | Press **Enter** or click the message |
+| Open a message in the reading pane | Press **Enter** or select the message |
 | Move focus into the reading pane | `Ctrl+4` or **F6** |
 | Return focus to the message list | **Escape** or **F6** from the reading pane |
 | Cycle focus forward through all panes | **F6** |
@@ -112,7 +113,7 @@ Press `Ctrl+Y` to open a searchable list of every folder across all your account
 
 ### Load More (Ctrl+M)
 
-The message list shows the 100 most recent messages by default. Click **Load More** at the bottom of the list, or press `Ctrl+M`, to load the next 100.
+The message list shows the 100 most recent messages by default. Activate **Load More** at the bottom of the list, or press `Ctrl+M`, to load the next 100.
 
 ### All Mail
 
@@ -129,13 +130,13 @@ Hold **Shift** and press **Up** or **Down** in the message list to extend your s
 Conversation view groups related messages by subject into threaded trees, so you can follow a back-and-forth exchange in one place.
 
 **Toggle conversation view:**
-- Click the **Conversation** button in the toolbar, or
+- Activate the **Conversation** button in the toolbar, or
 - Press `Ctrl+Shift+C`.
 
 When conversation view is on:
 
 - Each row in the message list represents a thread rather than a single message.
-- Click the arrow next to a thread (or press **Right** arrow when the thread is selected) to expand it and see the individual messages inside.
+- Select the arrow next to a thread (or press **Right** arrow when the thread is selected) to expand it and see the individual messages inside.
 - **Reply**, **Forward**, and **Delete** always act on the specific message selected within the thread.
 
 ---
@@ -144,7 +145,7 @@ When conversation view is on:
 
 ### New message
 
-- Press `Ctrl+N`, or click **New** in the toolbar.
+- Press `Ctrl+N`, or activate **New** in the toolbar.
 - The compose window opens. If you have more than one account, the **From** field lets you choose which account to send from.
 
 ### Reply, Reply All, and Forward
@@ -183,7 +184,7 @@ Drafts are saved to the **Drafts folder on your mail server**, so they are acces
 
 ### Saving a draft
 
-- Press `Ctrl+S` or click **Save Draft** in the compose window at any time.
+- Press `Ctrl+S` or activate **Save Draft** in the compose window at any time.
 - The draft is uploaded to the server immediately. The status bar shows **"Draft saved."** when it is done.
 - You can save as many times as you like — each save replaces the previous version.
 
@@ -199,7 +200,7 @@ If you close the compose window after making changes that have not been sent or 
 
 1. Go to the **Drafts** folder in the folder list.
 2. Select the draft in the message list.
-3. Press **Enter** (or click it) — the compose window opens with the draft pre-loaded.
+3. Select the draft or press **Enter** — the compose window opens with the draft pre-loaded.
 4. Make your edits, then send with `Alt+S` or save again with `Ctrl+S`.
 
 When you send a draft, it is automatically removed from the Drafts folder.
@@ -210,7 +211,7 @@ When you send a draft, it is automatically removed from the Drafts folder.
 
 ### Adding attachments when composing
 
-- **File dialog** — Press `Ctrl+Shift+A` or click **Add Files…** to open a file picker. You can select multiple files at once.
+- **File dialog** — Press `Ctrl+Shift+A` or activate **Add Files…** to open a file picker. You can select multiple files at once.
 - **Drag-and-drop** — Drag one or more files from File Explorer and drop them anywhere on the compose window.
 - **Clipboard paste** — Copy files in File Explorer (`Ctrl+C`), then press `Ctrl+V` in the compose window. Only file copies are intercepted this way; text paste still works normally.
 
@@ -246,7 +247,7 @@ A security warning is shown before opening executable file types.
 
 - Select one or more messages and press **Delete**. Use **Shift+Up/Down** to select multiple.
 - Messages are moved to the **Trash** folder. They are not permanently deleted.
-- To permanently delete everything in Trash, click **Empty Trash** in the toolbar or press `Ctrl+Shift+E`.
+- To permanently delete everything in Trash, activate **Empty Trash** in the toolbar or press `Ctrl+Shift+E`.
 
 ---
 
@@ -307,6 +308,35 @@ QuickMail keeps all its files under `%AppData%\QuickMail\` (typically `C:\Users\
 | File / folder | Contents |
 |---------------|----------|
 | `accounts.json` | Account configuration — server addresses, ports, display names. No passwords. |
+| `config.ini` | Optional settings file — see [Configuration file](#configuration-file) below. |
 | `mail.db` | Local message cache (SQLite database) |
 | `msal.cache` | Encrypted OAuth2 token cache (Microsoft accounts only) |
 | `quickmail.log` | Application log |
+
+---
+
+## Configuration file
+
+Some settings do not yet have a UI. You can control them by editing `%AppData%\QuickMail\config.ini` in any text editor. The file is created with defaults the first time QuickMail runs.
+
+Lines starting with `#` are comments and are ignored. The file uses a simple `key = value` format inside named sections.
+
+### `[global]` settings
+
+| Setting | Values | Default | What it does |
+|---------|--------|---------|--------------|
+| `PreviewLines` | `0`–`5` | `3` | Number of body-preview lines shown under each subject in the message list. Set to `0` to hide previews entirely. |
+| `ShowMessageStatus` | `true` / `false` | `true` | Show or hide the read/unread status indicator column in the message list. |
+| `ConversationView` | `true` / `false` | `false` | Start with conversation threading on. |
+
+### `[account:<guid>]` overrides
+
+You can override `PreviewLines` for a specific account by adding a section with that account's GUID (visible in `accounts.json`):
+
+```ini
+[account:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx]
+PreviewLines = 1
+# Show fewer preview lines for this account only.
+```
+
+Changes to `config.ini` take effect the next time you start QuickMail.

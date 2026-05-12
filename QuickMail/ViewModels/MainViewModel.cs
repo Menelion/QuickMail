@@ -992,17 +992,11 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ViewUserGuide()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "USERGUIDE.md");
-        if (!File.Exists(path))
+        Process.Start(new ProcessStartInfo
         {
-            System.Windows.MessageBox.Show(
-                "User guide file not found.",
-                "QuickMail",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
-            return;
-        }
-        Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+            FileName = "https://github.com/kellylford/QuickMail/blob/main/USERGUIDE.md",
+            UseShellExecute = true
+        });
     }
 
     // ── Attachment commands ─────────────────────────────────────────────────────
