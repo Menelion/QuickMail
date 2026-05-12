@@ -31,17 +31,16 @@ public partial class AddAccountViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPasswordAuth))]
     [NotifyPropertyChangedFor(nameof(IsOAuth2))]
+    [NotifyPropertyChangedFor(nameof(AuthTypeIndex))]
     private AuthType _authType = AuthType.Password;
 
-    public bool IsPasswordAuth
+    public bool IsPasswordAuth => AuthType == AuthType.Password;
+    public bool IsOAuth2       => AuthType == AuthType.OAuth2Microsoft;
+
+    public int AuthTypeIndex
     {
-        get => AuthType == AuthType.Password;
-        set { if (value) AuthType = AuthType.Password; }
-    }
-    public bool IsOAuth2
-    {
-        get => AuthType == AuthType.OAuth2Microsoft;
-        set { if (value) AuthType = AuthType.OAuth2Microsoft; }
+        get => AuthType == AuthType.Password ? 0 : 1;
+        set => AuthType = value == 0 ? AuthType.Password : AuthType.OAuth2Microsoft;
     }
 
     public AddAccountViewModel(IImapService imap, IOAuthService oauth)

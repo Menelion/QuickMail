@@ -37,19 +37,14 @@
                          TabIndex="1"/>
 
                 <!-- Authentication type -->
-                <TextBlock Text="Authentication:" Margin="0,8,0,2"/>
-                <StackPanel Orientation="Horizontal" Margin="0,2,0,6">
-                    <RadioButton Content="_Password"
-                                 IsChecked="{Binding IsPasswordAuth, Mode=TwoWay}"
-                                 GroupName="AuthType"
-                                 AutomationProperties.Name="Use password authentication"
-                                 Margin="0,0,12,0" TabIndex="2"/>
-                    <RadioButton Content="_Microsoft OAuth2 (Outlook.com)"
-                                 IsChecked="{Binding IsOAuth2, Mode=TwoWay}"
-                                 GroupName="AuthType"
-                                 AutomationProperties.Name="Use Microsoft OAuth2 for Outlook.com"
-                                 IsTabStop="False"/>
-                </StackPanel>
+                <TextBlock x:Name="LblAuthType" Text="_Authentication:" Margin="0,8,0,2"/>
+                <ComboBox SelectedIndex="{Binding AuthTypeIndex, Mode=TwoWay}"
+                          AutomationProperties.LabeledBy="{Binding ElementName=LblAuthType}"
+                          AutomationProperties.Name="Authentication method"
+                          TabIndex="2">
+                    <ComboBoxItem>Password</ComboBoxItem>
+                    <ComboBoxItem>Microsoft OAuth2 (Outlook.com)</ComboBoxItem>
+                </ComboBox>
 
                 <!-- Password panel (hidden for OAuth2) -->
                 <StackPanel Visibility="{Binding IsPasswordAuth, Converter={StaticResource BoolToVisibility}}">
