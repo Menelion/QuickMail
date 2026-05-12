@@ -89,7 +89,7 @@ public class ImapService : IImapService
         // Always put INBOX first — many servers don't return it via GetFoldersAsync
         try
         {
-            var inbox = client.Inbox;
+            var inbox = client.Inbox!;
             await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
             LogService.Log($"INBOX: FullName={inbox.FullName} Count={inbox.Count} Unread={inbox.Unread}");
             result.Add(new MailFolderModel
@@ -110,7 +110,7 @@ public class ImapService : IImapService
         {
             if ((folder.Attributes & FolderAttributes.NonExistent) != 0) continue;
             if ((folder.Attributes & FolderAttributes.NoSelect)    != 0) continue;
-            if (folder.FullName == client.Inbox.FullName)               continue;
+            if (folder.FullName == client.Inbox!.FullName)              continue;
 
             try
             {
@@ -526,9 +526,9 @@ public class ImapService : IImapService
             var decoded = await folder.GetBodyPartAsync(mailKitUid, bodyPart, ct);
             using var stream = new MemoryStream();
             if (decoded is MimePart mp)
-                mp.Content.DecodeTo(stream);
+                mp.Content!.DecodeTo(stream);
             else if (decoded is MessagePart msgPart)
-                await msgPart.Message.WriteToAsync(stream, ct);
+                await msgPart.Message!.WriteToAsync(stream, ct);
             return stream.ToArray();
         }
         finally { await folder.CloseAsync(false, ct); }
