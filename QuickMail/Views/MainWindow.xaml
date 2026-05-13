@@ -19,13 +19,8 @@
     </Window.Resources>
 
     <Window.InputBindings>
-        <!-- Ctrl+N, F5, Ctrl+M, Ctrl+Shift+E use valid KeyGestures (modifier or function key). -->
-        <!-- R, Shift+R, F have no modifier so WPF KeyGesture rejects them; handled in PreviewKeyDown. -->
-        <KeyBinding Key="N"  Modifiers="Ctrl"       Command="{Binding NewMessageCommand}"       />
-        <KeyBinding Key="F5"                        Command="{Binding RefreshCommand}"          />
-        <KeyBinding Key="M"  Modifiers="Ctrl"       Command="{Binding LoadMoreMessagesCommand}" />
-        <KeyBinding Key="E"  Modifiers="Ctrl+Shift" Command="{Binding EmptyTrashCommand}"       />
-        <KeyBinding Key="F1"                        Command="{Binding ViewUserGuideCommand}"    />
+        <!-- Navigation shortcuts not in the command registry are handled directly in PreviewKeyDown. -->
+        <!-- Action command shortcuts are routed through the CommandRegistry in OnWindowKeyDown.     -->
     </Window.InputBindings>
 
     <Grid>

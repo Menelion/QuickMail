@@ -17,6 +17,11 @@ public class ConfigModel
     /// <summary>Whether to display messages grouped into conversations instead of a flat list.</summary>
     public bool ConversationView { get; set; } = false;
 
+    // ── Custom hotkey overrides ──────────────────────────────────────────────────
+
+    /// <summary>User-defined keyboard shortcut overrides, stored in hotkeys.json.</summary>
+    public List<HotkeyBinding> CustomHotkeys { get; set; } = [];
+
     // ── Per-account overrides ─────────────────────────────────────────────────────
 
     public Dictionary<Guid, AccountOverrideConfig> Accounts { get; set; } = [];

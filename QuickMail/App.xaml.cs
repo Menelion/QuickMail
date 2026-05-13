@@ -30,11 +30,14 @@ public partial class App : Application
 
         var syncService = new SyncService(imapService, localStore, configService);
 
+        var commandRegistry = new CommandRegistry();
+        commandRegistry.ApplyUserOverrides(configService.Load().CustomHotkeys);
+
         var mainVm = new MainViewModel(
-            imapService, accountService, credentialService, localStore, syncService, configService);
+            imapService, accountService, credentialService, localStore, syncService, configService, commandRegistry);
         mainVm.LoadAccountList();
 
-        var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService);
+        var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry);
         mainWindow.Show();
     }
 }

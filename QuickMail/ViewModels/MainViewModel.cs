@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -119,7 +120,8 @@ public partial class MainViewModel : ObservableObject
         ICredentialService credentials,
         ILocalStoreService localStore,
         ISyncService syncService,
-        IConfigService configService)
+        IConfigService configService,
+        ICommandRegistry commandRegistry)
     {
         _imap           = imap;
         _accountService = accountService;
@@ -134,11 +136,73 @@ public partial class MainViewModel : ObservableObject
 
         _syncService.FolderSynced    += OnFolderSynced;
         _syncService.MessagesRemoved += OnMessagesRemoved;
+
+        RegisterCommands(commandRegistry);
     }
 
     public void LoadAccountList()
     {
         Accounts = new ObservableCollection<AccountModel>(_accountService.LoadAccounts());
+    }
+
+    private void RegisterCommands(ICommandRegistry registry)
+    {
+        registry.Register(new CommandDefinition(
+            id: "mail.new", category: "Mail", title: "New Message",
+            execute: () => NewMessageCommand.Execute(null),
+            defaultKey: Key.N, defaultModifiers: ModifierKeys.Control));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.reply", category: "Mail", title: "Reply",
+            execute: () => ReplyCommand.Execute(null),
+            defaultKey: Key.R, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => HasSelectedMessage));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.replyAll", category: "Mail", title: "Reply All",
+            execute: () => ReplyAllCommand.Execute(null),
+            defaultKey: Key.R, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => HasSelectedMessage));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.forward", category: "Mail", title: "Forward",
+            execute: () => ForwardCommand.Execute(null),
+            defaultKey: Key.F, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => HasSelectedMessage));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.delete", category: "Mail", title: "Delete",
+            execute: () => DeleteMessageCommand.Execute(null),
+            defaultKey: Key.Delete, defaultModifiers: ModifierKeys.None,
+            isAvailable: () => HasSelectedMessage));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.refresh", category: "Mail", title: "Refresh",
+            execute: () => RefreshCommand.Execute(null),
+            defaultKey: Key.F5, defaultModifiers: ModifierKeys.None));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.loadMore", category: "Mail", title: "Load More Messages",
+            execute: () => LoadMoreMessagesCommand.Execute(null),
+            defaultKey: Key.M, defaultModifiers: ModifierKeys.Control));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.emptyTrash", category: "Mail", title: "Empty Trash",
+            execute: () => EmptyTrashCommand.Execute(null),
+            defaultKey: Key.E, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
+        registry.Register(new CommandDefinition(
+            id: "view.toggleConversation", category: "View", title: "Toggle Conversation View",
+            execute: () => IsConversationView = !IsConversationView));
+
+        registry.Register(new CommandDefinition(
+            id: "account.manage", category: "Account", title: "Manage Accounts",
+            execute: () => ManageAccountsCommand.Execute(null)));
+
+        registry.Register(new CommandDefinition(
+            id: "help.userGuide", category: "Help", title: "Open User Guide",
+            execute: () => ViewUserGuideCommand.Execute(null),
+            defaultKey: Key.F1, defaultModifiers: ModifierKeys.None));
     }
 
     // ── Startup ──────────────────────────────────────────────────────────────────

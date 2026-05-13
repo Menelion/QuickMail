@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private readonly ICredentialService _credentials;
     private readonly IImapService _imap;
     private readonly IOAuthService _oauth;
+    private readonly ICommandRegistry _registry;
     private bool _webViewReady;
 
     public MainWindow(
@@ -72,7 +73,8 @@ public partial class MainWindow : Window
         IAccountService accountService,
         ICredentialService credentials,
         IImapService imap,
-        IOAuthService oauth)
+        IOAuthService oauth,
+        ICommandRegistry registry)
     {
         _vm = vm;
         _smtp = smtp;
@@ -80,6 +82,7 @@ public partial class MainWindow : Window
         _credentials = credentials;
         _imap = imap;
         _oauth = oauth;
+        _registry = registry;
 
         InitializeComponent();
         DataContext = vm;
@@ -123,6 +126,17 @@ public partial class MainWindow : Window
     // On startup: initialise WebView2, connect to first account, open INBOX, focus message list
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Register commands that require UI access (must run after InitializeComponent).
+        _registry.Register(new CommandDefinition(
+            id: "view.folderPicker", category: "View", title: "Go to Folder…",
+            execute: OpenFolderPicker,
+            defaultKey: Key.Y, defaultModifiers: ModifierKeys.Control));
+
+        _registry.Register(new CommandDefinition(
+            id: "view.toggleConversation", category: "View", title: "Toggle Conversation View",
+            execute: () => _vm.IsConversationView = !_vm.IsConversationView,
+            defaultKey: Key.C, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
         {
@@ -190,57 +204,68 @@ public partial class MainWindow : Window
     // Global key handler (PreviewKeyDown so it fires before any child can swallow the event).
     private async void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
-        switch (e.KeyboardDevice.Modifiers)
+        var modifiers = e.KeyboardDevice.Modifiers;
+        var key       = e.Key;
+
+        // ── Navigation shortcuts (hardcoded, not in the command registry) ──────────
+        if (modifiers == ModifierKeys.Control)
         {
-            case ModifierKeys.Control:
-                switch (e.Key)
-                {
-                    case Key.D0: ToolbarFirstButton.Focus(); e.Handled = true; break;
-                    case Key.D1: AccountList.Focus();        e.Handled = true; break;
-                    case Key.D2: FolderList.Focus();         e.Handled = true; break;
-                    case Key.D3:
-                        // Focus whichever message panel is currently visible
-                        if (_vm.IsConversationView)
-                            ConversationTree.Focus();
-                        else
-                            MessageList.Focus();
-                        e.Handled = true;
-                        break;
-                    case Key.Y:  OpenFolderPicker();         e.Handled = true; break;
-                    case Key.R:  e.Handled = true; await _vm.ReplyCommand.ExecuteAsync(null);   break;
-                    case Key.F:  e.Handled = true; await _vm.ForwardCommand.ExecuteAsync(null); break;
-                }
-                break;
-
-            case ModifierKeys.Control | ModifierKeys.Shift:
-                switch (e.Key)
-                {
-                    case Key.R:
-                        e.Handled = true;
-                        await _vm.ReplyAllCommand.ExecuteAsync(null);
-                        break;
-                    case Key.C:
-                        _vm.IsConversationView = !_vm.IsConversationView;
-                        e.Handled = true;
-                        break;
-                }
-                break;
-
-            case ModifierKeys.None:
-                if (e.Key == Key.F6) { e.Handled = true; await CycleFocusAsync(true); }
-                else if (e.Key == Key.Escape && _vm.IsMessageOpen)
-                {
+            switch (key)
+            {
+                case Key.D0: ToolbarFirstButton.Focus(); e.Handled = true; return;
+                case Key.D1: AccountList.Focus();        e.Handled = true; return;
+                case Key.D2: FolderList.Focus();         e.Handled = true; return;
+                case Key.D3:
+                    if (_vm.IsConversationView)
+                        ConversationTree.Focus();
+                    else
+                        MessageList.Focus();
+                    e.Handled = true;
+                    return;
+            }
+        }
+        else if (modifiers == ModifierKeys.None)
+        {
+            switch (key)
+            {
+                case Key.F6:
+                    e.Handled = true;
+                    await CycleFocusAsync(true);
+                    return;
+                case Key.Escape when _vm.IsMessageOpen:
                     _vm.IsMessageOpen = false;
                     _vm.MessageDetail = null;
                     ReturnFocusToMessageList();
                     e.Handled = true;
-                }
-                break;
-
-            case ModifierKeys.Shift:
-                if (e.Key == Key.F6) { e.Handled = true; await CycleFocusAsync(false); }
-                break;
+                    return;
+            }
         }
+        else if (modifiers == ModifierKeys.Shift && key == Key.F6)
+        {
+            e.Handled = true;
+            await CycleFocusAsync(false);
+            return;
+        }
+        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.P)
+        {
+            OpenCommandPalette();
+            e.Handled = true;
+            return;
+        }
+
+        // ── Registry-based action commands ───────────────────────────────────────
+        var cmd = _registry.FindByGesture(key, modifiers);
+        if (cmd != null && (cmd.IsAvailable?.Invoke() ?? true))
+        {
+            cmd.Execute();
+            e.Handled = true;
+        }
+    }
+
+    private void OpenCommandPalette()
+    {
+        var palette = new CommandPaletteWindow(_registry) { Owner = this };
+        palette.ShowDialog();
     }
 
     private async void OpenFolderPicker()
