@@ -197,15 +197,27 @@
                         Visibility="{Binding IsMessageOpen, Converter={StaticResource BoolToVisibilityConverter}}">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Margin="8,6,8,0">
-                            <TextBlock Text="{Binding MessageDetail.Subject, FallbackValue=''}"
-                                       FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       AutomationProperties.Name="{Binding MessageDetail.Subject, FallbackValue=''}"/>
-                            <TextBlock Text="{Binding MessageDetail.From, StringFormat='From: {0}', FallbackValue=''}"
-                                       Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding MessageDetail.To, StringFormat='To: {0}', FallbackValue=''}"/>
-                            <TextBlock Text="{Binding MessageDetail.Cc, StringFormat='Cc: {0}', FallbackValue=''}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
+                            <TextBox x:Name="SubjectField"
+                                     Text="{Binding MessageDetail.Subject, FallbackValue='', Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent"
+                                     FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
+                                     AutomationProperties.Name="{Binding MessageDetail.Subject, FallbackValue=''}"/>
+                            <TextBox x:Name="FromField"
+                                     Text="{Binding MessageDetail.From, StringFormat='From: {0}', FallbackValue='', Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent"
+                                     Margin="0,2,0,0"/>
+                            <TextBox x:Name="ToField"
+                                     Text="{Binding MessageDetail.To, StringFormat='To: {0}', FallbackValue='', Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent"/>
+                            <TextBox x:Name="CcField"
+                                     Text="{Binding MessageDetail.Cc, StringFormat='Cc: {0}', FallbackValue='', Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding MessageDetail.Cc}" Value="">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -215,9 +227,12 @@
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <TextBlock Text="{Binding MessageDetail.Date, StringFormat='Date: {0:f}', FallbackValue=''}"/>
+                                </TextBox.Style>
+                            </TextBox>
+                            <TextBox x:Name="DateField"
+                                     Text="{Binding MessageDetail.Date, StringFormat='Date: {0:f}', FallbackValue='', Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent"/>
 
                             <!-- Attachments (visible when selected message has attachments) -->
                             <ListBox x:Name="ReadingPaneAttachmentList"
@@ -260,7 +275,8 @@
                         <!-- WebView2: real browser, proper arrow-key caret nav, screen-reader virtual cursor -->
                         <wv2:WebView2 x:Name="MessageBody"
                                       AutomationProperties.Name="Message body. Press Escape to return to message list."
-                                      KeyboardNavigation.IsTabStop="False"
+                                      KeyboardNavigation.IsTabStop="True"
+                                      GotKeyboardFocus="MessageBody_GotKeyboardFocus"
                                       MinHeight="80"/>
                     </DockPanel>
                 </Border>

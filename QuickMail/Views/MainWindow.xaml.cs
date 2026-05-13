@@ -138,14 +138,15 @@ public partial class MainWindow : Window
             MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
             MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
-            // Inject Escape and F6 relay into every page at the host level — runs before any CSP.
+            // Inject Escape, F6, and Shift+Tab relay into every page at the host level — runs before any CSP.
             await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
                 "window.addEventListener('keydown',function(e){"
                 +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
                 +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
+                +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
                 +"});");
 
-            // JavaScript in every page posts a message when Escape or F6 is pressed,
+            // JavaScript in every page posts a message when Escape, F6, or Shift+Tab is pressed,
             // which we relay back to WPF to move focus appropriately.
             MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
             {
@@ -161,6 +162,8 @@ public partial class MainWindow : Window
                     Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
                 else if (msg == "shift-f6")
                     Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
+                else if (msg == "shift-tab")
+                    Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
             };
         }
         catch (Exception ex)
@@ -479,6 +482,9 @@ public partial class MainWindow : Window
     {
         if (!_webViewReady) return;
 
+        var encodedSubject = WebUtility.HtmlEncode(detail.Subject ?? string.Empty);
+        var titleTag = $"<title>{encodedSubject}</title>";
+
         string html;
         if (!string.IsNullOrWhiteSpace(detail.HtmlBody))
         {
@@ -489,10 +495,17 @@ public partial class MainWindow : Window
                 "<meta http-equiv=\"Content-Security-Policy\" " +
                 "content=\"script-src 'none'; object-src 'none'; frame-src 'none';\">";
             var body = detail.HtmlBody;
+
+            // Replace any existing <title> so screen readers announce our subject, not the sender's.
+            body = System.Text.RegularExpressions.Regex.Replace(
+                body, @"<title[^>]*>.*?</title>", string.Empty,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+
             var headIdx = body.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
             html = headIdx >= 0
-                ? body.Insert(headIdx + 6, cspTag)
-                : cspTag + body;
+                ? body.Insert(headIdx + 6, titleTag + cspTag)
+                : titleTag + cspTag + body;
         }
         else
         {
@@ -501,7 +514,7 @@ public partial class MainWindow : Window
             html =
                 "<!DOCTYPE html>\n" +
                 "<html lang=\"en\">\n" +
-                "<head><meta charset=\"utf-8\"><style>\n" +
+                $"<head><meta charset=\"utf-8\">{titleTag}<style>\n" +
                 "html,body{margin:0;padding:8px 12px;font-family:Segoe UI,Arial,sans-serif;" +
                 "font-size:13px;white-space:pre-wrap;word-break:break-word;" +
                 "background:Window;color:WindowText;outline:none;}\n" +
@@ -526,6 +539,24 @@ public partial class MainWindow : Window
         // Give focus to the browser control and push keyboard focus into <body>
         MessageBody.Focus();
         await MessageBody.CoreWebView2.ExecuteScriptAsync("document.body.focus()");
+    }
+
+    // When the WebView2 host receives WPF keyboard focus (e.g. Tab from a header field),
+    // push focus into the HTML document body so the user can read/navigate content.
+    private async void MessageBody_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_webViewReady)
+            await MessageBody.CoreWebView2.ExecuteScriptAsync("document.body.focus()");
+    }
+
+    // Focuses the last visible field in the reading-pane header so Shift+Tab from the
+    // WebView2 body lands in the right place (attachments list if present, else Date).
+    private void FocusLastHeaderField()
+    {
+        if (ReadingPaneAttachmentList.Visibility == Visibility.Visible)
+            ReadingPaneAttachmentList.Focus();
+        else
+            DateField.Focus();
     }
 
     // Return keyboard focus to the active message panel after reading a message.
@@ -582,8 +613,8 @@ public partial class MainWindow : Window
 
     // Returns the index of the pane that currently holds keyboard focus:
     //   0 = Toolbar, 1 = Account list, 2 = Folder list,
-    //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2, only when open),
-    //   4 or 5 = Status bar (always last in the ring).
+    //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2),
+    //   5 = Status bar.
     // Falls back to 0 if no match.
     private int GetFocusedPaneIndex()
     {
@@ -592,8 +623,7 @@ public partial class MainWindow : Window
         if (FolderList.IsKeyboardFocusWithin)   return 2;
         if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin) return 3;
         if (MessageBody.IsKeyboardFocusWithin)  return 4;
-        if (MainStatusBar.IsKeyboardFocusWithin)
-            return (_vm.IsMessageOpen && _webViewReady) ? 5 : 4;
+        if (MainStatusBar.IsKeyboardFocusWithin) return 5;
         return 0;
     }
 
@@ -622,15 +652,22 @@ public partial class MainWindow : Window
     }
 
     // Cycles keyboard focus forward (F6) or backward (Shift+F6) through the pane ring.
-    // Status bar is always the last stop. Reading pane (index 4) is included only when open.
+    // The reading pane (index 4) is included only when a message is open.
+    // StatusBar (index 5) is always the last stop before wrapping back to Toolbar.
     private async Task CycleFocusAsync(bool forward)
     {
-        int count   = (_vm.IsMessageOpen && _webViewReady) ? 6 : 5;
-        int current = Math.Min(GetFocusedPaneIndex(), count - 1);
-        int next    = forward
-            ? (current + 1) % count
-            : (current - 1 + count) % count;
-        await FocusPaneAtAsync(next);
+        // Build the ordered list of active pane indices.
+        var panes = new System.Collections.Generic.List<int> { 0, 1, 2, 3 };
+        if (_vm.IsMessageOpen && _webViewReady) panes.Add(4);
+        panes.Add(5); // StatusBar always included
+
+        int current    = GetFocusedPaneIndex();
+        int currentPos = panes.IndexOf(current);
+        if (currentPos < 0) currentPos = 0;
+        int nextPos = forward
+            ? (currentPos + 1) % panes.Count
+            : (currentPos - 1 + panes.Count) % panes.Count;
+        await FocusPaneAtAsync(panes[nextPos]);
     }
 
     // Focuses the first (or currently selected) TreeViewItem in the conversation tree.
