@@ -19,9 +19,10 @@ public partial class FolderPickerWindow : Window
     public MailFolderModel? SelectedFolder { get; private set; }
     public AccountModel? SelectedAccount { get; private set; }
 
-    public FolderPickerWindow(IEnumerable<AccountModel> accounts, IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders, MailFolderModel? allMailFolder = null)
+    public FolderPickerWindow(IEnumerable<AccountModel> accounts, IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders, MailFolderModel? allMailFolder = null, string title = "Go to Folder")
     {
         InitializeComponent();
+        Title = title;
 
         var roots = new List<FolderTreeNode>();
 

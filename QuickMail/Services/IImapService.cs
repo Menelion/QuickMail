@@ -51,4 +51,16 @@ public interface IImapService : IDisposable
 
     /// <summary>Downloads and decodes a single attachment by its IMAP body-part specifier.</summary>
     Task<byte[]> DownloadAttachmentAsync(Guid accountId, string folderName, uint uid, string partSpecifier, CancellationToken ct = default);
+
+    // ── Copy / Move messages ─────────────────────────────────────────────────
+    Task CopyMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default);
+    Task MoveMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default);
+
+    // ── Folder CRUD ──────────────────────────────────────────────────────────
+    Task CreateFolderAsync(Guid accountId, string? parentFolderName, string name, CancellationToken ct = default);
+    Task DeleteFolderAsync(Guid accountId, string folderName, CancellationToken ct = default);
+    /// <summary>Moves a folder by renaming it under a new parent. Pass null for <paramref name="newParentFolderName"/> to move to the account root.</summary>
+    Task RenameFolderAsync(Guid accountId, string folderName, string newName, string? newParentFolderName, CancellationToken ct = default);
+    /// <summary>Recursively copies a folder and all its messages into a new parent folder.</summary>
+    Task CopyFolderAsync(Guid accountId, string folderName, string? destinationParentName, CancellationToken ct = default);
 }

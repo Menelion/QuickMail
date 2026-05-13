@@ -405,6 +405,101 @@ public class ImapService : IImapService
         finally { await draftsFolder.CloseAsync(false, ct); }
     }
 
+    // ── Copy / Move messages ─────────────────────────────────────────────────────
+
+    public async Task CopyMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var folder = await client.GetFolderAsync(folderName, ct);
+        var dest   = await client.GetFolderAsync(destinationFolder, ct);
+        await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+        try   { await folder.CopyToAsync(uids.Select(u => new UniqueId(u)).ToList(), dest, ct); }
+        finally { await folder.CloseAsync(false, ct); }
+    }
+
+    public async Task MoveMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var folder = await client.GetFolderAsync(folderName, ct);
+        var dest   = await client.GetFolderAsync(destinationFolder, ct);
+        await folder.OpenAsync(FolderAccess.ReadWrite, ct);
+        try   { await folder.MoveToAsync(uids.Select(u => new UniqueId(u)).ToList(), dest, ct); }
+        finally { await folder.CloseAsync(false, ct); }
+    }
+
+    // ── Folder CRUD ──────────────────────────────────────────────────────────────
+
+    public async Task CreateFolderAsync(Guid accountId, string? parentFolderName, string name, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        IMailFolder parent = string.IsNullOrEmpty(parentFolderName)
+            ? client.GetFolder(client.PersonalNamespaces[0])
+            : await client.GetFolderAsync(parentFolderName, ct);
+        await parent.CreateAsync(name, true, ct);
+    }
+
+    public async Task DeleteFolderAsync(Guid accountId, string folderName, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var folder = await client.GetFolderAsync(folderName, ct);
+
+        // Move all messages to Trash first so no mail is hard-deleted
+        await folder.OpenAsync(FolderAccess.ReadWrite, ct);
+        try
+        {
+            var uids = await folder.SearchAsync(SearchQuery.All, ct);
+            if (uids.Count > 0)
+            {
+                var trash = FindSpecialFolder(client, SpecialFolder.Trash);
+                if (trash != null) await folder.MoveToAsync(uids, trash, ct);
+                else               await folder.AddFlagsAsync(uids, MessageFlags.Deleted, true, ct);
+            }
+        }
+        finally { await folder.CloseAsync(false, ct); }
+
+        await folder.DeleteAsync(ct);
+    }
+
+    public async Task RenameFolderAsync(Guid accountId, string folderName, string newName, string? newParentFolderName, CancellationToken ct = default)
+    {
+        var client = await GetOrReconnectAsync(accountId, ct);
+        var folder = await client.GetFolderAsync(folderName, ct);
+        IMailFolder parent = string.IsNullOrEmpty(newParentFolderName)
+            ? client.GetFolder(client.PersonalNamespaces[0])
+            : await client.GetFolderAsync(newParentFolderName, ct);
+        await folder.RenameAsync(parent, newName, ct);
+    }
+
+    public async Task CopyFolderAsync(Guid accountId, string folderName, string? destinationParentName, CancellationToken ct = default)
+    {
+        var client    = await GetOrReconnectAsync(accountId, ct);
+        var srcFolder = await client.GetFolderAsync(folderName, ct);
+
+        IMailFolder destParent = string.IsNullOrEmpty(destinationParentName)
+            ? client.GetFolder(client.PersonalNamespaces[0])
+            : await client.GetFolderAsync(destinationParentName, ct);
+
+        var newFolder = await destParent.CreateAsync(srcFolder.Name, true, ct)
+            ?? throw new InvalidOperationException($"Failed to create destination folder '{srcFolder.Name}'.");
+
+        await srcFolder.OpenAsync(FolderAccess.ReadOnly, ct);
+        try
+        {
+            if (srcFolder.Count > 0)
+            {
+                var uids = await srcFolder.SearchAsync(SearchQuery.All, ct);
+                if (uids.Count > 0)
+                    await srcFolder.CopyToAsync(uids, newFolder, ct);
+            }
+        }
+        finally { await srcFolder.CloseAsync(false, ct); }
+
+        // Recurse into subfolders
+        var subfolders = await srcFolder.GetSubfoldersAsync(false, ct);
+        foreach (var sub in subfolders)
+            await CopyFolderAsync(accountId, sub.FullName, newFolder.FullName, ct);
+    }
+
     public async Task<int> EmptyTrashAsync(Guid accountId, CancellationToken ct = default)
     {
         var client = await GetOrReconnectAsync(accountId, ct);

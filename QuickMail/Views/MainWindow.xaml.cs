@@ -89,6 +89,7 @@ public partial class MainWindow : Window
 
         vm.ComposeRequested += OpenComposeWindow;
         vm.ManageAccountsRequested += OpenAccountManager;
+        vm.OpenAccountSettingsRequested += OpenAccountManagerForAccount;
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
         vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
 
@@ -852,6 +853,178 @@ public partial class MainWindow : Window
         var dialog = new AccountManagerDialog(accountVm) { Owner = this };
         if (dialog.ShowDialog() == true)
             _vm.RefreshAccountList();
+    }
+
+    private void OpenAccountManagerForAccount(AccountModel account)
+    {
+        var accountVm = new AccountManagerViewModel(_accountService, _credentials, _imap, _oauth);
+        var dialog    = new AccountManagerDialog(accountVm) { Owner = this };
+        // Pre-select the account in the manager
+        accountVm.SelectedAccount = accountVm.Accounts.FirstOrDefault(a => a.Id == account.Id);
+        if (dialog.ShowDialog() == true)
+            _vm.RefreshAccountList();
+    }
+
+    // ── Folder context menu handlers ─────────────────────────────────────────
+
+    private FolderTreeNode? GetContextMenuFolderNode(object sender)
+    {
+        var item = sender as MenuItem;
+        var menu = item?.Parent as ContextMenu;
+        return (menu?.PlacementTarget as TreeViewItem)?.DataContext as FolderTreeNode;
+    }
+
+    private async void FolderContextMenu_NewFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var node = GetContextMenuFolderNode(sender);
+        if (node == null) return;
+
+        // Determine the parent: if it's a header node (account), create at root; otherwise under the selected folder
+        var parentFolder = node.IsHeader ? null : node.Folder;
+        var accountId    = parentFolder?.AccountId
+                          ?? _vm.Accounts.FirstOrDefault(a => a.DisplayName == node.Label)?.Id
+                          ?? _vm.SelectedAccount?.Id;
+        if (accountId == null || accountId == Guid.Empty) return;
+
+        var dlg = new NewFolderDialog
+        {
+            Owner = this,
+            ParentFolderName = parentFolder?.DisplayName ?? node.Label
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        await _vm.CreateFolderAndRefreshAsync(accountId.Value, parentFolder?.FullName, dlg.FolderName);
+    }
+
+    private async void FolderContextMenu_MoveFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var node = GetContextMenuFolderNode(sender);
+        if (node?.Folder == null || node.IsHeader) return;
+
+        if (_vm.CachedFolders.Count == 0) return;
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move Folder To") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveFolderToAsync(node, picker.SelectedFolder);
+    }
+
+    private async void FolderContextMenu_CopyFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var node = GetContextMenuFolderNode(sender);
+        if (node?.Folder == null || node.IsHeader) return;
+
+        if (_vm.CachedFolders.Count == 0) return;
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy Folder To") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopyFolderToAsync(node, picker.SelectedFolder);
+    }
+
+    private async void FolderContextMenu_DeleteFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var node = GetContextMenuFolderNode(sender);
+        if (node == null) return;
+        await _vm.DeleteFolderAsync(node);
+    }
+
+    // ── Message context menu handlers ────────────────────────────────────────
+
+    private IReadOnlyList<MailMessageSummary> GetSelectedMessages()
+    {
+        // MessageList (standard view)
+        if (MessageList.IsVisible && MessageList.SelectedItems.Count > 0)
+            return MessageList.SelectedItems.OfType<MailMessageSummary>().ToList();
+
+        // ConversationTree child node (individual message)
+        if (ConversationTree.IsVisible && ConversationTree.SelectedItem is MailMessageSummary msg)
+            return [msg];
+
+        // Fallback: VM's selected message
+        if (_vm.SelectedMessage != null)
+            return [_vm.SelectedMessage];
+
+        return [];
+    }
+
+    private async void MessageContextMenu_MoveToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var messages = GetSelectedMessages();
+        if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveSelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
+    }
+
+    private async void MessageContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var messages = GetSelectedMessages();
+        if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopySelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
+    }
+
+    // ── Conversation context menu handlers ───────────────────────────────────
+
+    private async void ConversationContextMenu_MoveToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (ConversationTree.SelectedItem is not ConversationGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move Conversation to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+    }
+
+    private async void ConversationContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (ConversationTree.SelectedItem is not ConversationGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy Conversation to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopySelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+    }
+
+    // ── ConversationTree right-click helpers ─────────────────────────────────
+
+    private void ConversationTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Walk up from the original source to find the TreeViewItem that was clicked,
+        // then select it so SelectedItem is correct when ContextMenuOpening fires.
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null && source is not TreeViewItem)
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+
+        if (source is TreeViewItem tvi)
+        {
+            tvi.IsSelected = true;
+            tvi.Focus();
+        }
+    }
+
+    private void ConversationTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        switch (ConversationTree.SelectedItem)
+        {
+            case ConversationGroup:
+                ConversationTree.ContextMenu = (ContextMenu)FindResource("ConversationGroupContextMenu");
+                break;
+            case MailMessageSummary:
+                // Child-node message: the MessageContextMenu is already on the TreeViewItem style;
+                // suppress the tree-level menu to avoid a double menu.
+                e.Handled = true;
+                break;
+            default:
+                e.Handled = true;
+                break;
+        }
     }
 
 }

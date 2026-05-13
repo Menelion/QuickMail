@@ -1055,6 +1055,312 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageAccounts() => ManageAccountsRequested?.Invoke();
 
+    // ── Account context menu commands ─────────────────────────────────────────
+
+    public event Action<AccountModel>? OpenAccountSettingsRequested;
+
+    [RelayCommand]
+    private void DeleteAccount(AccountModel? account)
+    {
+        if (account == null) return;
+
+        var result = MessageBox.Show(
+            $"Remove the account '{account.DisplayName}'? This only removes it from QuickMail — your mail on the server is not affected.",
+            "Remove Account",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        _credentials.DeletePassword(account.Id);
+        Accounts.Remove(account);
+        _accountService.SaveAccounts([.. Accounts]);
+
+        _cachedFolders.Remove(account.Id);
+        RebuildFolderListFromCache();
+
+        if (SelectedAccount?.Id == account.Id)
+        {
+            SelectedAccount  = Accounts.FirstOrDefault();
+            SelectedFolder   = AllMailFolder;
+            Messages.Clear();
+        }
+
+        StatusText = $"Account '{account.DisplayName}' removed.";
+    }
+
+    [RelayCommand]
+    private void OpenAccountSettings(AccountModel? account)
+    {
+        if (account != null)
+            OpenAccountSettingsRequested?.Invoke(account);
+    }
+
+    // ── Folder context menu commands ──────────────────────────────────────────
+
+    /// <summary>
+    /// Refreshes the folder list for one account from the server.
+    /// Called after any folder CRUD operation.
+    /// </summary>
+    public async Task RefreshFolderListAsync(Guid accountId)
+    {
+        try
+        {
+            using var cts   = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var folderList  = await _imap.GetFoldersAsync(accountId, cts.Token);
+            _cachedFolders[accountId] = folderList;
+            RebuildFolderListFromCache();
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("RefreshFolderList", ex);
+            StatusText = $"Failed to refresh folders: {ex.Message}";
+        }
+    }
+
+    /// <summary>Creates a new folder under the given parent and refreshes the tree.</summary>
+    public async Task CreateFolderAndRefreshAsync(Guid accountId, string? parentFolderName, string name)
+    {
+        StatusText = $"Creating folder '{name}'…";
+        IsBusy     = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await _imap.CreateFolderAsync(accountId, parentFolderName, name, cts.Token);
+            await RefreshFolderListAsync(accountId);
+            StatusText = $"Folder '{name}' created.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to create folder: {ex.Message}";
+            LogService.Log("CreateFolder", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>Moves a folder to a new parent (IMAP RENAME) and refreshes the tree.</summary>
+    public async Task MoveFolderToAsync(FolderTreeNode node, MailFolderModel destination)
+    {
+        if (node.Folder == null) return;
+        StatusText = $"Moving folder '{node.Label}'…";
+        IsBusy     = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await _imap.RenameFolderAsync(
+                node.Folder.AccountId,
+                node.Folder.FullName,
+                node.Folder.DisplayName,
+                destination.FullName,
+                cts.Token);
+            await RefreshFolderListAsync(node.Folder.AccountId);
+            StatusText = $"Folder '{node.Label}' moved.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to move folder: {ex.Message}";
+            LogService.Log("MoveFolder", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>Copies a folder (and all its messages) to a new parent and refreshes the tree.</summary>
+    public async Task CopyFolderToAsync(FolderTreeNode node, MailFolderModel destination)
+    {
+        if (node.Folder == null) return;
+        StatusText = $"Copying folder '{node.Label}'…";
+        IsBusy     = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            await _imap.CopyFolderAsync(
+                node.Folder.AccountId,
+                node.Folder.FullName,
+                destination.FullName,
+                cts.Token);
+            await RefreshFolderListAsync(node.Folder.AccountId);
+            StatusText = $"Folder '{node.Label}' copied.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to copy folder: {ex.Message}";
+            LogService.Log("CopyFolder", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Moves all messages in the folder to Trash, deletes the folder, and refreshes the tree.
+    /// Shows a confirmation dialog first.
+    /// </summary>
+    public async Task DeleteFolderAsync(FolderTreeNode node)
+    {
+        if (node.Folder == null || node.IsHeader) return;
+
+        var result = MessageBox.Show(
+            $"Delete the folder '{node.Label}' and move all its messages to Trash?",
+            "Delete Folder",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        StatusText = $"Deleting folder '{node.Label}'…";
+        IsBusy     = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await _imap.DeleteFolderAsync(node.Folder.AccountId, node.Folder.FullName, cts.Token);
+
+            // If the deleted folder was selected, fall back to All Mail
+            if (SelectedFolder?.FullName == node.Folder.FullName)
+            {
+                SelectedFolder = AllMailFolder;
+                await FetchAllMailAsync();
+            }
+
+            await RefreshFolderListAsync(node.Folder.AccountId);
+            StatusText = $"Folder '{node.Label}' deleted.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to delete folder: {ex.Message}";
+            LogService.Log("DeleteFolder", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    // ── Message move / copy ───────────────────────────────────────────────────
+
+    /// <summary>Moves the given messages to a destination folder and removes them from the current view.</summary>
+    public async Task MoveSelectedMessagesToFolderAsync(IReadOnlyList<MailMessageSummary> messages, MailFolderModel destination)
+    {
+        if (messages.Count == 0) return;
+
+        var label  = messages.Count == 1 ? "message" : $"{messages.Count} messages";
+        StatusText = $"Moving {label}…";
+        IsBusy     = true;
+        try
+        {
+            _messageCts?.Cancel();
+            _messageCts = new CancellationTokenSource();
+
+            var groups = messages.GroupBy(m => (m.AccountId, m.FolderName));
+            foreach (var group in groups)
+            {
+                var uids = group.Select(m => m.UniqueId).ToList();
+                await _imap.MoveMessagesAsync(
+                    group.Key.AccountId, group.Key.FolderName, uids,
+                    destination.FullName, _messageCts.Token);
+                await _localStore.DeleteSummariesAsync(group.Key.AccountId, group.Key.FolderName, uids);
+            }
+
+            foreach (var msg in messages)
+                Messages.Remove(msg);
+
+            if (IsConversationView)
+                ScheduleConversationRebuild();
+
+            StatusText = $"{messages.Count} {(messages.Count == 1 ? "message" : "messages")} moved to {destination.DisplayName}.";
+            Announce(StatusText);
+        }
+        catch (OperationCanceledException) { StatusText = "Move cancelled."; }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to move: {ex.Message}";
+            LogService.Log("MoveMessages", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>Copies the given messages to a destination folder without removing them from the current view.</summary>
+    public async Task CopySelectedMessagesToFolderAsync(IReadOnlyList<MailMessageSummary> messages, MailFolderModel destination)
+    {
+        if (messages.Count == 0) return;
+
+        var label  = messages.Count == 1 ? "message" : $"{messages.Count} messages";
+        StatusText = $"Copying {label}…";
+        IsBusy     = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var groups    = messages.GroupBy(m => (m.AccountId, m.FolderName));
+            foreach (var group in groups)
+                await _imap.CopyMessagesAsync(
+                    group.Key.AccountId, group.Key.FolderName,
+                    group.Select(m => m.UniqueId).ToList(),
+                    destination.FullName, cts.Token);
+
+            StatusText = $"{messages.Count} {(messages.Count == 1 ? "message" : "messages")} copied to {destination.DisplayName}.";
+            Announce(StatusText);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to copy: {ex.Message}";
+            LogService.Log("CopyMessages", ex);
+        }
+        finally { IsBusy = false; }
+    }
+
+    // ── Conversation context menu commands ────────────────────────────────────
+
+    [RelayCommand]
+    private void ExpandConversation(ConversationGroup? group)
+    {
+        if (group != null) group.IsExpanded = true;
+    }
+
+    [RelayCommand]
+    private void CollapseConversation(ConversationGroup? group)
+    {
+        if (group != null) group.IsExpanded = false;
+    }
+
+    [RelayCommand]
+    private void ExpandAllConversations()
+    {
+        foreach (var g in Conversations) g.IsExpanded = true;
+    }
+
+    [RelayCommand]
+    private void CollapseAllConversations()
+    {
+        foreach (var g in Conversations) g.IsExpanded = false;
+    }
+
+    [RelayCommand]
+    private async Task ReplyConversationAsync(ConversationGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0]; // newest first
+        var detail = await EnsureDetailAsync();
+        if (detail == null) return;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReply(detail, detail.AccountId));
+    }
+
+    [RelayCommand]
+    private async Task ReplyAllConversationAsync(ConversationGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0];
+        var detail = await EnsureDetailAsync();
+        if (detail == null) return;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReplyAll(detail, detail.AccountId));
+    }
+
+    [RelayCommand]
+    private async Task ForwardConversationAsync(ConversationGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0];
+        await Forward();
+    }
+
+    [RelayCommand]
+    private async Task DeleteConversationAsync(ConversationGroup? group)
+    {
+        if (group == null || group.Messages.Count == 0) return;
+        await DeleteMessagesAsync(group.Messages);
+    }
+
     [RelayCommand]
     private void ViewUserGuide()
     {

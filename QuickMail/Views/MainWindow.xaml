@@ -16,6 +16,80 @@
         <BooleanToVisibilityConverter    x:Key="BoolToVisibilityConverter"/>
         <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
         <local:BoolToColumnWidthConverter       x:Key="BoolToColumnWidthConverter"/>
+
+        <!-- ── Shared context menus ── -->
+
+        <!-- Conversation-group context menu (root level of ConversationTree) -->
+        <ContextMenu x:Key="ConversationGroupContextMenu"
+                     AutomationProperties.Name="Conversation actions"
+                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="_Reply"
+                      AutomationProperties.Name="Reply"
+                      Command="{Binding ReplyConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Reply _All"
+                      AutomationProperties.Name="Reply All"
+                      Command="{Binding ReplyAllConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="_Forward"
+                      AutomationProperties.Name="Forward"
+                      Command="{Binding ForwardConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="Move to _Folder…"
+                      AutomationProperties.Name="Move Conversation to Folder"
+                      Click="ConversationContextMenu_MoveToFolder_Click"/>
+            <MenuItem Header="_Copy to Folder…"
+                      AutomationProperties.Name="Copy Conversation to Folder"
+                      Click="ConversationContextMenu_CopyToFolder_Click"/>
+            <Separator/>
+            <MenuItem Header="_Delete Conversation"
+                      AutomationProperties.Name="Delete Conversation"
+                      Command="{Binding DeleteConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="E_xpand Conversation"
+                      AutomationProperties.Name="Expand Conversation"
+                      Command="{Binding ExpandConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Colla_pse Conversation"
+                      AutomationProperties.Name="Collapse Conversation"
+                      Command="{Binding CollapseConversationCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="Expand _All Conversations"
+                      AutomationProperties.Name="Expand All Conversations"
+                      Command="{Binding ExpandAllConversationsCommand}"/>
+            <MenuItem Header="Collapse A_ll Conversations"
+                      AutomationProperties.Name="Collapse All Conversations"
+                      Command="{Binding CollapseAllConversationsCommand}"/>
+        </ContextMenu>
+
+        <!-- Individual-message context menu (MessageList and child nodes in ConversationTree) -->
+        <ContextMenu x:Key="MessageContextMenu"
+                     AutomationProperties.Name="Message actions"
+                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="_Reply"
+                      AutomationProperties.Name="Reply"
+                      Command="{Binding ReplyCommand}"/>
+            <MenuItem Header="Reply _All"
+                      AutomationProperties.Name="Reply All"
+                      Command="{Binding ReplyAllCommand}"/>
+            <MenuItem Header="_Forward"
+                      AutomationProperties.Name="Forward"
+                      Command="{Binding ForwardCommand}"/>
+            <Separator/>
+            <MenuItem Header="Move to _Folder…"
+                      AutomationProperties.Name="Move to Folder"
+                      Click="MessageContextMenu_MoveToFolder_Click"/>
+            <MenuItem Header="_Copy to Folder…"
+                      AutomationProperties.Name="Copy to Folder"
+                      Click="MessageContextMenu_CopyToFolder_Click"/>
+            <Separator/>
+            <MenuItem Header="_Delete"
+                      AutomationProperties.Name="Delete"
+                      Command="{Binding DeleteMessageCommand}"/>
+        </ContextMenu>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -136,7 +210,20 @@
                          TabIndex="1"
                          KeyboardNavigation.TabNavigation="Once"
                          GotKeyboardFocus="List_GotKeyboardFocus"
-                         PreviewKeyDown="AccountList_PreviewKeyDown"/>
+                         PreviewKeyDown="AccountList_PreviewKeyDown">
+                    <ListBox.ContextMenu>
+                        <ContextMenu AutomationProperties.Name="Account actions">
+                            <MenuItem Header="_Delete Account"
+                                      AutomationProperties.Name="Delete Account"
+                                      Command="{Binding PlacementTarget.DataContext.DeleteAccountCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                            <MenuItem Header="Account _Settings…"
+                                      AutomationProperties.Name="Account Settings"
+                                      Command="{Binding PlacementTarget.DataContext.OpenAccountSettingsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
 
                 <TextBlock Grid.Row="2" Text="Folders" FontWeight="SemiBold" Padding="6,4"
                            Focusable="False"
@@ -172,6 +259,28 @@
                         <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                             <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/>
+                            <!-- Tag exposes the window DataContext (MainViewModel) to the ContextMenu -->
+                            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                            <Setter Property="ContextMenu">
+                                <Setter.Value>
+                                    <ContextMenu AutomationProperties.Name="Folder actions">
+                                        <MenuItem Header="_New Folder…"
+                                                  AutomationProperties.Name="New Folder"
+                                                  Click="FolderContextMenu_NewFolder_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="_Move Folder…"
+                                                  AutomationProperties.Name="Move Folder"
+                                                  Click="FolderContextMenu_MoveFolder_Click"/>
+                                        <MenuItem Header="_Copy Folder…"
+                                                  AutomationProperties.Name="Copy Folder"
+                                                  Click="FolderContextMenu_CopyFolder_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="_Delete Folder"
+                                                  AutomationProperties.Name="Delete Folder"
+                                                  Click="FolderContextMenu_DeleteFolder_Click"/>
+                                    </ContextMenu>
+                                </Setter.Value>
+                            </Setter>
                         </Style>
                     </TreeView.ItemContainerStyle>
                 </TreeView>
@@ -309,6 +418,7 @@
                     <Grid>
                     <ListView x:Name="MessageList"
                               AutomationProperties.Name="Messages"
+                              ContextMenu="{StaticResource MessageContextMenu}"
                               Visibility="{Binding IsConversationView, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                               ItemsSource="{Binding Messages}"
                               SelectedItem="{Binding SelectedMessage, Mode=TwoWay}"
@@ -441,7 +551,9 @@
                               ScrollViewer.CanContentScroll="True"
                               GotKeyboardFocus="ConversationTree_GotKeyboardFocus"
                               SelectedItemChanged="ConversationTree_SelectedItemChanged"
-                              PreviewKeyDown="ConversationTree_PreviewKeyDown">
+                              PreviewKeyDown="ConversationTree_PreviewKeyDown"
+                              PreviewMouseRightButtonDown="ConversationTree_PreviewMouseRightButtonDown"
+                              ContextMenuOpening="ConversationTree_ContextMenuOpening">
                         <TreeView.Resources>
                             <!-- Style for level-2 message rows (children of a conversation node) -->
                             <Style x:Key="MessageTreeItemStyle" TargetType="TreeViewItem"
@@ -457,6 +569,7 @@
                                         </MultiBinding>
                                     </Setter.Value>
                                 </Setter>
+                                <Setter Property="ContextMenu" Value="{StaticResource MessageContextMenu}"/>
                             </Style>
 
                             <!-- Level 1: conversation group header with subject + count + preview -->
