@@ -142,6 +142,22 @@ public partial class AccountManagerViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SetDefault(AccountModel? account)
+    {
+        if (account == null) return;
+        _accountService.SetDefaultAccount(account.Id);
+        foreach (var a in Accounts)
+            a.IsDefault = a.Id == account.Id;
+        // Rebuild the collection so item templates re-evaluate IsDefault bindings.
+        var selectedId = SelectedAccount?.Id;
+        Accounts = new ObservableCollection<AccountModel>([.. Accounts]);
+        SelectedAccount = selectedId.HasValue
+            ? Accounts.FirstOrDefault(a => a.Id == selectedId.Value)
+            : null;
+        StatusText = $"{account.DisplayName} set as default.";
+    }
+
+    [RelayCommand]
     private async Task SignInMicrosoftAsync()
     {
         IsBusy = true;

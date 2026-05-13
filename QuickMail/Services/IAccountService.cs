@@ -7,4 +7,5 @@ public interface IAccountService
 {
     List<AccountModel> LoadAccounts();
     void SaveAccounts(List<AccountModel> accounts);
+    void SetDefaultAccount(Guid accountId);
 }

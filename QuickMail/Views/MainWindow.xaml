@@ -519,17 +519,32 @@
         </Grid>
 
         <!-- ── Status bar ── -->
-        <StatusBar Grid.Row="2">
-            <StatusBarItem>
+        <!-- Focusable=True lets F6 land here. IsTabStop=False keeps it out of Tab order.
+             WPF StatusBar maps to ControlType.StatusBar in UIA automatically. -->
+        <StatusBar x:Name="MainStatusBar"
+                   Grid.Row="2"
+                   Focusable="True"
+                   IsTabStop="False"
+                   KeyboardNavigation.DirectionalNavigation="None"
+                   AutomationProperties.Name="Status bar"
+                   PreviewKeyDown="StatusBar_PreviewKeyDown">
+            <StatusBarItem x:Name="StatusTextItem"
+                           Focusable="True"
+                           IsTabStop="False"
+                           AutomationProperties.Name="{Binding StatusText}">
                 <TextBlock Text="{Binding StatusText}"
                            AutomationProperties.LiveSetting="Polite"
                            AutomationProperties.Name="Status"/>
             </StatusBarItem>
 
-            <StatusBarItem HorizontalAlignment="Right">
+            <StatusBarItem x:Name="StatusProgressItem"
+                           HorizontalAlignment="Right"
+                           Focusable="True"
+                           IsTabStop="False"
+                           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
+                           AutomationProperties.Name="Loading in progress">
                 <ProgressBar Width="80" Height="14"
                              IsIndeterminate="True"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
                              AutomationProperties.Name="Loading in progress"/>
             </StatusBarItem>
         </StatusBar>

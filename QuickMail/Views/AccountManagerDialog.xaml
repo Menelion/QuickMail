@@ -36,13 +36,28 @@
                 <Button Content="_Delete"
                         Command="{Binding DeleteAccountCommand}"
                         AutomationProperties.Name="Delete selected account"
-                        MinWidth="60"/>
+                        MinWidth="60" Margin="0,0,4,0"/>
+                <Button Content="Set _Default"
+                        Command="{Binding SetDefaultCommand}"
+                        CommandParameter="{Binding SelectedAccount}"
+                        AutomationProperties.Name="Set selected account as default for new messages"
+                        MinWidth="75"/>
             </StackPanel>
             <ListBox ItemsSource="{Binding Accounts}"
                      SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
                      AutomationProperties.Name="Account list"
-                     DisplayMemberPath="DisplayName"
-                     BorderThickness="1"/>
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"/>
+                            <TextBlock Text=" (Default)" FontStyle="Italic" Foreground="DarkBlue"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsDefault, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </DockPanel>
 
         <!-- Splitter -->

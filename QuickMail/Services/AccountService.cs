@@ -39,4 +39,12 @@ public class AccountService : IAccountService
         var json = JsonSerializer.Serialize(accounts, JsonOptions);
         File.WriteAllText(AccountsFile, json);
     }
+
+    public void SetDefaultAccount(Guid accountId)
+    {
+        var accounts = LoadAccounts();
+        foreach (var a in accounts)
+            a.IsDefault = a.Id == accountId;
+        SaveAccounts(accounts);
+    }
 }

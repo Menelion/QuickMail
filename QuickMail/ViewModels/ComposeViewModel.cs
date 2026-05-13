@@ -84,6 +84,7 @@ public partial class ComposeViewModel : ObservableObject
         var accounts = _accountService.LoadAccounts();
         SenderAccounts = new ObservableCollection<AccountModel>(accounts);
         SenderAccount = SenderAccounts.FirstOrDefault(a => a.Id == model.AccountId)
+                        ?? SenderAccounts.FirstOrDefault(a => a.IsDefault)
                         ?? SenderAccounts.FirstOrDefault();
     }
 

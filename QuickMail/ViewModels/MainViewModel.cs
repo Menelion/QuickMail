@@ -764,25 +764,25 @@ public partial class MainViewModel : ObservableObject
     private async Task Reply()
     {
         var detail = await EnsureDetailAsync();
-        if (detail == null || SelectedAccount == null) return;
-        ComposeRequested?.Invoke(ComposeViewModel.CreateReply(detail, SelectedAccount.Id));
+        if (detail == null) return;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReply(detail, detail.AccountId));
     }
 
     [RelayCommand]
     private async Task ReplyAll()
     {
         var detail = await EnsureDetailAsync();
-        if (detail == null || SelectedAccount == null) return;
-        ComposeRequested?.Invoke(ComposeViewModel.CreateReplyAll(detail, SelectedAccount.Id));
+        if (detail == null) return;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReplyAll(detail, detail.AccountId));
     }
 
     [RelayCommand]
     private async Task Forward()
     {
         var detail = await EnsureDetailAsync();
-        if (detail == null || SelectedAccount == null) return;
+        if (detail == null) return;
 
-        var model = ComposeViewModel.CreateForward(detail, SelectedAccount.Id);
+        var model = ComposeViewModel.CreateForward(detail, detail.AccountId);
 
         // Hydrate attachment bytes so the forwarded message can include them.
         if (detail.Attachments.Count > 0)
@@ -868,7 +868,9 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void NewMessage()
     {
-        var account = SelectedAccount ?? Accounts.FirstOrDefault();
+        var account = Accounts.FirstOrDefault(a => a.IsDefault)
+                      ?? SelectedAccount
+                      ?? Accounts.FirstOrDefault();
         if (account == null) return;
         ComposeRequested?.Invoke(new ComposeModel { AccountId = account.Id });
     }

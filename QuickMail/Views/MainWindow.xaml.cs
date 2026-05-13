@@ -551,12 +551,40 @@ public partial class MainWindow : Window
             FocusMessageListFirstItem();
     }
 
+    // Moves focus to the first visible item in the status bar (always StatusTextItem).
+    private void FocusStatusBar()
+    {
+        StatusTextItem.Focus();
+    }
+
+    // Left/Right arrow keys navigate between the visible StatusBarItems.
+    // The progress item is only in the ring when IsBusy (i.e. it's visible).
+    // All other keys fall through so F6/Shift+F6 continue to work normally.
+    private void StatusBar_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Left && e.Key != Key.Right) return;
+
+        var items = new[] { StatusTextItem, StatusProgressItem }
+                        .Where(i => i.IsVisible)
+                        .ToList();
+
+        var focused = items.FirstOrDefault(i => i.IsKeyboardFocusWithin);
+        int idx = focused != null ? items.IndexOf(focused) : -1;
+
+        int next = e.Key == Key.Right ? idx + 1 : idx - 1;
+        if (next >= 0 && next < items.Count)
+            items[next].Focus();
+
+        e.Handled = true;
+    }
+
     // ── F6 pane-cycling helpers ──────────────────────────────────────────────
 
     // Returns the index of the pane that currently holds keyboard focus:
     //   0 = Toolbar, 1 = Account list, 2 = Folder list,
-    //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2).
-    // Falls back to 0 if no match (e.g. focus is on a dialog or status bar).
+    //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2, only when open),
+    //   4 or 5 = Status bar (always last in the ring).
+    // Falls back to 0 if no match.
     private int GetFocusedPaneIndex()
     {
         if (MainToolbar.IsKeyboardFocusWithin)  return 0;
@@ -564,6 +592,8 @@ public partial class MainWindow : Window
         if (FolderList.IsKeyboardFocusWithin)   return 2;
         if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin) return 3;
         if (MessageBody.IsKeyboardFocusWithin)  return 4;
+        if (MainStatusBar.IsKeyboardFocusWithin)
+            return (_vm.IsMessageOpen && _webViewReady) ? 5 : 4;
         return 0;
     }
 
@@ -584,17 +614,18 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    FocusActiveMessagePanel();
+                    FocusStatusBar();
                 }
                 break;
+            case 5: FocusStatusBar(); break;
         }
     }
 
     // Cycles keyboard focus forward (F6) or backward (Shift+F6) through the pane ring.
-    // The reading pane (index 4) is included only when a message is open.
+    // Status bar is always the last stop. Reading pane (index 4) is included only when open.
     private async Task CycleFocusAsync(bool forward)
     {
-        int count   = (_vm.IsMessageOpen && _webViewReady) ? 5 : 4;
+        int count   = (_vm.IsMessageOpen && _webViewReady) ? 6 : 5;
         int current = Math.Min(GetFocusedPaneIndex(), count - 1);
         int next    = forward
             ? (current + 1) % count

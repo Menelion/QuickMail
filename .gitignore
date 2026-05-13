@@ -2,6 +2,7 @@
 bin/
 obj/
 publish/
+*.exe
 
 # User-specific files
 *.user

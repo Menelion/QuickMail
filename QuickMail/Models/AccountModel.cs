@@ -21,5 +21,8 @@ public class AccountModel
     public bool SmtpUseSsl { get; set; } = false; // STARTTLS on 587
     public bool SmtpAcceptInvalidCert { get; set; } = false;
 
+    /// <summary>When true, this account is pre-selected when composing a new message.</summary>
+    public bool IsDefault { get; set; } = false;
+
     public override string ToString() => DisplayName;
 }
