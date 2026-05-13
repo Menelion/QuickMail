@@ -363,6 +363,63 @@ public partial class MainWindow : Window
         }
     }
 
+    // First-letter navigation for the folder TreeView (TreeView has no built-in TextSearch).
+    private void FolderList_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
+
+        var allNodes = GetVisibleTreeNodes(FolderList.Items.OfType<FolderTreeNode>()).ToList();
+        if (allNodes.Count == 0) return;
+
+        var current = FolderList.SelectedItem as FolderTreeNode;
+        var startIdx = current != null ? allNodes.IndexOf(current) : -1;
+
+        for (int i = 1; i <= allNodes.Count; i++)
+        {
+            var candidate = allNodes[(startIdx + i) % allNodes.Count];
+            if (candidate.Label.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectTreeViewNode(FolderList, candidate);
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
+    // Recursively yields visible (expanded) FolderTreeNode items in depth-first order.
+    private static System.Collections.Generic.IEnumerable<FolderTreeNode> GetVisibleTreeNodes(
+        System.Collections.Generic.IEnumerable<FolderTreeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            yield return node;
+            if (node.IsExpanded && node.Children.Count > 0)
+                foreach (var child in GetVisibleTreeNodes(node.Children))
+                    yield return child;
+        }
+    }
+
+    // Walks the TreeView container hierarchy to find and select the target node.
+    private static bool SelectTreeViewNode(System.Windows.Controls.ItemsControl parent, FolderTreeNode target)
+    {
+        foreach (var item in parent.Items)
+        {
+            if (item is not FolderTreeNode node) continue;
+            if (parent.ItemContainerGenerator.ContainerFromItem(item) is not TreeViewItem container) continue;
+
+            if (node == target)
+            {
+                container.IsSelected = true;
+                container.BringIntoView();
+                container.Focus();
+                return true;
+            }
+            if (node.IsExpanded && SelectTreeViewNode(container, target))
+                return true;
+        }
+        return false;
+    }
+
     // Focuses the first (or currently selected) ListViewItem so Up/Down arrow work
     // immediately after loading a folder.
     //

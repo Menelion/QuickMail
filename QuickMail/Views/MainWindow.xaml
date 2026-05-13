@@ -36,7 +36,7 @@
                       Command="{Binding ForwardConversationCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
             <Separator/>
-            <MenuItem Header="Move to _Folder…"
+            <MenuItem Header="_Move to Folder…"
                       AutomationProperties.Name="Move Conversation to Folder"
                       Click="ConversationContextMenu_MoveToFolder_Click"/>
             <MenuItem Header="_Copy to Folder…"
@@ -57,7 +57,7 @@
                       Command="{Binding CollapseConversationCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
             <Separator/>
-            <MenuItem Header="Expand _All Conversations"
+            <MenuItem Header="_Expand All Conversations"
                       AutomationProperties.Name="Expand All Conversations"
                       Command="{Binding ExpandAllConversationsCommand}"/>
             <MenuItem Header="Collapse A_ll Conversations"
@@ -79,7 +79,7 @@
                       AutomationProperties.Name="Forward"
                       Command="{Binding ForwardCommand}"/>
             <Separator/>
-            <MenuItem Header="Move to _Folder…"
+            <MenuItem Header="_Move to Folder…"
                       AutomationProperties.Name="Move to Folder"
                       Click="MessageContextMenu_MoveToFolder_Click"/>
             <MenuItem Header="_Copy to Folder…"
@@ -227,6 +227,7 @@
                          ItemsSource="{Binding Accounts}"
                          SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
                          DisplayMemberPath="DisplayName"
+                         TextSearch.TextPath="DisplayName"
                          BorderThickness="0,0,1,0"
                          TabIndex="1"
                          KeyboardNavigation.TabNavigation="Once"
@@ -258,6 +259,7 @@
                           BorderThickness="0,0,1,0"
                           TabIndex="2"
                           KeyboardNavigation.TabNavigation="Once"
+                          PreviewTextInput="FolderList_PreviewTextInput"
                           PreviewKeyDown="FolderList_PreviewKeyDown">
                     <TreeView.Resources>
                         <HierarchicalDataTemplate DataType="{x:Type models:FolderTreeNode}"

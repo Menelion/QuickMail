@@ -46,6 +46,7 @@
             <ListBox ItemsSource="{Binding Accounts}"
                      SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
                      AutomationProperties.Name="Account list"
+                     TextSearch.TextPath="DisplayName"
                      BorderThickness="1">
                 <ListBox.ItemTemplate>
                     <DataTemplate>

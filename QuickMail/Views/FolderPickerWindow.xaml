@@ -52,6 +52,7 @@
                   ItemTemplate="{StaticResource FolderNodeTemplate}"
                   ItemContainerStyle="{StaticResource FolderItemStyle}"
                   BorderThickness="1"
+                  PreviewTextInput="FolderTreeView_PreviewTextInput"
                   PreviewKeyDown="FolderTreeView_PreviewKeyDown"/>
 
     </DockPanel>

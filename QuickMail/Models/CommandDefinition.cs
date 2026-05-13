@@ -49,7 +49,11 @@ public sealed class CommandDefinition
             if ((DefaultModifiers & ModifierKeys.Control) != 0) parts.Add("Ctrl");
             if ((DefaultModifiers & ModifierKeys.Shift)   != 0) parts.Add("Shift");
             if ((DefaultModifiers & ModifierKeys.Alt)     != 0) parts.Add("Alt");
-            parts.Add(DefaultKey.ToString());
+            var keyStr = DefaultKey.ToString();
+            // Key.D0–Key.D9 stringify as "D0"–"D9"; show just the digit.
+            if (keyStr.Length == 2 && keyStr[0] == 'D' && char.IsDigit(keyStr[1]))
+                keyStr = keyStr[1..];
+            parts.Add(keyStr);
             return string.Join("+", parts);
         }
     }

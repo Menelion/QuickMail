@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -56,6 +57,60 @@ public partial class FolderPickerWindow : Window
             e.Handled = true;
             Commit();
         }
+    }
+
+    // First-letter navigation for the folder TreeView (TreeView has no built-in TextSearch).
+    private void FolderTreeView_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
+
+        var allNodes = GetVisibleTreeNodes(FolderTreeView.Items.OfType<FolderTreeNode>()).ToList();
+        if (allNodes.Count == 0) return;
+
+        var current = FolderTreeView.SelectedItem as FolderTreeNode;
+        var startIdx = current != null ? allNodes.IndexOf(current) : -1;
+
+        for (int i = 1; i <= allNodes.Count; i++)
+        {
+            var candidate = allNodes[(startIdx + i) % allNodes.Count];
+            if (candidate.Label.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectTreeViewNode(FolderTreeView, candidate);
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
+    private static IEnumerable<FolderTreeNode> GetVisibleTreeNodes(IEnumerable<FolderTreeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            yield return node;
+            if (node.IsExpanded && node.Children.Count > 0)
+                foreach (var child in GetVisibleTreeNodes(node.Children))
+                    yield return child;
+        }
+    }
+
+    private static bool SelectTreeViewNode(ItemsControl parent, FolderTreeNode target)
+    {
+        foreach (var item in parent.Items)
+        {
+            if (item is not FolderTreeNode node) continue;
+            if (parent.ItemContainerGenerator.ContainerFromItem(item) is not TreeViewItem container) continue;
+
+            if (node == target)
+            {
+                container.IsSelected = true;
+                container.BringIntoView();
+                container.Focus();
+                return true;
+            }
+            if (node.IsExpanded && SelectTreeViewNode(container, target))
+                return true;
+        }
+        return false;
     }
 
     private void Commit()

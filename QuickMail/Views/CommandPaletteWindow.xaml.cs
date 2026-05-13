@@ -47,6 +47,16 @@ public partial class CommandPaletteWindow : Window
             RunSelected();
             e.Handled = true;
         }
+        else if (e.Key == Key.Down)
+        {
+            MoveSelection(+1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Up)
+        {
+            MoveSelection(-1);
+            e.Handled = true;
+        }
     }
 
     private void CommandList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
