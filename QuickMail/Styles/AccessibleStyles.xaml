@@ -58,9 +58,46 @@
         <Setter Property="MinHeight" Value="28"/>
     </Style>
 
-    <!-- Status bar items are F6-reachable; give them a visible focus ring. -->
+    <!-- Status bar items — not focusable themselves; focus goes to the TextBox child. -->
     <Style TargetType="StatusBarItem">
+        <Setter Property="Focusable" Value="False"/>
+    </Style>
+
+    <!-- Read-only TextBox used as the status bar text element.
+         ControlType.Edit + ValuePattern means screen readers read its value
+         natively when keyboard focus arrives (F6 pane cycling).
+         Visually indistinguishable from a plain TextBlock, but focusable in UIA. -->
+    <Style x:Key="StatusTextBoxStyle" TargetType="TextBox">
+        <Setter Property="IsReadOnly"       Value="True"/>
+        <Setter Property="BorderThickness"  Value="0"/>
+        <Setter Property="Background"       Value="Transparent"/>
+        <Setter Property="Padding"          Value="0"/>
+        <Setter Property="Cursor"           Value="Arrow"/>
         <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}"/>
+        <!-- Override the default TextBox chrome so it looks like a label -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="border" Property="BorderThickness" Value="1"/>
+                            <Setter TargetName="border" Property="BorderBrush"
+                                    Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>

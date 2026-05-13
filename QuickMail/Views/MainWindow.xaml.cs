@@ -622,35 +622,15 @@ public partial class MainWindow : Window
             FocusMessageListFirstItem();
     }
 
-    // Moves focus to the first visible item in the status bar (always StatusTextItem).
-    // Also explicitly announces the status text because WPF's StatusBarItemAutomationPeer
-    // does not reliably raise UIA focus-changed events, so screen readers won't read it
-    // from the focus move alone.
+    // Moves keyboard focus to the status bar's read-only TextBox.
+    // StatusTextBox is ControlType.Edit + ValuePattern, so screen readers
+    // announce its value natively when it receives focus — no Announce hack needed.
+    // The Announce call is kept as a belt-and-suspenders fallback for screen readers
+    // that have slow UIA update cycles.
     private void FocusStatusBar()
     {
-        StatusTextItem.Focus();
+        StatusTextBox.Focus();
         AccessibilityHelper.Announce(this, $"Status bar: {_vm.StatusText}");
-    }
-
-    // Left/Right arrow keys navigate between the visible StatusBarItems.
-    // The progress item is only in the ring when IsBusy (i.e. it's visible).
-    // All other keys fall through so F6/Shift+F6 continue to work normally.
-    private void StatusBar_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Left && e.Key != Key.Right) return;
-
-        var items = new[] { StatusTextItem, StatusProgressItem }
-                        .Where(i => i.IsVisible)
-                        .ToList();
-
-        var focused = items.FirstOrDefault(i => i.IsKeyboardFocusWithin);
-        int idx = focused != null ? items.IndexOf(focused) : -1;
-
-        int next = e.Key == Key.Right ? idx + 1 : idx - 1;
-        if (next >= 0 && next < items.Count)
-            items[next].Focus();
-
-        e.Handled = true;
     }
 
     // ── F6 pane-cycling helpers ──────────────────────────────────────────────

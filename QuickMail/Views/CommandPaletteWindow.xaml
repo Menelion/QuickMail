@@ -12,7 +12,7 @@
         Background="Transparent"
         Width="560"
         SizeToContent="Height"
-        MaxHeight="420"
+        MaxHeight="460"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
         d:DataContext="{d:DesignInstance Type=vm:CommandPaletteViewModel}"
@@ -26,82 +26,58 @@
             <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.35" Direction="270"/>
         </Border.Effect>
 
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <!-- Command list — plain arrow-navigable list, no search box -->
+        <ListBox x:Name="CommandList"
+                 Margin="4"
+                 MaxHeight="440"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 ItemsSource="{Binding Commands}"
+                 SelectedItem="{Binding SelectedCommand}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 AutomationProperties.Name="Commands. Arrow keys to navigate, Enter to run, Escape to close."
+                 MouseDoubleClick="CommandList_MouseDoubleClick">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="8,5"/>
+                    <Setter Property="IsTabStop" Value="False"/>
+                    <Setter Property="AutomationProperties.Name"
+                            Value="{Binding Title}"/>
+                    <Setter Property="AutomationProperties.HelpText"
+                            Value="{Binding GestureText}"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-            <!-- Search box -->
-            <TextBox x:Name="SearchBox"
-                     Grid.Row="0"
-                     Margin="8,8,8,4"
-                     Padding="6,4"
-                     FontSize="13"
-                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                     AutomationProperties.Name="Search commands"
-                     AutomationProperties.HelpText="Type to filter commands. Use Up/Down arrows to select, Enter to run, Escape to close."
-                     PreviewKeyDown="SearchBox_PreviewKeyDown"/>
-
-            <!-- Separator -->
-            <Separator Grid.Row="0" Margin="8,0" VerticalAlignment="Bottom"/>
-
-            <!-- Command list -->
-            <ListBox x:Name="CommandList"
-                     Grid.Row="1"
-                     Margin="4,4,4,4"
-                     MaxHeight="340"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     ItemsSource="{Binding FilteredCommands}"
-                     SelectedItem="{Binding SelectedCommand}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling"
-                     AutomationProperties.Name="Commands"
-                     MouseDoubleClick="CommandList_MouseDoubleClick"
-                     PreviewTextInput="CommandList_PreviewTextInput"
-                     PreviewKeyDown="CommandList_PreviewKeyDown">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                        <Setter Property="Padding" Value="8,5"/>
-                        <Setter Property="IsTabStop" Value="False"/>
-                        <Setter Property="AutomationProperties.Name"
-                                Value="{Binding Title}"/>
-                        <Setter Property="AutomationProperties.HelpText"
-                                Value="{Binding GestureText}"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Title}"
-                                           FontSize="13"
-                                           TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding Category}"
-                                           FontSize="11"
-                                           Opacity="0.6"
-                                           Margin="0,1,0,0"/>
-                            </StackPanel>
-
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding GestureText}"
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="13"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Category}"
                                        FontSize="11"
-                                       FontFamily="Consolas"
                                        Opacity="0.6"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
+                                       Margin="0,1,0,0"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding GestureText}"
+                                   FontSize="11"
+                                   FontFamily="Consolas"
+                                   Opacity="0.6"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,0,0"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-            </ListBox>
-        </Grid>
+        </ListBox>
     </Border>
 </Window>
