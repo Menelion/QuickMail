@@ -202,20 +202,23 @@
                                      IsReadOnly="True" IsReadOnlyCaretVisible="True"
                                      BorderThickness="0" Background="Transparent"
                                      FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
-                                     AutomationProperties.Name="{Binding MessageDetail.Subject, FallbackValue=''}"/>
+                                     AutomationProperties.Name="Subject"/>
                             <TextBox x:Name="FromField"
-                                     Text="{Binding MessageDetail.From, StringFormat='From: {0}', FallbackValue='', Mode=OneWay}"
+                                     Text="{Binding MessageDetail.From, FallbackValue='', Mode=OneWay}"
                                      IsReadOnly="True" IsReadOnlyCaretVisible="True"
                                      BorderThickness="0" Background="Transparent"
-                                     Margin="0,2,0,0"/>
+                                     Margin="0,2,0,0"
+                                     AutomationProperties.Name="From"/>
                             <TextBox x:Name="ToField"
-                                     Text="{Binding MessageDetail.To, StringFormat='To: {0}', FallbackValue='', Mode=OneWay}"
+                                     Text="{Binding MessageDetail.To, FallbackValue='', Mode=OneWay}"
                                      IsReadOnly="True" IsReadOnlyCaretVisible="True"
-                                     BorderThickness="0" Background="Transparent"/>
+                                     BorderThickness="0" Background="Transparent"
+                                     AutomationProperties.Name="To"/>
                             <TextBox x:Name="CcField"
-                                     Text="{Binding MessageDetail.Cc, StringFormat='Cc: {0}', FallbackValue='', Mode=OneWay}"
+                                     Text="{Binding MessageDetail.Cc, FallbackValue='', Mode=OneWay}"
                                      IsReadOnly="True" IsReadOnlyCaretVisible="True"
-                                     BorderThickness="0" Background="Transparent">
+                                     BorderThickness="0" Background="Transparent"
+                                     AutomationProperties.Name="Cc">
                                 <TextBox.Style>
                                     <Style TargetType="TextBox">
                                         <Style.Triggers>
@@ -230,9 +233,10 @@
                                 </TextBox.Style>
                             </TextBox>
                             <TextBox x:Name="DateField"
-                                     Text="{Binding MessageDetail.Date, StringFormat='Date: {0:f}', FallbackValue='', Mode=OneWay}"
+                                     Text="{Binding MessageDetail.Date, StringFormat='{}{0:f}', FallbackValue='', Mode=OneWay}"
                                      IsReadOnly="True" IsReadOnlyCaretVisible="True"
-                                     BorderThickness="0" Background="Transparent"/>
+                                     BorderThickness="0" Background="Transparent"
+                                     AutomationProperties.Name="Date"/>
 
                             <!-- Attachments (visible when selected message has attachments) -->
                             <ListBox x:Name="ReadingPaneAttachmentList"
