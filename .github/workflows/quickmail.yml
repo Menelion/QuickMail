@@ -19,6 +19,16 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Test
+        run: dotnet test QuickMail.Tests/QuickMail.Tests.csproj -c Release --logger "trx;LogFileName=results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: QuickMail.Tests/TestResults/results.trx
+
       - name: Publish
         run: dotnet publish QuickMail/QuickMail.csproj -c Release -o publish/
         # PublishSingleFile, SelfContained, RuntimeIdentifier, ReadyToRun are set in .csproj

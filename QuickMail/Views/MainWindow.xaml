@@ -90,6 +90,27 @@
                       AutomationProperties.Name="Delete"
                       Command="{Binding DeleteMessageCommand}"/>
         </ContextMenu>
+
+        <!-- Folder context menu — MUST live in Window.Resources, not inside a Style.Setter.Value.
+             The WPF XAML compiler generates incorrect type casts for Click handlers inside
+             Style setters (it emits GridSplitter instead of MenuItem), causing an APPCRASH. -->
+        <ContextMenu x:Key="FolderContextMenu"
+                     AutomationProperties.Name="Folder actions">
+            <MenuItem Header="_New Folder…"
+                      AutomationProperties.Name="New Folder"
+                      Click="FolderContextMenu_NewFolder_Click"/>
+            <Separator/>
+            <MenuItem Header="_Move Folder…"
+                      AutomationProperties.Name="Move Folder"
+                      Click="FolderContextMenu_MoveFolder_Click"/>
+            <MenuItem Header="_Copy Folder…"
+                      AutomationProperties.Name="Copy Folder"
+                      Click="FolderContextMenu_CopyFolder_Click"/>
+            <Separator/>
+            <MenuItem Header="_Delete Folder"
+                      AutomationProperties.Name="Delete Folder"
+                      Click="FolderContextMenu_DeleteFolder_Click"/>
+        </ContextMenu>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -261,26 +282,7 @@
                             <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/>
                             <!-- Tag exposes the window DataContext (MainViewModel) to the ContextMenu -->
                             <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                            <Setter Property="ContextMenu">
-                                <Setter.Value>
-                                    <ContextMenu AutomationProperties.Name="Folder actions">
-                                        <MenuItem Header="_New Folder…"
-                                                  AutomationProperties.Name="New Folder"
-                                                  Click="FolderContextMenu_NewFolder_Click"/>
-                                        <Separator/>
-                                        <MenuItem Header="_Move Folder…"
-                                                  AutomationProperties.Name="Move Folder"
-                                                  Click="FolderContextMenu_MoveFolder_Click"/>
-                                        <MenuItem Header="_Copy Folder…"
-                                                  AutomationProperties.Name="Copy Folder"
-                                                  Click="FolderContextMenu_CopyFolder_Click"/>
-                                        <Separator/>
-                                        <MenuItem Header="_Delete Folder"
-                                                  AutomationProperties.Name="Delete Folder"
-                                                  Click="FolderContextMenu_DeleteFolder_Click"/>
-                                    </ContextMenu>
-                                </Setter.Value>
-                            </Setter>
+                            <Setter Property="ContextMenu" Value="{StaticResource FolderContextMenu}"/>
                         </Style>
                     </TreeView.ItemContainerStyle>
                 </TreeView>

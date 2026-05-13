@@ -40,32 +40,9 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Launching app for smoke test (5 s)...
-start "" /B dotnet run --project QuickMail\QuickMail.csproj -c %CONFIG% --no-build
-set SMOKE_PID=
-
-:: Give the process a moment to start, then grab its PID via WMIC
-timeout /t 1 /nobreak >nul
-for /f "tokens=2" %%i in ('wmic process where "CommandLine like '%%QuickMail%%' and not CommandLine like '%%build.bat%%'" get ProcessId /value 2^>nul ^| findstr "ProcessId"') do set SMOKE_PID=%%i
-
-timeout /t 5 /nobreak >nul
-
-:: Check if the process is still running
-if defined SMOKE_PID (
-    wmic process where "ProcessId=%SMOKE_PID%" get ProcessId /value >nul 2>&1
-    if errorlevel 1 (
-        echo SMOKE FAILED: app exited within 5 seconds.
-        exit /b 1
-    )
-    :: App is still alive - kill it cleanly
-    taskkill /PID %SMOKE_PID% /F >nul 2>&1
-    :: Also kill any child dotnet processes that were spawned
-    for /f "tokens=2" %%i in ('wmic process where "CommandLine like '%%QuickMail.dll%%'" get ProcessId /value 2^>nul ^| findstr "ProcessId"') do taskkill /PID %%i /F >nul 2>&1
-    echo SMOKE PASSED: app started and stayed alive for 5 seconds.
-) else (
-    echo SMOKE FAILED: could not find app process (may have crashed immediately).
-    exit /b 1
-)
+echo Smoke-testing: launching app and waiting 6 seconds...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Start-Process dotnet -ArgumentList 'run','--project','QuickMail/QuickMail.csproj','-c','%CONFIG%','--no-build' -PassThru; Start-Sleep 6; if ($p.HasExited) { Write-Host 'SMOKE FAILED: app exited within 6 seconds.'; exit 1 } else { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; Write-Host 'SMOKE PASSED: app started and stayed alive.'; exit 0 }"
+if errorlevel 1 exit /b 1
 goto end
 
 :end
