@@ -264,8 +264,14 @@ public partial class MainWindow : Window
 
     private void OpenCommandPalette()
     {
+        // Remember what had focus so we can restore it if the user dismisses without running a command.
+        var previousFocus = Keyboard.FocusedElement as IInputElement;
+
         var palette = new CommandPaletteWindow(_registry) { Owner = this };
         palette.ShowDialog();
+
+        // Restore focus. Fall back to the message list if nothing was previously focused.
+        (previousFocus ?? MessageList).Focus();
     }
 
     private async void OpenFolderPicker()

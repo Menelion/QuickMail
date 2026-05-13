@@ -17,6 +17,9 @@ public partial class CommandPaletteWindow : Window
         InitializeComponent();
         DataContext = _vm;
 
+        // Wire screen-reader announcements: fire on every selection change while focus stays in the search box.
+        _vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text);
+
         Loaded += OnLoaded;
     }
 
