@@ -26,6 +26,10 @@ public interface IImapService : IDisposable
     Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MoveToTrashAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default);
+    /// <summary>Permanently deletes messages already in Trash by setting \Deleted and expunging.</summary>
+    Task PermanentlyDeleteBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default);
+    /// <summary>Sends IMAP NOOP to keep the connection alive. Silently discards the client if the connection is stale.</summary>
+    Task NoOpAsync(Guid accountId, CancellationToken ct = default);
     Task<int> EmptyTrashAsync(Guid accountId, CancellationToken ct = default);
     Task<IList<uint>> GetFolderUidsAsync(Guid accountId, string folderName, CancellationToken ct = default);
 

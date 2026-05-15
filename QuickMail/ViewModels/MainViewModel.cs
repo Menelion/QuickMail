@@ -42,13 +42,35 @@ public partial class MainViewModel : ObservableObject
     private readonly Dictionary<Guid, List<MailFolderModel>> _cachedFolders = new();
     public IReadOnlyDictionary<Guid, List<MailFolderModel>> CachedFolders => _cachedFolders;
 
-    /// <summary>Sentinel that represents the cross-account virtual All Mail view.</summary>
+    // ── Virtual folder sentinels ─────────────────────────────────────────────────
+    /// <summary>Child under the All Mail group: all non-excluded folders across all accounts.</summary>
     public static readonly MailFolderModel AllMailFolder = new()
     {
         FullName    = "\x00AllMail",
         DisplayName = "All Mail"
     };
-    private bool IsAllMailSelected => SelectedFolder?.FullName == AllMailFolder.FullName;
+    public static readonly MailFolderModel AllInboxesFolder = new()
+    {
+        FullName    = "\x00AllInboxes",
+        DisplayName = "All Inboxes"
+    };
+    public static readonly MailFolderModel AllDraftsFolder = new()
+    {
+        FullName    = "\x00AllDrafts",
+        DisplayName = "All Drafts"
+    };
+    public static readonly MailFolderModel AllSentFolder = new()
+    {
+        FullName    = "\x00AllSent",
+        DisplayName = "All Sent"
+    };
+    public static readonly MailFolderModel AllTrashFolder = new()
+    {
+        FullName    = "\x00AllTrash",
+        DisplayName = "All Trash"
+    };
+
+    private static bool IsVirtualFolder(MailFolderModel? f) => f?.FullName.StartsWith("\x00") == true;
 
     [ObservableProperty]
     private ObservableCollection<AccountModel> _accounts = [];
@@ -297,7 +319,7 @@ public partial class MainViewModel : ObservableObject
     // Inserts truly new messages into the live collection in sorted order.
     private void OnFolderSynced(IReadOnlyList<MailMessageSummary> incoming)
     {
-        if (!IsAllMailSelected) return;
+        if (SelectedFolder?.FullName != AllMailFolder.FullName) return;
 
         foreach (var msg in incoming.OrderByDescending(m => m.Date))
         {
@@ -424,7 +446,10 @@ public partial class MainViewModel : ObservableObject
     private void RebuildFolderListFromCache()
     {
         var saved = SelectedFolder;
-        var items = new List<MailFolderModel> { AllMailFolder };
+        var items = new List<MailFolderModel>
+        {
+            AllInboxesFolder, AllMailFolder, AllDraftsFolder, AllSentFolder, AllTrashFolder
+        };
 
         foreach (var account in Accounts)
         {
@@ -457,8 +482,19 @@ public partial class MainViewModel : ObservableObject
     {
         var roots = new List<FolderTreeNode>();
 
-        // "All Mail" is a synthetic leaf at the top (no children).
-        roots.Add(new FolderTreeNode { Folder = AllMailFolder, Label = AllMailFolder.DisplayName });
+        // "All Mail" is a top-level group header with 5 virtual sub-folder children.
+        var allMailGroup = new FolderTreeNode
+        {
+            IsHeader   = true,
+            Label      = "All Mail",
+            IsExpanded = true,
+        };
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllInboxesFolder, Label = AllInboxesFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllMailFolder,    Label = AllMailFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllDraftsFolder,  Label = AllDraftsFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllSentFolder,    Label = AllSentFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllTrashFolder,   Label = AllTrashFolder.DisplayName });
+        roots.Add(allMailGroup);
 
         foreach (var account in Accounts)
         {
@@ -602,8 +638,8 @@ public partial class MainViewModel : ObservableObject
         MessageDetail  = null;
         IsMessageOpen  = false;
 
-        if (folder.FullName == AllMailFolder.FullName)
-            await FetchAllMailAsync();
+        if (IsVirtualFolder(folder))
+            await FetchVirtualAsync(folder);
         else
         {
             if (folder.AccountId != Guid.Empty)
@@ -616,8 +652,8 @@ public partial class MainViewModel : ObservableObject
     private async Task LoadMoreMessagesAsync()
     {
         _messageLimit += 100;
-        if (IsAllMailSelected)
-            await FetchAllMailAsync();
+        if (IsVirtualFolder(SelectedFolder))
+            await FetchVirtualAsync(SelectedFolder!);
         else if (SelectedFolder != null && SelectedFolder.AccountId != Guid.Empty)
             await FetchFolderAsync();
     }
@@ -723,8 +759,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        if (IsAllMailSelected)
-            await FetchAllMailAsync();
+        if (IsVirtualFolder(SelectedFolder))
+            await FetchVirtualAsync(SelectedFolder!);
         else if (SelectedFolder != null && SelectedFolder.AccountId != Guid.Empty)
             await FetchFolderAsync();
     }
@@ -798,6 +834,88 @@ public partial class MainViewModel : ObservableObject
         return result;
     }
 
+    /// <summary>
+    /// Dispatches to the correct fetch implementation for each virtual folder sentinel.
+    /// </summary>
+    private Task FetchVirtualAsync(MailFolderModel folder)
+    {
+        if (folder.FullName == AllMailFolder.FullName)    return FetchAllMailAsync();
+        if (folder.FullName == AllInboxesFolder.FullName) return FetchVirtualFolderAsync(SpecialFolderKind.Inbox,  "All Inboxes");
+        if (folder.FullName == AllDraftsFolder.FullName)  return FetchVirtualFolderAsync(SpecialFolderKind.Drafts, "All Drafts");
+        if (folder.FullName == AllSentFolder.FullName)    return FetchVirtualFolderAsync(SpecialFolderKind.Sent,   "All Sent");
+        if (folder.FullName == AllTrashFolder.FullName)   return FetchVirtualFolderAsync(SpecialFolderKind.Trash,  "All Trash");
+        return Task.CompletedTask;
+    }
+
+    private async Task FetchVirtualFolderAsync(SpecialFolderKind kind, string displayName)
+    {
+        Messages.Clear();
+        StatusText = $"Loading {displayName}…";
+        IsBusy = true;
+
+        _folderCts?.Cancel();
+        _folderCts = new CancellationTokenSource();
+        var ct = _folderCts.Token;
+
+        var all = new List<MailMessageSummary>();
+
+        try
+        {
+            var perAccountTasks = Accounts
+                .Where(a => _cachedFolders.ContainsKey(a.Id))
+                .Select(account => FetchAccountByKindAsync(account, kind, ct));
+
+            var accountResults = await Task.WhenAll(perAccountTasks);
+            foreach (var batch in accountResults)
+                all.AddRange(batch);
+
+            var sorted = all.OrderByDescending(m => m.Date).ToList();
+            Messages = new ObservableCollection<MailMessageSummary>(sorted);
+            StatusText = sorted.Count == 0
+                ? $"No messages in {displayName}."
+                : $"{sorted.Count} messages in {displayName}.";
+            _ = _localStore.UpsertSummariesAsync(sorted);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = $"{displayName} load cancelled.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Failed to load {displayName}: {ex.Message}";
+            LogService.Log($"Fetch{displayName.Replace(" ", "")}", ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task<List<MailMessageSummary>> FetchAccountByKindAsync(
+        AccountModel account, SpecialFolderKind kind, CancellationToken ct)
+    {
+        var result = new List<MailMessageSummary>();
+        if (!_cachedFolders.TryGetValue(account.Id, out var folders)) return result;
+
+        foreach (var folder in folders)
+        {
+            if (folder.Kind != kind) continue;
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var msgs = await _imap.GetMessageSummariesAsync(
+                    account.Id, folder.FullName, _messageLimit, ct);
+                result.AddRange(msgs);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                LogService.Log($"VirtualFolder fetch {account.DisplayName}/{folder.FullName}", ex);
+            }
+        }
+        return result;
+    }
+
     // ── Delete / Trash ───────────────────────────────────────────────────────────
 
     [RelayCommand]
@@ -827,8 +945,21 @@ public partial class MainViewModel : ObservableObject
             foreach (var group in groups)
             {
                 var uids = group.Select(m => m.UniqueId).ToList();
-                await _imap.MoveToTrashBatchAsync(
-                    group.Key.AccountId, group.Key.FolderName, uids, _messageCts.Token);
+
+                // Messages already in Trash must be permanently deleted (expunge);
+                // moving them to trash again is a no-op on most servers.
+                var sourceKind = _cachedFolders.TryGetValue(group.Key.AccountId, out var acctFolders)
+                    ? acctFolders.FirstOrDefault(f =>
+                          f.FullName.Equals(group.Key.FolderName, StringComparison.OrdinalIgnoreCase))?.Kind
+                    : null;
+
+                if (sourceKind == SpecialFolderKind.Trash)
+                    await _imap.PermanentlyDeleteBatchAsync(
+                        group.Key.AccountId, group.Key.FolderName, uids, _messageCts.Token);
+                else
+                    await _imap.MoveToTrashBatchAsync(
+                        group.Key.AccountId, group.Key.FolderName, uids, _messageCts.Token);
+
                 await _localStore.DeleteSummariesAsync(group.Key.AccountId, group.Key.FolderName, uids);
             }
 
@@ -1076,14 +1207,20 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task EmptyTrashAsync()
     {
-        var accountsToEmpty = IsAllMailSelected
+        var accountsToEmpty = IsVirtualFolder(SelectedFolder)
             ? Accounts.ToList()
             : (SelectedAccount != null ? [SelectedAccount] : Accounts.Take(1).ToList());
 
         if (accountsToEmpty.Count == 0) return;
 
+        bool viewingTrash = SelectedFolder?.Kind == SpecialFolderKind.Trash
+                         || SelectedFolder?.FullName == AllTrashFolder.FullName;
+
+        LogService.Debug($"EmptyTrash: viewingTrash={viewingTrash} folder='{SelectedFolder?.FullName}'");
+
         StatusText = "Emptying trash…";
         IsBusy = true;
+        bool trashEmptied = false;
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -1094,6 +1231,8 @@ public partial class MainViewModel : ObservableObject
             var msg = totalDeleted == 1 ? "1 message deleted from trash." : $"{totalDeleted} messages deleted from trash.";
             StatusText = msg;
             Announce(msg);
+            trashEmptied = true;
+            LogService.Debug($"EmptyTrash: deleted {totalDeleted} messages");
         }
         catch (OperationCanceledException)
         {
@@ -1107,6 +1246,18 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+
+        // Only update the message list if the user is currently looking at the trash.
+        // If they're in their inbox, All Mail, etc., those messages are completely
+        // unaffected — leave the view and focus exactly as they are.
+        if (trashEmptied && viewingTrash)
+        {
+            Messages.Clear();
+            SelectedMessage = null;
+            MessageDetail   = null;
+            IsMessageOpen   = false;
+            MessageListFocusRequested?.Invoke();
         }
     }
 

@@ -732,7 +732,9 @@
                                         </MultiBinding>
                                     </Setter.Value>
                                 </Setter>
-                                <Setter Property="ContextMenu" Value="{StaticResource MessageContextMenu}"/>
+                                <!-- ContextMenu is intentionally omitted here: SenderGroupTree_ContextMenuOpening
+                                     assigns MessageContextMenu at the tree level so PlacementTarget.DataContext
+                                     resolves to MainViewModel instead of MailMessageSummary. -->
                             </Style>
 
                             <!-- Level 1: sender group header with name + count + newest subject -->

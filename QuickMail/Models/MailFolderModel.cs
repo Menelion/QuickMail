@@ -2,6 +2,8 @@ using System;
 
 namespace QuickMail.Models;
 
+public enum SpecialFolderKind { None, Inbox, Sent, Drafts, Trash }
+
 public class MailFolderModel
 {
     public Guid AccountId { get; set; }
@@ -11,6 +13,8 @@ public class MailFolderModel
     public int UnreadCount { get; set; }
     /// <summary>True for Trash, Junk, Sent, and Drafts — excluded from the All Mail aggregate view.</summary>
     public bool ExcludeFromAllMail { get; set; }
+    /// <summary>Identifies special-purpose folders for virtual aggregate views.</summary>
+    public SpecialFolderKind Kind { get; set; }
 
     /// <summary>Accessibility label: headers just show the name; folders include unread count.</summary>
     public string AutomationName =>

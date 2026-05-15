@@ -36,6 +36,13 @@ public class SyncService : ISyncService
             ct.ThrowIfCancellationRequested();
             if (!cachedFolders.TryGetValue(account.Id, out var folders)) continue;
 
+            // Send NOOP to keep the connection alive and flush any server-side
+            // BYE before we start syncing. NoOpAsync discards the stale client
+            // internally so GetOrReconnectAsync will create a fresh one when needed.
+            try { await _imap.NoOpAsync(account.Id, ct); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { LogService.Log($"NoOp {account.DisplayName}", ex); }
+
             foreach (var folder in folders)
             {
                 ct.ThrowIfCancellationRequested();

@@ -296,7 +296,11 @@ public partial class MainWindow : Window
     private async void OpenFolderPicker()
     {
         if (_vm.CachedFolders.Count == 0) return;
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, MainViewModel.AllMailFolder) { Owner = this };
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders,
+            [MainViewModel.AllInboxesFolder, MainViewModel.AllMailFolder,
+             MainViewModel.AllDraftsFolder,  MainViewModel.AllSentFolder,
+             MainViewModel.AllTrashFolder],
+            initialFolder: _vm.SelectedFolder) { Owner = this };
         if (picker.ShowDialog() == true && picker.SelectedFolder is MailFolderModel folder)
         {
             // Switch accounts if needed (AllMail has no specific account)
@@ -535,6 +539,13 @@ public partial class MainWindow : Window
             e.Handled = true;
             ExtendMessageSelection(e.Key == Key.Down ? 1 : -1);
         }
+        else if ((e.Key == Key.Up || e.Key == Key.Down || e.Key == Key.Left || e.Key == Key.Right)
+                 && Keyboard.Modifiers == ModifierKeys.None
+                 && MessageList.Items.Count == 0)
+        {
+            // Prevent arrow keys from escaping an empty ListView to the toolbar.
+            e.Handled = true;
+        }
     }
 
     // Extends (or shrinks) the MessageList selection by one step in the given direction.
@@ -679,7 +690,13 @@ public partial class MainWindow : Window
             FocusSenderGroupTreeFirstItem();
             return;
         }
-        if (MessageList.Items.Count == 0) { MessageList.Focus(); return; }
+        if (MessageList.Items.Count == 0)
+        {
+            // Dispatch at Input priority so we queue AFTER any WPF-internal focus
+            // restoration that was enqueued when items were removed from the list.
+            Dispatcher.InvokeAsync(() => MessageList.Focus(), DispatcherPriority.Input);
+            return;
+        }
         var idx = MessageList.SelectedIndex >= 0 ? MessageList.SelectedIndex : 0;
         MessageList.ScrollIntoView(MessageList.Items[idx]);
         Dispatcher.InvokeAsync(() => FocusItemAt(idx), DispatcherPriority.Input);
@@ -868,7 +885,7 @@ public partial class MainWindow : Window
 
     // Builds the screen-reader announcement string for a single message row.
     private static string MessageSummaryAnnouncement(MailMessageSummary msg) =>
-        $"{msg.ReadStatusLabel}. {msg.From}. {msg.Subject}. {msg.DateDisplay}.";
+        $"{msg.ReadStatusLabel}. {msg.From}. {msg.Subject}. {msg.Preview}. {msg.DateDisplay}.";
 
     // After an async conversation rebuild, selects and focuses the conversation
     // at the given index (clamped to the new list size).
@@ -1010,7 +1027,10 @@ public partial class MainWindow : Window
                 SenderGroupTree.ContextMenu = (ContextMenu)FindResource("SenderGroupContextMenu");
                 break;
             case MailMessageSummary:
-                e.Handled = true;
+                // Open MessageContextMenu at the tree level so PlacementTarget.DataContext
+                // resolves to MainViewModel (not MailMessageSummary), giving commands
+                // like ReplyCommand and DeleteMessageCommand access to the right bindings.
+                SenderGroupTree.ContextMenu = (ContextMenu)FindResource("MessageContextMenu");
                 break;
             default:
                 e.Handled = true;
@@ -1116,8 +1136,12 @@ public partial class MainWindow : Window
             return MessageList.SelectedItems.OfType<MailMessageSummary>().ToList();
 
         // ConversationTree child node (individual message)
-        if (ConversationTree.IsVisible && ConversationTree.SelectedItem is MailMessageSummary msg)
-            return [msg];
+        if (ConversationTree.IsVisible && ConversationTree.SelectedItem is MailMessageSummary convMsg)
+            return [convMsg];
+
+        // SenderGroupTree child node (individual message)
+        if (SenderGroupTree.IsVisible && SenderGroupTree.SelectedItem is MailMessageSummary senderMsg)
+            return [senderMsg];
 
         // Fallback: VM's selected message
         if (_vm.SelectedMessage != null)
