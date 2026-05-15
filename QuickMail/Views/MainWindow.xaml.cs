@@ -139,8 +139,8 @@ public partial class MainWindow : Window
             defaultKey: Key.Y, defaultModifiers: ModifierKeys.Control));
 
         _registry.Register(new CommandDefinition(
-            id: "view.toggleConversation", category: "View", title: "Cycle View Mode",
-            execute: () => _vm.ViewMode = (Models.ViewMode)(((int)_vm.ViewMode + 1) % 3),
+            id: "view.openViewMenu", category: "View", title: "Open View Menu",
+            execute: OpenViewMenu,
             defaultKey: Key.V, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
 
         _registry.Register(new CommandDefinition(
@@ -285,6 +285,12 @@ public partial class MainWindow : Window
 
         // Restore focus. Fall back to the message list if nothing was previously focused.
         (previousFocus ?? MessageList).Focus();
+    }
+
+    private void OpenViewMenu()
+    {
+        ViewModeMenuItem.Focus();
+        ViewModeMenuItem.IsSubmenuOpen = true;
     }
 
     private async void OpenFolderPicker()

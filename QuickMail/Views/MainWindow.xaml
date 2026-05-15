@@ -212,7 +212,8 @@
             <Separator/>
             <Menu Background="Transparent"
                   AutomationProperties.Name="View mode">
-                <MenuItem Header="{Binding ViewModeLabel}"
+                <MenuItem x:Name="ViewModeMenuItem"
+                          Header="{Binding ViewModeLabel}"
                           ToolTip="Select message view mode (Ctrl+Shift+V)">
                     <MenuItem Header="_Messages"
                               IsCheckable="True"

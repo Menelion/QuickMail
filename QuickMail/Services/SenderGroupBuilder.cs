@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuickMail.Models;
@@ -26,7 +25,7 @@ public static class SenderGroupBuilder
                     Messages  = sorted,
                 };
             })
-            .OrderByDescending(s => s.Messages.Count > 0 ? s.Messages[0].Date : DateTimeOffset.MinValue)
+            .OrderBy(s => s.SenderKey, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }
