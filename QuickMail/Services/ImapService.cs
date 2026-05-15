@@ -268,13 +268,23 @@ public class ImapService : IImapService
 
     // ── Message detail ───────────────────────────────────────────────────────────
 
-    public async Task<MailMessageDetail> GetMessageDetailAsync(
-        Guid accountId, string folderName, uint uid, CancellationToken ct = default)
+    public Task<MailMessageDetail> GetMessageDetailAsync(
+        Guid accountId, string folderName, uint uid, CancellationToken ct = default) =>
+        GetMessageDetailCoreAsync(accountId, folderName, uid, markRead: true, ImapLeasePriority.Foreground, ct);
+
+    public Task<MailMessageDetail> PrefetchMessageDetailAsync(
+        Guid accountId, string folderName, uint uid, CancellationToken ct = default) =>
+        GetMessageDetailCoreAsync(accountId, folderName, uid, markRead: false, ImapLeasePriority.Background, ct);
+
+    private async Task<MailMessageDetail> GetMessageDetailCoreAsync(
+        Guid accountId, string folderName, uint uid,
+        bool markRead, ImapLeasePriority priority, CancellationToken ct)
     {
-        using var lease = await RentClientAsync(accountId, ct, ImapLeasePriority.Foreground);
+        using var lease = await RentClientAsync(accountId, ct, priority);
         var client = lease.Client;
         var folder = await client.GetFolderAsync(folderName, ct);
-        await folder.OpenAsync(FolderAccess.ReadWrite, ct);
+        var access = markRead ? FolderAccess.ReadWrite : FolderAccess.ReadOnly;
+        await folder.OpenAsync(access, ct);
 
         try
         {
@@ -305,7 +315,8 @@ public class ImapService : IImapService
                 if (bodyPart is TextPart tp) plainText = tp.Text ?? string.Empty;
             }
 
-            await folder.AddFlagsAsync(mailKitUid, MessageFlags.Seen, true, ct);
+            if (markRead)
+                await folder.AddFlagsAsync(mailKitUid, MessageFlags.Seen, true, ct);
 
             var attachments = ExtractAttachments(s.Body);
 
@@ -320,7 +331,7 @@ public class ImapService : IImapService
                 ReplyTo       = FormatAddressList(s.Envelope?.ReplyTo),
                 Subject       = s.Envelope?.Subject ?? "(no subject)",
                 Date          = s.Envelope?.Date ?? DateTimeOffset.MinValue,
-                IsRead        = true,
+                IsRead        = markRead || (s.Flags & MessageFlags.Seen) != 0,
                 MessageId     = s.Envelope?.MessageId ?? string.Empty,
                 PlainTextBody = plainText,
                 HtmlBody      = htmlText,

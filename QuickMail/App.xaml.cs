@@ -18,26 +18,37 @@ public partial class App : Application
             LogService.Log("Debug mode enabled.");
         }
 
-        var accountService    = new AccountService();
-        var credentialService = new CredentialService();
-        var oauthService      = new OAuthService();
-        var configService     = new ConfigService();
-        var imapService       = new ImapService(oauthService, configService);
-        var smtpService       = new SmtpService(oauthService);
+        try
+        {
+            var accountService    = new AccountService();
+            var credentialService = new CredentialService();
+            var oauthService      = new OAuthService();
+            var configService     = new ConfigService();
+            var imapService       = new ImapService(oauthService, configService);
+            var smtpService       = new SmtpService(oauthService);
 
-        var localStore = new LocalStoreService();
-        localStore.Initialize();
+            var localStore = new LocalStoreService();
+            localStore.Initialize();
 
-        var syncService = new SyncService(imapService, localStore, configService);
+            var syncService = new SyncService(imapService, localStore, configService);
 
-        var commandRegistry = new CommandRegistry();
-        commandRegistry.ApplyUserOverrides(configService.Load().CustomHotkeys);
+            var commandRegistry = new CommandRegistry();
+            commandRegistry.ApplyUserOverrides(configService.Load().CustomHotkeys);
 
-        var mainVm = new MainViewModel(
-            imapService, accountService, credentialService, localStore, syncService, configService, commandRegistry);
-        mainVm.LoadAccountList();
+            var mainVm = new MainViewModel(
+                imapService, accountService, credentialService, localStore, syncService, configService, commandRegistry);
+            mainVm.LoadAccountList();
 
-        var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry);
-        mainWindow.Show();
+            var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry);
+            mainWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            // Log the exception chain before WER kills the process so the cause
+            // survives in %APPDATA%\QuickMail\quickmail.log.
+            for (var cur = ex; cur != null; cur = cur.InnerException)
+                LogService.Log("Startup", cur);
+            throw;
+        }
     }
 }

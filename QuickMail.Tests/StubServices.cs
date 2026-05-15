@@ -21,6 +21,7 @@ sealed class StubImapService : IImapService
     public Task<List<MailMessageSummary>> GetMessagesSinceDateAsync(Guid accountId, string folderName, DateTime since, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
     public Task<List<MailMessageSummary>> GetMessagesSinceAsync(Guid accountId, string folderName, uint sinceUid, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
     public Task<MailMessageDetail> GetMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
+    public Task<MailMessageDetail> PrefetchMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
     public Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.CompletedTask;
     public Task MoveToTrashAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.CompletedTask;
     public Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default) => Task.CompletedTask;

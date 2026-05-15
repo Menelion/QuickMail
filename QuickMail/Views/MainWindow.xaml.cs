@@ -77,11 +77,30 @@ public partial class MainWindow : Window
     private object? _typeAheadScope;
     private int _messageBodyRenderVersion;
 
-    private const int MaxRichHtmlRenderChars = 180_000;
+    // Debounces SelectionChanged announces so rapid arrow-key bursts only emit
+    // one UIA notification per landing. Otherwise a burst can flood NVDA's event
+    // pipeline and synchronously block the WPF dispatcher (entire process stalls).
+    private DispatcherTimer? _announceTimer;
+    private string? _pendingAnnounceText;
+    private static readonly TimeSpan AnnounceDebounce = TimeSpan.FromMilliseconds(50);
+
+    private const int MaxRichHtmlRenderChars = 1_000_000;
     private const int MaxReaderTextChars = 140_000;
-    private const int MaxRichHtmlTableCount = 80;
+    private const int MaxRichHtmlTableCount = 500;
+
+    // NOTE: order matters — fields below reference these timeouts during static init.
     private static readonly TimeSpan HtmlRegexTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan WebViewNavigationTimeout = TimeSpan.FromSeconds(4);
+
+    // Matches an http/https/mailto URL up to the first whitespace, angle bracket,
+    // or quote. Trailing punctuation (.,;:!?)] is trimmed in the replace step
+    // because senders write things like "see https://example.com/page." or
+    // "(https://example.com)" and we shouldn't swallow the closing punctuation.
+    private static readonly Regex AutoLinkUrl = new(
+        @"\b((?:https?|mailto):[^\s<>""']+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        HtmlRegexTimeout);
+    private static readonly char[] AutoLinkTrailingPunct = ['.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\''];
 
     public MainWindow(
         MainViewModel vm,
@@ -201,10 +220,12 @@ public partial class MainWindow : Window
         // Announce the newly selected message to the screen reader whenever the selection
         // changes via keyboard (arrow keys, etc.).  WPF ListView does not reliably fire
         // UIA focus events on arrow-key navigation, so RaiseNotificationEvent is required.
+        // Debounced — a held arrow key only announces the final landing, which keeps NVDA's
+        // UIA pipeline from being flooded (the flood causes whole-process stalls).
         MessageList.SelectionChanged += (_, _) =>
         {
             if (MessageList.IsKeyboardFocusWithin && MessageList.SelectedItem is MailMessageSummary msg)
-                AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(msg), interrupt: true);
+                QueueSelectionAnnounce(MessageSummaryAnnouncement(msg));
         };
 
         // ── Focus-enter / focus-leave traces for every message panel ────────────
@@ -214,6 +235,31 @@ public partial class MainWindow : Window
         ConversationTree.LostKeyboardFocus += (_, e) => LogService.Debug($"[FOCUS] LostFocus ConvTree  to={e.NewFocus?.GetType().Name ?? "null"}");
         SenderGroupTree.GotKeyboardFocus   += (_, e) => LogService.Debug($"[FOCUS] GotFocus  SenderTree from={e.OldFocus?.GetType().Name ?? "null"} selectedItem={SenderGroupTree.SelectedItem?.GetType().Name ?? "null"}");
         SenderGroupTree.LostKeyboardFocus  += (_, e) => LogService.Debug($"[FOCUS] LostFocus SenderTree to={e.NewFocus?.GetType().Name ?? "null"}");
+    }
+
+    // Debounced UIA notification for rapid selection bursts. Each call resets the timer;
+    // the announce only fires after AnnounceDebounce of quiet, so a held arrow ends with
+    // exactly one notification on the final item.
+    private void QueueSelectionAnnounce(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        _pendingAnnounceText = text;
+
+        if (_announceTimer == null)
+        {
+            _announceTimer = new DispatcherTimer { Interval = AnnounceDebounce };
+            _announceTimer.Tick += (_, _) =>
+            {
+                _announceTimer!.Stop();
+                var pending = _pendingAnnounceText;
+                _pendingAnnounceText = null;
+                if (!string.IsNullOrEmpty(pending))
+                    AccessibilityHelper.Announce(this, pending, interrupt: true);
+            };
+        }
+
+        _announceTimer.Stop();
+        _announceTimer.Start();
     }
 
     // On startup: initialise WebView2, connect to first account, open INBOX, focus message list
@@ -269,12 +315,7 @@ public partial class MainWindow : Window
             {
                 var msg = args.TryGetWebMessageAsString();
                 if (msg == "escape")
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        _vm.IsMessageOpen = false;
-                        _vm.MessageDetail = null;
-                        ReturnFocusToMessageList();
-                    }, DispatcherPriority.Input);
+                    Dispatcher.InvokeAsync(CloseReadingPane, DispatcherPriority.Input);
                 else if (msg == "f6")
                     Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
                 else if (msg == "shift-f6")
@@ -284,6 +325,29 @@ public partial class MainWindow : Window
                 else if (msg == "shift-tab")
                     Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
             };
+
+            // Open clicked links in the user's default browser instead of replacing
+            // the reading-pane document. NavigateToString sets the document URI to
+            // "about:blank", so allow that for the initial render and block everything else.
+            MessageBody.CoreWebView2.NavigationStarting += (_, args) =>
+            {
+                var uri = args.Uri;
+                if (string.IsNullOrEmpty(uri) ||
+                    uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
+                    uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    return;
+                args.Cancel = true;
+                OpenExternal(uri);
+            };
+            MessageBody.CoreWebView2.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                OpenExternal(args.Uri);
+            };
+
+            // WebView2 renderer crash signal — surfaces as a blank reading pane.
+            MessageBody.CoreWebView2.ProcessFailed += (_, args) =>
+                LogService.Log($"[ERROR] WebView2 ProcessFailed kind={args.ProcessFailedKind} exit={args.ExitCode} reason={args.Reason}");
         }
         catch (Exception ex)
         {
@@ -351,9 +415,7 @@ public partial class MainWindow : Window
                     await CycleFocusAsync(true);
                     return;
                 case Key.Escape when _vm.IsMessageOpen:
-                    _vm.IsMessageOpen = false;
-                    _vm.MessageDetail = null;
-                    ReturnFocusToMessageList();
+                    CloseReadingPane();
                     e.Handled = true;
                     return;
             }
@@ -1095,6 +1157,10 @@ public partial class MainWindow : Window
         }
 
         MessageBody.CoreWebView2.NavigationCompleted += OnNavigated;
+        // Cancel any prior in-flight navigation before starting this one so we don't
+        // queue two pending navigations on the WebView2 renderer.
+        try { MessageBody.CoreWebView2.Stop(); }
+        catch (Exception ex) { LogService.Log("ShowMessageBody/Stop", ex); }
         MessageBody.CoreWebView2.NavigateToString(html);
 
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(WebViewNavigationTimeout)) == tcs.Task;
@@ -1112,11 +1178,12 @@ public partial class MainWindow : Window
 
     private async Task FocusMessageBodyAsync(int renderVersion, string? subject)
     {
-        if (renderVersion != _messageBodyRenderVersion || !_webViewReady)
+        if (renderVersion != _messageBodyRenderVersion || !_webViewReady || !_vm.IsMessageOpen)
             return;
 
         await Dispatcher.InvokeAsync(() =>
         {
+            if (!_vm.IsMessageOpen) return;
             MessageBody.Focus();
             Keyboard.Focus(MessageBody);
         }, DispatcherPriority.Input);
@@ -1124,7 +1191,7 @@ public partial class MainWindow : Window
         var focusLabel = MessageBodyFocusLabel(subject);
         for (var attempt = 0; attempt < 5; attempt++)
         {
-            if (renderVersion != _messageBodyRenderVersion)
+            if (renderVersion != _messageBodyRenderVersion || !_vm.IsMessageOpen)
                 return;
 
             await Dispatcher.InvokeAsync(FocusMessageBodyHost, DispatcherPriority.Input);
@@ -1143,11 +1210,12 @@ public partial class MainWindow : Window
             await Task.Delay(100);
         }
 
-        if (renderVersion != _messageBodyRenderVersion)
+        if (renderVersion != _messageBodyRenderVersion || !_vm.IsMessageOpen)
             return;
 
         await Dispatcher.InvokeAsync(() =>
         {
+            if (!_vm.IsMessageOpen) return;
             FocusMessageBodyHost();
             AccessibilityHelper.Announce(this, focusLabel, interrupt: true);
         }, DispatcherPriority.Input);
@@ -1155,6 +1223,8 @@ public partial class MainWindow : Window
 
     private void FocusMessageBodyHost()
     {
+        if (!_vm.IsMessageOpen) return;
+
         MessageBody.Focus();
         Keyboard.Focus(MessageBody);
 
@@ -1217,8 +1287,11 @@ public partial class MainWindow : Window
 
     private static bool ShouldUseReaderMode(string html) =>
         html.Length > MaxRichHtmlRenderChars ||
-        CountOccurrences(html, "<table") > MaxRichHtmlTableCount ||
-        CountOccurrences(html, "data:image", StringComparison.OrdinalIgnoreCase) > 0;
+        CountOccurrences(html, "<table") > MaxRichHtmlTableCount;
+    // data:image used to force reader mode, but <img> tags are stripped by
+    // StripHeavyHtml and blocked by CSP img-src 'none' anyway, so the size of the
+    // base64 payload doesn't actually slow rendering. Newsletter logos no longer
+    // force reader mode.
 
     private static string BuildSanitizedHtmlDocument(string? subject, string html)
     {
@@ -1251,6 +1324,7 @@ public partial class MainWindow : Window
     {
         var clipped = Truncate(text ?? string.Empty, MaxReaderTextChars);
         var encoded = WebUtility.HtmlEncode(clipped);
+        var linked  = AutoLinkPlainTextUrls(encoded);
         var titleTag = $"<title>{WebUtility.HtmlEncode(subject ?? string.Empty)}</title>";
         var noteHtml = string.IsNullOrWhiteSpace(note)
             ? string.Empty
@@ -1261,8 +1335,45 @@ public partial class MainWindow : Window
                "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline';\">" +
                "<style>html,body{margin:0;padding:8px 12px;font-family:Segoe UI,Arial,sans-serif;" +
                "font-size:13px;white-space:pre-wrap;word-break:break-word;background:Window;color:WindowText;}" +
+               "a{color:#0645ad;}" +
                ".note{white-space:normal;border-left:3px solid #777;padding-left:8px;margin:0 0 12px 0;color:#555;}</style>" +
-               "</head><body tabindex=\"0\">" + noteHtml + encoded + "</body></html>";
+               "</head><body tabindex=\"0\">" + noteHtml + linked + "</body></html>";
+    }
+
+    // Wrap http/https/mailto runs in <a> tags so plain-text emails get clickable links.
+    // Operates on already-HTML-encoded text, so we won't double-encode the URL value.
+    private static string AutoLinkPlainTextUrls(string encoded)
+    {
+        try
+        {
+            return AutoLinkUrl.Replace(encoded, m =>
+            {
+                var url = m.Value;
+                var trailing = string.Empty;
+                while (url.Length > 0 && Array.IndexOf(AutoLinkTrailingPunct, url[^1]) >= 0)
+                {
+                    trailing = url[^1] + trailing;
+                    url = url[..^1];
+                }
+                if (url.Length == 0) return m.Value;
+                // url is already HTML-encoded so it's safe to put it in href and as text
+                return $"<a href=\"{url}\" rel=\"nofollow noreferrer\">{url}</a>{trailing}";
+            });
+        }
+        catch (RegexMatchTimeoutException) { return encoded; }
+    }
+
+    private static void OpenExternal(string uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            LogService.Log($"OpenExternal {uri}", ex);
+        }
     }
 
     private static string StripHeavyHtml(string html)
@@ -1358,6 +1469,24 @@ public partial class MainWindow : Window
             ReadingPaneAttachmentList.Focus();
         else
             DateField.Focus();
+    }
+
+    // Close the reading pane safely: cancel any in-flight render/focus chain and
+    // stop WebView2 navigation before flipping Visibility so the IsVisible=false
+    // COM call doesn't race with a busy renderer (was a "Not Responding" stall).
+    private void CloseReadingPane()
+    {
+        Interlocked.Increment(ref _messageBodyRenderVersion);
+
+        if (_webViewReady)
+        {
+            try { MessageBody.CoreWebView2.Stop(); }
+            catch (Exception ex) { LogService.Log("CloseReadingPane/Stop", ex); }
+        }
+
+        _vm.IsMessageOpen = false;
+        _vm.MessageDetail = null;
+        ReturnFocusToMessageList();
     }
 
     // Return keyboard focus to the active message panel after reading a message.
@@ -1589,10 +1718,10 @@ public partial class MainWindow : Window
             switch (e.NewValue)
             {
                 case MailMessageSummary m:
-                    AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(m), interrupt: true);
+                    QueueSelectionAnnounce(MessageSummaryAnnouncement(m));
                     break;
                 case ConversationGroup grp:
-                    AccessibilityHelper.Announce(this, grp.AutomationName, interrupt: true);
+                    QueueSelectionAnnounce(grp.AutomationName);
                     break;
             }
         }

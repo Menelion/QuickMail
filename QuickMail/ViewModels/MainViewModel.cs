@@ -30,6 +30,10 @@ public partial class MainViewModel : ObservableObject
     private CancellationTokenSource? _folderCts;
     private CancellationTokenSource? _messageLoadCts;
     private CancellationTokenSource? _messageActionCts;
+    private CancellationTokenSource? _prefetchCts;
+
+    private const int PrefetchRadiusAroundOpen = 5;
+    private const int PrefetchTopOnFolderLoad  = 10;
     private CancellationTokenSource? _bgSyncCts;
 
     // How many days of mail to sync (0 = all); set via the Sync Range menu
@@ -301,6 +305,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = cached.Count > 0
             ? $"{cached.Count} messages (cached — syncing…)"
             : "Connecting and syncing…";
+        StartPrefetchTopOfFolder();
         RebuildFolderListFromCache();
     }
 
@@ -372,14 +377,17 @@ public partial class MainViewModel : ObservableObject
     {
         if (SelectedFolder?.FullName != AllMailFolder.FullName) return;
 
+        // Hash existing keys once so the dedupe check is O(1) per incoming item
+        // instead of an O(n) Messages.Any() scan per item — that scan would dominate
+        // a sync against a multi-thousand-message All Mail view and freeze the UI thread.
+        var seen = new HashSet<(uint, Guid, string)>(Messages.Count);
+        foreach (var e in Messages)
+            seen.Add((e.UniqueId, e.AccountId, e.FolderName));
+
         foreach (var msg in incoming.OrderByDescending(m => m.Date))
         {
-            // Skip if already displayed (can happen if user triggered a manual refresh mid-sync)
-            if (Messages.Any(e => e.UniqueId   == msg.UniqueId &&
-                                  e.AccountId  == msg.AccountId &&
-                                  e.FolderName == msg.FolderName))
+            if (!seen.Add((msg.UniqueId, msg.AccountId, msg.FolderName)))
                 continue;
-
             InsertMessageSorted(msg);
         }
 
@@ -394,18 +402,21 @@ public partial class MainViewModel : ObservableObject
     }
     private void OnMessagesRemoved(IReadOnlyList<MailMessageSummary> removed)
     {
+        // Build a key→item map once so each removed key is an O(1) lookup
+        // instead of a Messages.FirstOrDefault scan per item.
+        var byKey = new Dictionary<(uint, Guid, string), MailMessageSummary>(Messages.Count);
+        foreach (var e in Messages)
+            byKey[(e.UniqueId, e.AccountId, e.FolderName)] = e;
+
         bool removedOpen = false;
         foreach (var msg in removed)
         {
-            var existing = Messages.FirstOrDefault(e =>
-                e.UniqueId   == msg.UniqueId &&
-                e.AccountId  == msg.AccountId &&
-                e.FolderName == msg.FolderName);
-
-            if (existing == null) continue;
+            var key = (msg.UniqueId, msg.AccountId, msg.FolderName);
+            if (!byKey.TryGetValue(key, out var existing)) continue;
 
             if (SelectedMessage == existing) removedOpen = true;
             Messages.Remove(existing);
+            byKey.Remove(key);
         }
 
         if (removedOpen)
@@ -790,8 +801,12 @@ public partial class MainViewModel : ObservableObject
             StatusText = cached.Count > 0
                 ? $"{cached.Count} cached {(cached.Count == 1 ? "message" : "messages")} (checking for new…)"
                 : $"Loading {folder.DisplayName}…";
-            if (cached.Count > 0 && IsConversationsView)
-                ScheduleConversationRebuild();
+            if (cached.Count > 0)
+            {
+                if (IsConversationsView)
+                    ScheduleConversationRebuild();
+                StartPrefetchTopOfFolder();
+            }
 
             _ = RefreshFolderFromServerAsync(accountId, folder, loadVersion, cts.Token);
         }
@@ -831,6 +846,7 @@ public partial class MainViewModel : ObservableObject
 
             if (IsConversationsView)
                 ScheduleConversationRebuild();
+            StartPrefetchTopOfFolder();
         }
         catch (OperationCanceledException)
         {
@@ -905,6 +921,8 @@ public partial class MainViewModel : ObservableObject
             }
 
             StatusText = "Message loaded. Press Escape to return to message list.";
+
+            StartPrefetchAroundOpen(summary);
         }
         catch (OperationCanceledException)
         {
@@ -922,6 +940,78 @@ public partial class MainViewModel : ObservableObject
             if (loadVersion == _messageLoadVersion)
                 IsBusy = false;
         }
+    }
+
+    // ── Prefetch ─────────────────────────────────────────────────────────────────
+    // Eagerly cache message bodies for nearby/top messages so subsequent opens are
+    // instant. Uses background IMAP leases (cannot starve foreground opens) and does
+    // not set the Seen flag on the server.
+
+    private void StartPrefetchAroundOpen(MailMessageSummary current)
+    {
+        var snapshot = Messages.ToList();
+        var idx = snapshot.IndexOf(current);
+        if (idx < 0) return;
+
+        var targets = new List<MailMessageSummary>(PrefetchRadiusAroundOpen * 2);
+        for (var offset = 1; offset <= PrefetchRadiusAroundOpen; offset++)
+        {
+            if (idx + offset < snapshot.Count) targets.Add(snapshot[idx + offset]);
+            if (idx - offset >= 0)             targets.Add(snapshot[idx - offset]);
+        }
+        if (targets.Count == 0) return;
+
+        SchedulePrefetch(targets, "around-open");
+    }
+
+    private void StartPrefetchTopOfFolder()
+    {
+        var snapshot = Messages.Take(PrefetchTopOnFolderLoad).ToList();
+        if (snapshot.Count == 0) return;
+        SchedulePrefetch(snapshot, "folder-top");
+    }
+
+    private void SchedulePrefetch(List<MailMessageSummary> targets, string reason)
+    {
+        var cts = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _prefetchCts, cts);
+        try { previous?.Cancel(); previous?.Dispose(); } catch { /* best effort */ }
+
+        _ = Task.Run(() => RunPrefetchAsync(targets, reason, cts.Token));
+    }
+
+    private async Task RunPrefetchAsync(List<MailMessageSummary> targets, string reason, CancellationToken ct)
+    {
+        LogService.Debug($"Prefetch start reason={reason} count={targets.Count}");
+        var tasks = targets.Select(s => PrefetchOneAsync(s, ct)).ToList();
+        try { await Task.WhenAll(tasks); }
+        catch { /* per-message errors logged inside */ }
+        LogService.Debug($"Prefetch end reason={reason} cancelled={ct.IsCancellationRequested}");
+    }
+
+    private async Task PrefetchOneAsync(MailMessageSummary summary, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested) return;
+        try
+        {
+            var cached = await _localStore.LoadDetailAsync(
+                summary.AccountId, summary.FolderName, summary.UniqueId);
+            if (cached != null || ct.IsCancellationRequested) return;
+
+            var detail = await _imap.PrefetchMessageDetailAsync(
+                summary.AccountId, summary.FolderName, summary.UniqueId, ct);
+            if (ct.IsCancellationRequested) return;
+            await _localStore.UpsertDetailAsync(detail);
+            LogService.Debug($"Prefetched UID={summary.UniqueId} folder={summary.FolderName}");
+        }
+        catch (OperationCanceledException) { /* expected on switch */ }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not connected"))
+        {
+            // Prefetch raced startup or a disconnect; the next prefetch trigger
+            // (folder load, message open) will retry once the account is up.
+            LogService.Debug($"Prefetch skipped UID={summary.UniqueId} (account not connected)");
+        }
+        catch (Exception ex) { LogService.Log($"Prefetch UID={summary.UniqueId}", ex); }
     }
 
     [RelayCommand]
@@ -1034,6 +1124,8 @@ public partial class MainViewModel : ObservableObject
                 ScheduleSenderGroupRebuild();
             else if (ViewMode == ViewMode.To)
                 ScheduleToGroupRebuild();
+
+            StartPrefetchTopOfFolder();
         }
         catch (OperationCanceledException)
         {

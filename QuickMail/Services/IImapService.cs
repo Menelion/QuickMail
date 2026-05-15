@@ -30,6 +30,14 @@ public interface IImapService : IDisposable
         Guid accountId, string folderName, uint sinceUid, CancellationToken ct = default);
     Task<MailMessageDetail> GetMessageDetailAsync(
         Guid accountId, string folderName, uint uid, CancellationToken ct = default);
+
+    /// <summary>
+    /// Same as <see cref="GetMessageDetailAsync"/> but uses a background IMAP lease
+    /// and does NOT set the Seen flag on the server. Intended for prefetching nearby
+    /// messages into the local cache so subsequent opens are instant.
+    /// </summary>
+    Task<MailMessageDetail> PrefetchMessageDetailAsync(
+        Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MoveToTrashAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default);
