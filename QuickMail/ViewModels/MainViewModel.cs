@@ -580,13 +580,21 @@ public partial class MainViewModel : ObservableObject
     {
         var version  = Interlocked.Increment(ref _senderGroupRebuildVersion);
         var snapshot = Messages.ToList();
+        LogService.Debug($"[DELETE] ScheduleSenderGroupRebuild v={version} snapshot={snapshot.Count} msgs");
         Task.Run(() =>
         {
             var groups = SenderGroupBuilder.Build(snapshot);
             App.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (version == _senderGroupRebuildVersion)
+                {
+                    LogService.Debug($"[DELETE] SenderGroupRebuild v={version} applying {groups.Count} groups");
                     SenderGroups = new ObservableCollection<SenderGroup>(groups);
+                }
+                else
+                {
+                    LogService.Debug($"[DELETE] SenderGroupRebuild v={version} DISCARDED (current={_senderGroupRebuildVersion})");
+                }
             });
         });
     }
@@ -775,24 +783,50 @@ public partial class MainViewModel : ObservableObject
         _folderCts = new CancellationTokenSource();
         var ct = _folderCts.Token;
 
-        var all = new List<MailMessageSummary>();
-
         try
         {
+            // ── Phase 1: show cache immediately (same data as InitialLoadAsync) ──────
+            // This keeps the view consistent regardless of how many times the user
+            // navigates to All Mail.  The IMAP fetch in Phase 2 adds truly new messages.
+            var cached = await _localStore.LoadAllSummariesAsync();
+            Messages = new ObservableCollection<MailMessageSummary>(cached);
+            StatusText = cached.Count > 0
+                ? $"{cached.Count} messages (checking for new…)"
+                : "Checking for new messages…";
+            IsBusy = false;
+
+            // ── Phase 2: incremental IMAP update (new messages only, per-folder) ─────
+            ct.ThrowIfCancellationRequested();
+            IsBusy = true;
             var perAccountTasks = Accounts
                 .Where(a => _cachedFolders.ContainsKey(a.Id))
-                .Select(account => FetchAccountAllFoldersAsync(account, ct));
+                .Select(account => FetchAccountNewMessagesAsync(account, ct));
 
             var accountResults = await Task.WhenAll(perAccountTasks);
-            foreach (var batch in accountResults)
-                all.AddRange(batch);
+            var newMessages = accountResults.SelectMany(r => r).ToList();
 
-            var sorted = all.OrderByDescending(m => m.Date).ToList();
-            Messages = new ObservableCollection<MailMessageSummary>(sorted);
-            StatusText = sorted.Count == 0
+            foreach (var msg in newMessages.OrderByDescending(m => m.Date))
+            {
+                // Dedup in case of overlap with cache
+                if (Messages.Any(e => e.UniqueId == msg.UniqueId &&
+                                      e.AccountId == msg.AccountId &&
+                                      e.FolderName == msg.FolderName))
+                    continue;
+                InsertMessageSorted(msg);
+            }
+
+            if (newMessages.Count > 0)
+                _ = _localStore.UpsertSummariesAsync(newMessages);
+
+            var count = Messages.Count;
+            StatusText = count == 0
                 ? "No messages across connected accounts."
-                : $"{sorted.Count} messages across all accounts.";
-            _ = _localStore.UpsertSummariesAsync(sorted);
+                : $"{count} messages across all accounts.";
+
+            if (ViewMode == ViewMode.Conversations)
+                ScheduleConversationRebuild();
+            else if (ViewMode == ViewMode.From)
+                ScheduleSenderGroupRebuild();
         }
         catch (OperationCanceledException)
         {
@@ -835,8 +869,36 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Dispatches to the correct fetch implementation for each virtual folder sentinel.
+    /// Fetches only messages newer than what is already stored locally for each
+    /// non-excluded folder belonging to <paramref name="account"/>.  Used by the
+    /// Phase 2 incremental update in <see cref="FetchAllMailAsync"/>.
     /// </summary>
+    private async Task<List<MailMessageSummary>> FetchAccountNewMessagesAsync(
+        AccountModel account, CancellationToken ct)
+    {
+        var result = new List<MailMessageSummary>();
+        if (!_cachedFolders.TryGetValue(account.Id, out var folders)) return result;
+
+        foreach (var folder in folders)
+        {
+            if (folder.ExcludeFromAllMail) continue;
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var maxUid = await _localStore.GetMaxUidAsync(account.Id, folder.FullName);
+                var msgs   = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, ct);
+                result.AddRange(msgs);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                LogService.Log($"AllMail new-msg fetch {account.DisplayName}/{folder.FullName}", ex);
+            }
+        }
+        return result;
+    }
+
+
     private Task FetchVirtualAsync(MailFolderModel folder)
     {
         if (folder.FullName == AllMailFolder.FullName)    return FetchAllMailAsync();
@@ -931,11 +993,48 @@ public partial class MainViewModel : ObservableObject
 
         var minIdx = toDelete.Min(m => Messages.IndexOf(m));
         var label  = toDelete.Count == 1 ? "message" : $"{toDelete.Count} messages";
+        LogService.Debug($"[DELETE] DeleteMessagesAsync start count={toDelete.Count} ViewMode={ViewMode}");
         StatusText    = $"Deleting {label}…";
         IsBusy        = true;
         MessageDetail = null;
         IsMessageOpen = false;
 
+        // ── Step 1: Remove from UI immediately (before IMAP call) ─────────────
+        // Matches the "mark as deleted" pattern used by clients like Outlook:
+        // messages vanish instantly, focus lands correctly, and the IMAP
+        // move-to-trash runs afterwards. If it fails the messages will reappear
+        // on the next background sync.
+        int removed = 0;
+        foreach (var msg in toDelete)
+        {
+            if (Messages.Remove(msg)) removed++;
+        }
+        LogService.Debug($"[DELETE] Removed {removed}/{toDelete.Count} from UI immediately (now {Messages.Count})");
+
+        if (ViewMode == ViewMode.Conversations)
+            ScheduleConversationRebuild();
+        else if (ViewMode == ViewMode.From)
+            ScheduleSenderGroupRebuild();
+
+        if (ViewMode == ViewMode.Messages && Messages.Count > 0)
+        {
+            // In flat Messages view: advance selection to the next item so the
+            // global Delete hotkey (HasSelectedMessage guard) stays coherent.
+            var landIdx = Math.Max(0, Math.Min(minIdx, Messages.Count - 1));
+            SelectedMessage = Messages[landIdx];
+            MessageListFocusRequested?.Invoke();
+        }
+        else
+        {
+            // In From/Conversations views focus is managed by LandOnSenderGroupAfterRebuild /
+            // LandOnConversationAfterRebuild.  Clearing SelectedMessage here is essential:
+            // leaving it set makes HasSelectedMessage=true, which causes the global Delete
+            // hotkey in OnWindowKeyDown to steal the next keypress and delete just that one
+            // message instead of the whole selected group.
+            SelectedMessage = null;
+        }
+
+        // ── Step 2: IMAP delete + local store cleanup ────────────────────────────
         try
         {
             _messageCts?.Cancel();
@@ -945,6 +1044,7 @@ public partial class MainViewModel : ObservableObject
             foreach (var group in groups)
             {
                 var uids = group.Select(m => m.UniqueId).ToList();
+                LogService.Debug($"[DELETE] IMAP delete {group.Key.FolderName} uids={string.Join(",", uids)}");
 
                 // Messages already in Trash must be permanently deleted (expunge);
                 // moving them to trash again is a no-op on most servers.
@@ -960,29 +1060,14 @@ public partial class MainViewModel : ObservableObject
                     await _imap.MoveToTrashBatchAsync(
                         group.Key.AccountId, group.Key.FolderName, uids, _messageCts.Token);
 
+                LogService.Debug($"[DELETE] IMAP done {group.Key.FolderName}");
                 await _localStore.DeleteSummariesAsync(group.Key.AccountId, group.Key.FolderName, uids);
             }
 
-            foreach (var msg in toDelete)
-                Messages.Remove(msg);
-
-            if (ViewMode == ViewMode.Conversations)
-                ScheduleConversationRebuild();
-            else if (ViewMode == ViewMode.From)
-                ScheduleSenderGroupRebuild();
-
-            if (Messages.Count > 0)
-            {
-                var landIdx = Math.Max(0, Math.Min(minIdx, Messages.Count - 1));
-                SelectedMessage = Messages[landIdx];
-                StatusText = $"{toDelete.Count} {(toDelete.Count == 1 ? "message" : "messages")} deleted.";
-                MessageListFocusRequested?.Invoke();
-            }
-            else
-            {
-                SelectedMessage = null;
-                StatusText = $"{toDelete.Count} {(toDelete.Count == 1 ? "message" : "messages")} deleted. Folder is now empty.";
-            }
+            var count = toDelete.Count;
+            StatusText = Messages.Count > 0
+                ? $"{count} {(count == 1 ? "message" : "messages")} deleted."
+                : $"{count} {(count == 1 ? "message" : "messages")} deleted. Folder is now empty.";
         }
         catch (OperationCanceledException)
         {
@@ -1472,6 +1557,9 @@ public partial class MainViewModel : ObservableObject
 
             StatusText = $"{messages.Count} {(messages.Count == 1 ? "message" : "messages")} moved to {destination.DisplayName}.";
             Announce(StatusText);
+            // Conversations/From: LandOnX in the view handles focus after rebuild.
+            if (ViewMode == ViewMode.Messages && Messages.Count > 0)
+                MessageListFocusRequested?.Invoke();
         }
         catch (OperationCanceledException) { StatusText = "Move cancelled."; }
         catch (Exception ex)

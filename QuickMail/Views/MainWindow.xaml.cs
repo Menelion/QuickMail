@@ -93,14 +93,54 @@ public partial class MainWindow : Window
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
         vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
 
-        // Re-focus the active message panel whenever the Messages collection is replaced
-        // (happens after Refresh, Load More, and folder changes).
+        // Re-focus the active message panel whenever the message collections are replaced
+        // (happens after Refresh, Load More, folder changes, and view-mode switches).
+        //
+        // Conversations/SenderGroups use FocusTreeSelectedOrFirst rather than the old
+        // FocusActiveMessagePanel so they enqueue exactly one dispatcher item (Y1').
+        // LandOnX registers its own item (Y2) after this handler fires, so Y2 always
+        // runs last and wins — the correct post-delete focus position is preserved.
         vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(MainViewModel.Messages)
-                               or nameof(MainViewModel.Conversations)
-                               or nameof(MainViewModel.SenderGroups) && IsActive)
-                Dispatcher.InvokeAsync(FocusActiveMessagePanel, DispatcherPriority.Input);
+            if (e.PropertyName == nameof(MainViewModel.Messages) && IsActive)
+            {
+                LogService.Debug($"[FOCUS] PropChanged:Messages viewMode={_vm.ViewMode} {FocusInfo()}");
+                if (vm.IsConversationsView)
+                {
+                    LogService.Debug("[FOCUS]   → LandOnConversationAfterRebuild(0)");
+                    LandOnConversationAfterRebuild(0);
+                }
+                else if (vm.IsFromView)
+                {
+                    LogService.Debug("[FOCUS]   → LandOnSenderGroupAfterRebuild(0)");
+                    LandOnSenderGroupAfterRebuild(0);
+                }
+                else
+                {
+                    LogService.Debug("[FOCUS]   → FocusActiveMessagePanel (dispatched)");
+                    Dispatcher.InvokeAsync(FocusActiveMessagePanel, DispatcherPriority.Input);
+                }
+            }
+            else if (e.PropertyName == nameof(MainViewModel.Conversations) && IsActive && vm.IsConversationsView)
+            {
+                // Capture selected index now (before DataBind replaces items) so we can
+                // restore position after a background sync that rebuilds Conversations.
+                var oldIdx = ConversationTree.Items.IndexOf(ConversationTree.SelectedItem);
+                LogService.Debug($"[FOCUS] PropChanged:Conversations convCount={vm.Conversations.Count} oldIdx={oldIdx} {FocusInfo()}");
+                FocusTreeSelectedOrFirst(ConversationTree, oldIdx);
+            }
+            else if (e.PropertyName == nameof(MainViewModel.SenderGroups) && IsActive && vm.IsFromView)
+            {
+                // Capture selected index now (before DataBind replaces items) so we can
+                // restore position after a background sync that rebuilds SenderGroups.
+                var oldIdx = SenderGroupTree.Items.IndexOf(SenderGroupTree.SelectedItem);
+                LogService.Debug($"[FOCUS] PropChanged:SenderGroups grpCount={vm.SenderGroups.Count} oldIdx={oldIdx} {FocusInfo()}");
+                FocusTreeSelectedOrFirst(SenderGroupTree, oldIdx);
+            }
+            else if (e.PropertyName == nameof(MainViewModel.ViewMode))
+            {
+                LogService.Debug($"[FOCUS] ViewMode → {vm.ViewMode} {FocusInfo()}");
+            }
 
             if (e.PropertyName == nameof(MainViewModel.StatusText) && !string.IsNullOrEmpty(vm.StatusText))
                 AccessibilityHelper.Announce(this, vm.StatusText);
@@ -127,6 +167,14 @@ public partial class MainWindow : Window
             if (MessageList.IsKeyboardFocusWithin && MessageList.SelectedItem is MailMessageSummary msg)
                 AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(msg), interrupt: true);
         };
+
+        // ── Focus-enter / focus-leave traces for every message panel ────────────
+        MessageList.GotKeyboardFocus       += (_, e) => LogService.Debug($"[FOCUS] GotFocus  MsgList   from={e.OldFocus?.GetType().Name ?? "null"}");
+        MessageList.LostKeyboardFocus      += (_, e) => LogService.Debug($"[FOCUS] LostFocus MsgList   to={e.NewFocus?.GetType().Name ?? "null"}");
+        ConversationTree.GotKeyboardFocus  += (_, e) => LogService.Debug($"[FOCUS] GotFocus  ConvTree  from={e.OldFocus?.GetType().Name ?? "null"} selectedItem={ConversationTree.SelectedItem?.GetType().Name ?? "null"}");
+        ConversationTree.LostKeyboardFocus += (_, e) => LogService.Debug($"[FOCUS] LostFocus ConvTree  to={e.NewFocus?.GetType().Name ?? "null"}");
+        SenderGroupTree.GotKeyboardFocus   += (_, e) => LogService.Debug($"[FOCUS] GotFocus  SenderTree from={e.OldFocus?.GetType().Name ?? "null"} selectedItem={SenderGroupTree.SelectedItem?.GetType().Name ?? "null"}");
+        SenderGroupTree.LostKeyboardFocus  += (_, e) => LogService.Debug($"[FOCUS] LostFocus SenderTree to={e.NewFocus?.GetType().Name ?? "null"}");
     }
 
     // On startup: initialise WebView2, connect to first account, open INBOX, focus message list
@@ -287,10 +335,15 @@ public partial class MainWindow : Window
         (previousFocus ?? MessageList).Focus();
     }
 
+    private void ViewModeButton_Click(object sender, RoutedEventArgs e) => OpenViewMenu();
+
     private void OpenViewMenu()
     {
-        ViewModeMenuItem.Focus();
-        ViewModeMenuItem.IsSubmenuOpen = true;
+        var cm = ViewModeButton.ContextMenu;
+        if (cm == null) return;
+        cm.PlacementTarget = ViewModeButton;
+        cm.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        cm.IsOpen = true;
     }
 
     private async void OpenFolderPicker()
@@ -680,24 +733,27 @@ public partial class MainWindow : Window
     // Return keyboard focus to the active message panel after reading a message.
     private void ReturnFocusToMessageList()
     {
+        LogService.Debug($"[FOCUS] ReturnFocusToMessageList viewMode={_vm.ViewMode} {FocusInfo()}");
         if (_vm.IsConversationsView)
         {
-            FocusConversationTreeFirstItem();
+            FocusTreeSelectedOrFirst(ConversationTree);
             return;
         }
         if (_vm.IsFromView)
         {
-            FocusSenderGroupTreeFirstItem();
+            FocusTreeSelectedOrFirst(SenderGroupTree);
             return;
         }
         if (MessageList.Items.Count == 0)
         {
+            LogService.Debug("[FOCUS]   → MessageList.Focus() (empty list)");
             // Dispatch at Input priority so we queue AFTER any WPF-internal focus
             // restoration that was enqueued when items were removed from the list.
             Dispatcher.InvokeAsync(() => MessageList.Focus(), DispatcherPriority.Input);
             return;
         }
         var idx = MessageList.SelectedIndex >= 0 ? MessageList.SelectedIndex : 0;
+        LogService.Debug($"[FOCUS]   → FocusItemAt({idx}) count={MessageList.Items.Count}");
         MessageList.ScrollIntoView(MessageList.Items[idx]);
         Dispatcher.InvokeAsync(() => FocusItemAt(idx), DispatcherPriority.Input);
     }
@@ -705,6 +761,7 @@ public partial class MainWindow : Window
     // Routes focus to whichever message panel is currently visible.
     private void FocusActiveMessagePanel()
     {
+        LogService.Debug($"[FOCUS] FocusActiveMessagePanel viewMode={_vm.ViewMode} {FocusInfo()}");
         if (_vm.IsConversationsView)
             FocusConversationTreeFirstItem();
         else if (_vm.IsFromView)
@@ -794,16 +851,83 @@ public partial class MainWindow : Window
         Dispatcher.InvokeAsync(ConversationTree.Focus, DispatcherPriority.Input);
     }
 
+    // Focuses the selected TreeViewItem; falls back to the first item if nothing is selected.
+    // fallbackIdx: index to use when tree.SelectedItem is null at dispatch time
+    // (e.g. after DataBind cleared the selection during a background rebuild).
+    // Pass -1 (default for direct calls) to use item 0; pass the old selected index
+    // from PropChanged handlers to preserve position across background sync rebuilds.
+    private void FocusTreeSelectedOrFirst(TreeView tree, int fallbackIdx = -1)
+    {
+        var name = tree == ConversationTree ? "ConvTree" : "SenderTree";
+        // Defer ALL logic to Input priority so WPF's DataBind pass (which runs at
+        // higher priority) has already updated ItemsSource and recycled old containers
+        // before we try to locate a TreeViewItem.  Capturing tvi synchronously here
+        // and focusing it in the dispatch results in a stale/detached container when
+        // the items source just changed, causing Focus() to silently fail.
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (tree.Items.Count == 0)
+            {
+                LogService.Debug($"[FOCUS] FocusTreeSelectedOrFirst({name}) empty — tree.Focus()");
+                tree.Focus();
+                return;
+            }
+            // Prefer the live selected item; fall back to the captured index position
+            // (best match after a rebuild), then absolute first.
+            object? item;
+            string  source;
+            if (tree.SelectedItem != null)
+            {
+                item   = tree.SelectedItem;
+                source = "selected";
+            }
+            else if (fallbackIdx >= 0 && fallbackIdx < tree.Items.Count)
+            {
+                item   = tree.Items[fallbackIdx];
+                source = $"fallback[{fallbackIdx}]";
+            }
+            else
+            {
+                item   = tree.Items[0];
+                source = "fallback[0]";
+            }
+            if (tree.ItemContainerGenerator.ContainerFromItem(item) is TreeViewItem tvi)
+            {
+                LogService.Debug($"[FOCUS] FocusTreeSelectedOrFirst({name}) {source} containerFound=true — tvi.Focus()");
+                tvi.IsSelected = true;
+                tvi.Focus();
+                return;
+            }
+            LogService.Debug($"[FOCUS] FocusTreeSelectedOrFirst({name}) {source} containerFound=false — tree.Focus()");
+            tree.Focus();
+        }, DispatcherPriority.Input);
+    }
+
+    // Returns a compact string describing where keyboard focus currently is.
+    private string FocusInfo()
+    {
+        if (ConversationTree.IsKeyboardFocusWithin)  return $"focus=ConvTree/{Keyboard.FocusedElement?.GetType().Name}";
+        if (SenderGroupTree.IsKeyboardFocusWithin)   return $"focus=SenderTree/{Keyboard.FocusedElement?.GetType().Name}";
+        if (MessageList.IsKeyboardFocusWithin)        return $"focus=MsgList/{Keyboard.FocusedElement?.GetType().Name}";
+        if (MessageBody.IsKeyboardFocusWithin)        return "focus=MsgBody";
+        if (FolderList.IsKeyboardFocusWithin)         return "focus=FolderList";
+        if (AccountList.IsKeyboardFocusWithin)        return "focus=AccountList";
+        if (MainToolbar.IsKeyboardFocusWithin)        return "focus=Toolbar";
+        return $"focus=other/{Keyboard.FocusedElement?.GetType().Name ?? "null"}";
+    }
+
     // ── Conversation tree event handlers ────────────────────────────────────────
 
     // When the ConversationTree gets keyboard focus, ensure an item is highlighted.
     private void ConversationTree_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
+        LogService.Debug($"[FOCUS] ConvTree GotKeyboardFocus selectedItem={ConversationTree.SelectedItem?.GetType().Name ?? "null"} count={ConversationTree.Items.Count} from={e.OldFocus?.GetType().Name ?? "null"}");
         // If no item is selected, select and focus the first root item.
         if (ConversationTree.SelectedItem == null && ConversationTree.Items.Count > 0)
         {
             if (ConversationTree.ItemContainerGenerator.ContainerFromIndex(0) is TreeViewItem first)
             {
+                LogService.Debug("[FOCUS]   ConvTree GotKeyboardFocus: no selection — selecting first item");
                 first.IsSelected = true;
                 first.Focus();
             }
@@ -816,6 +940,7 @@ public partial class MainWindow : Window
     // reliably fire UIA focus events on arrow-key navigation, so we use RaiseNotificationEvent.
     private void ConversationTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        LogService.Debug($"[FOCUS] ConvTree SelectedItemChanged old={e.OldValue?.GetType().Name ?? "null"} new={e.NewValue?.GetType().Name ?? "null"} {FocusInfo()}");
         if (e.NewValue is MailMessageSummary msg)
             _vm.SelectedMessage = msg;
 
@@ -836,6 +961,7 @@ public partial class MainWindow : Window
     // Keyboard actions in the conversation tree.
     private async void ConversationTree_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        LogService.Debug($"[FOCUS] ConvTree KeyDown key={e.Key} mod={Keyboard.Modifiers} {FocusInfo()} items={ConversationTree.Items.Count} selected={ConversationTree.SelectedItem?.GetType().Name ?? "null"}");
         if (e.Key == Key.Enter)
         {
             if (ConversationTree.SelectedItem is MailMessageSummary msg)
@@ -871,15 +997,24 @@ public partial class MainWindow : Window
             e.Handled = true;
             if (ConversationTree.SelectedItem is MailMessageSummary toDelete)
             {
+                var parentGroup = _vm.Conversations.FirstOrDefault(g => g.Messages.Contains(toDelete));
+                var targetIdx   = parentGroup != null ? _vm.Conversations.IndexOf(parentGroup) : 0;
                 _vm.SelectedMessage = toDelete;
+                LandOnConversationAfterRebuild(targetIdx);   // register before the rebuild fires
                 await _vm.DeleteMessageCommand.ExecuteAsync(null);
             }
             else if (ConversationTree.SelectedItem is ConversationGroup group)
             {
                 var targetIdx = _vm.Conversations.IndexOf(group);
+                LandOnConversationAfterRebuild(targetIdx);   // register before the rebuild fires
                 await _vm.DeleteMessagesAsync(group.Messages);
-                LandOnConversationAfterRebuild(targetIdx);
             }
+        }
+        else if ((e.Key == Key.Up || e.Key == Key.Down || e.Key == Key.Left || e.Key == Key.Right)
+                 && Keyboard.Modifiers == ModifierKeys.None
+                 && ConversationTree.Items.Count == 0)
+        {
+            e.Handled = true;
         }
     }
 
@@ -889,30 +1024,44 @@ public partial class MainWindow : Window
 
     // After an async conversation rebuild, selects and focuses the conversation
     // at the given index (clamped to the new list size).
-    private void LandOnConversationAfterRebuild(int targetIdx)    {
+    private void LandOnConversationAfterRebuild(int targetIdx)
+    {
+        LogService.Debug($"[FOCUS] LandOnConv: registered listener targetIdx={targetIdx} {FocusInfo()}");
         void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != nameof(_vm.Conversations)) return;
             _vm.PropertyChanged -= OnPropertyChanged;
+            LogService.Debug($"[FOCUS] LandOnConv: listener fired count={_vm.Conversations.Count} targetIdx={targetIdx} {FocusInfo()}");
             Dispatcher.InvokeAsync(() =>
             {
-                if (_vm.Conversations.Count == 0) return;
+                if (_vm.Conversations.Count == 0)
+                {
+                    LogService.Debug("[FOCUS] LandOnConv: dispatch skipped — Conversations empty");
+                    return;
+                }
                 var idx = Math.Max(0, Math.Min(targetIdx, _vm.Conversations.Count - 1));
                 var conv = _vm.Conversations[idx];
                 if (ConversationTree.ItemContainerGenerator.ContainerFromItem(conv) is TreeViewItem tvi)
                 {
+                    LogService.Debug($"[FOCUS] LandOnConv: tvi.Focus() idx={idx} {FocusInfo()}");
                     tvi.IsSelected = true;
                     tvi.Focus();
                 }
                 else
                 {
+                    LogService.Debug($"[FOCUS] LandOnConv: container not realized idx={idx} — retry at Background");
                     // Container not yet realized — retry at a lower priority.
                     Dispatcher.InvokeAsync(() =>
                     {
                         if (ConversationTree.ItemContainerGenerator.ContainerFromItem(conv) is TreeViewItem tvi2)
                         {
+                            LogService.Debug($"[FOCUS] LandOnConv: retry tvi.Focus() idx={idx}");
                             tvi2.IsSelected = true;
                             tvi2.Focus();
+                        }
+                        else
+                        {
+                            LogService.Debug($"[FOCUS] LandOnConv: retry also failed idx={idx} — giving up");
                         }
                     }, DispatcherPriority.Background);
                 }
@@ -929,14 +1078,64 @@ public partial class MainWindow : Window
         Dispatcher.InvokeAsync(SenderGroupTree.Focus, DispatcherPriority.Input);
     }
 
+    // After an async sender-group rebuild, selects and focuses the sender group
+    // at the given index (clamped to the new list size).
+    private void LandOnSenderGroupAfterRebuild(int targetGroupIdx)
+    {
+        LogService.Debug($"[FOCUS] LandOnSender: registered listener targetIdx={targetGroupIdx} {FocusInfo()}");
+        void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(_vm.SenderGroups)) return;
+            _vm.PropertyChanged -= OnPropertyChanged;
+            LogService.Debug($"[FOCUS] LandOnSender: listener fired count={_vm.SenderGroups.Count} targetIdx={targetGroupIdx} {FocusInfo()}");
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_vm.SenderGroups.Count == 0)
+                {
+                    LogService.Debug("[FOCUS] LandOnSender: dispatch skipped — SenderGroups empty");
+                    return;
+                }
+                var idx   = Math.Max(0, Math.Min(targetGroupIdx, _vm.SenderGroups.Count - 1));
+                var group = _vm.SenderGroups[idx];
+                if (SenderGroupTree.ItemContainerGenerator.ContainerFromItem(group) is TreeViewItem tvi)
+                {
+                    LogService.Debug($"[FOCUS] LandOnSender: tvi.Focus() idx={idx} {FocusInfo()}");
+                    tvi.IsSelected = true;
+                    tvi.Focus();
+                }
+                else
+                {
+                    LogService.Debug($"[FOCUS] LandOnSender: container not realized idx={idx} — retry at Background");
+                    // Container not yet realized — retry at a lower priority.
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (SenderGroupTree.ItemContainerGenerator.ContainerFromItem(group) is TreeViewItem tvi2)
+                        {
+                            LogService.Debug($"[FOCUS] LandOnSender: retry tvi.Focus() idx={idx}");
+                            tvi2.IsSelected = true;
+                            tvi2.Focus();
+                        }
+                        else
+                        {
+                            LogService.Debug($"[FOCUS] LandOnSender: retry also failed idx={idx} — giving up");
+                        }
+                    }, DispatcherPriority.Background);
+                }
+            }, DispatcherPriority.Input);
+        }
+        _vm.PropertyChanged += OnPropertyChanged;
+    }
+
     // ── SenderGroup tree event handlers ─────────────────────────────────────
 
     private void SenderGroupTree_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
+        LogService.Debug($"[FOCUS] SenderTree GotKeyboardFocus selectedItem={SenderGroupTree.SelectedItem?.GetType().Name ?? "null"} count={SenderGroupTree.Items.Count} from={e.OldFocus?.GetType().Name ?? "null"}");
         if (SenderGroupTree.SelectedItem == null && SenderGroupTree.Items.Count > 0)
         {
             if (SenderGroupTree.ItemContainerGenerator.ContainerFromIndex(0) is TreeViewItem first)
             {
+                LogService.Debug("[FOCUS]   SenderTree GotKeyboardFocus: no selection — selecting first item");
                 first.IsSelected = true;
                 first.Focus();
             }
@@ -945,6 +1144,7 @@ public partial class MainWindow : Window
 
     private void SenderGroupTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        LogService.Debug($"[FOCUS] SenderTree SelectedItemChanged old={e.OldValue?.GetType().Name ?? "null"} new={e.NewValue?.GetType().Name ?? "null"} {FocusInfo()}");
         if (e.NewValue is MailMessageSummary msg)
             _vm.SelectedMessage = msg;
 
@@ -964,6 +1164,7 @@ public partial class MainWindow : Window
 
     private async void SenderGroupTree_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        LogService.Debug($"[FOCUS] SenderTree KeyDown key={e.Key} mod={Keyboard.Modifiers} {FocusInfo()} items={SenderGroupTree.Items.Count} selected={SenderGroupTree.SelectedItem?.GetType().Name ?? "null"}");
         if (e.Key == Key.Enter)
         {
             if (SenderGroupTree.SelectedItem is MailMessageSummary msg)
@@ -996,13 +1197,24 @@ public partial class MainWindow : Window
             e.Handled = true;
             if (SenderGroupTree.SelectedItem is MailMessageSummary toDelete)
             {
+                var parentGroup = _vm.SenderGroups.FirstOrDefault(g => g.Messages.Contains(toDelete));
+                var targetIdx   = parentGroup != null ? _vm.SenderGroups.IndexOf(parentGroup) : 0;
                 _vm.SelectedMessage = toDelete;
+                LandOnSenderGroupAfterRebuild(targetIdx);   // register before the rebuild fires
                 await _vm.DeleteMessageCommand.ExecuteAsync(null);
             }
             else if (SenderGroupTree.SelectedItem is SenderGroup group)
             {
+                var targetIdx = _vm.SenderGroups.IndexOf(group);
+                LandOnSenderGroupAfterRebuild(targetIdx);   // register before the rebuild fires
                 await _vm.DeleteSenderGroupCommand.ExecuteAsync(group);
             }
+        }
+        else if ((e.Key == Key.Up || e.Key == Key.Down || e.Key == Key.Left || e.Key == Key.Right)
+                 && Keyboard.Modifiers == ModifierKeys.None
+                 && SenderGroupTree.Items.Count == 0)
+        {
+            e.Handled = true;
         }
     }
 
@@ -1159,6 +1371,13 @@ public partial class MainWindow : Window
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
+
+        // Conversations/From: LandOnX waits for the async rebuild before focusing.
+        // Messages view: MessageListFocusRequested in MoveSelectedMessagesToFolderAsync handles it.
+        if (_vm.IsConversationsView)
+            LandOnConversationAfterRebuild(0);
+        else if (_vm.IsFromView)
+            LandOnSenderGroupAfterRebuild(0);
     }
 
     private async void MessageContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)
@@ -1179,10 +1398,12 @@ public partial class MainWindow : Window
         if (ConversationTree.SelectedItem is not ConversationGroup group || group.Messages.Count == 0) return;
         if (_vm.CachedFolders.Count == 0) return;
 
+        var targetIdx = _vm.Conversations.IndexOf(group);
         var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move Conversation to Folder") { Owner = this };
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+        LandOnConversationAfterRebuild(targetIdx);
     }
 
     private async void ConversationContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)

@@ -210,28 +210,33 @@
                     ToolTip="Load 100 more messages (Ctrl+M)"
                     Content="Load _More"/>
             <Separator/>
-            <Menu Background="Transparent"
-                  AutomationProperties.Name="View mode">
-                <MenuItem x:Name="ViewModeMenuItem"
-                          Header="{Binding ViewModeLabel}"
-                          ToolTip="Select message view mode (Ctrl+Shift+V)">
-                    <MenuItem Header="_Messages"
-                              IsCheckable="True"
-                              IsChecked="{Binding IsMessagesView, Mode=OneWay}"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="Messages"/>
-                    <MenuItem Header="_Conversations"
-                              IsCheckable="True"
-                              IsChecked="{Binding IsConversationsView, Mode=OneWay}"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="Conversations"/>
-                    <MenuItem Header="_From"
-                              IsCheckable="True"
-                              IsChecked="{Binding IsFromView, Mode=OneWay}"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="From"/>
-                </MenuItem>
-            </Menu>
+            <Button x:Name="ViewModeButton"
+                    Style="{StaticResource ToolbarButton}"
+                    Content="{Binding ViewModeLabel}"
+                    AutomationProperties.Name="View mode"
+                    ToolTip="Select message view mode (Ctrl+Shift+V)"
+                    Click="ViewModeButton_Click">
+                <Button.ContextMenu>
+                    <ContextMenu AutomationProperties.Name="View mode"
+                                 DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="_Messages"
+                                  IsCheckable="True"
+                                  IsChecked="{Binding IsMessagesView, Mode=OneWay}"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="Messages"/>
+                        <MenuItem Header="_Conversations"
+                                  IsCheckable="True"
+                                  IsChecked="{Binding IsConversationsView, Mode=OneWay}"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="Conversations"/>
+                        <MenuItem Header="_From"
+                                  IsCheckable="True"
+                                  IsChecked="{Binding IsFromView, Mode=OneWay}"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="From"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding EmptyTrashCommand}"

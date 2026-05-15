@@ -653,20 +653,15 @@ public class ImapService : IImapService
         if (account.AuthType == AuthType.Password && !_passwords.TryGetValue(accountId, out password))
             throw new InvalidOperationException($"Account {accountId} is not connected.");
 
-        // One reconnect attempt at a time per account
-        var sem = _locks.GetOrAdd(accountId, _ => new SemaphoreSlim(1, 1));
-        await sem.WaitAsync(ct);
-        try
-        {
-            // Re-check after acquiring — another waiter may have reconnected already
-            if (_clients.TryGetValue(accountId, out client) && client.IsConnected && client.IsAuthenticated)
-                return client;
+        // ExecuteWithRetryAsync already holds the per-account lock, so reconnect
+        // without re-acquiring it (avoids deadlock). The double-check below handles
+        // the rare case where two direct callers both see the client as disconnected.
+        if (_clients.TryGetValue(accountId, out client) && client.IsConnected && client.IsAuthenticated)
+            return client;
 
-            LogService.Log($"Reconnecting {account.Username}…");
-            await ConnectAsync(account, password, ct);
-            return _clients[accountId];
-        }
-        finally { sem.Release(); }
+        LogService.Log($"Reconnecting {account.Username}…");
+        await ConnectAsync(account, password, ct);
+        return _clients[accountId];
     }
 
     private static MailMessageSummary SummaryToModel(IMessageSummary s, Guid accountId, string folderName) =>
@@ -842,18 +837,26 @@ public class ImapService : IImapService
     private async Task<T> ExecuteWithRetryAsync<T>(
         Guid accountId, CancellationToken ct, Func<ImapClient, Task<T>> operation)
     {
-        var client = await GetOrReconnectAsync(accountId, ct);
+        // Serialize all IMAP operations per account so background sync and
+        // foreground actions (delete, send, etc.) never share the client concurrently.
+        var sem = _locks.GetOrAdd(accountId, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct);
         try
         {
-            return await operation(client);
+            var client = await GetOrReconnectAsync(accountId, ct);
+            try
+            {
+                return await operation(client);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested && IsTransientConnectionError(ex))
+            {
+                LogService.Log($"Transient IMAP error, reconnecting ({accountId}): {ex.GetType().Name}");
+                ForceDisconnect(accountId);
+                client = await GetOrReconnectAsync(accountId, ct);
+                return await operation(client);
+            }
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested && IsTransientConnectionError(ex))
-        {
-            LogService.Log($"Transient IMAP error, reconnecting ({accountId}): {ex.GetType().Name}");
-            ForceDisconnect(accountId);
-            client = await GetOrReconnectAsync(accountId, ct);
-            return await operation(client);
-        }
+        finally { sem.Release(); }
     }
 
     public void Dispose()
