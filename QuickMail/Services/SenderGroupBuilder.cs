@@ -1,0 +1,32 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using QuickMail.Models;
+
+namespace QuickMail.Services;
+
+/// <summary>Builds <see cref="SenderGroup"/> instances from a flat message list.</summary>
+public static class SenderGroupBuilder
+{
+    /// <summary>
+    /// Groups <paramref name="messages"/> by sender (From field, trimmed, case-insensitive),
+    /// sorts each group newest-first, and orders groups by their newest message date descending
+    /// (matching the flat message list order).
+    /// </summary>
+    public static IReadOnlyList<SenderGroup> Build(IEnumerable<MailMessageSummary> messages)
+    {
+        return messages
+            .GroupBy(m => m.From.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var sorted = g.OrderByDescending(m => m.Date).ToList();
+                return new SenderGroup
+                {
+                    SenderKey = g.Key,
+                    Messages  = sorted,
+                };
+            })
+            .OrderByDescending(s => s.Messages.Count > 0 ? s.Messages[0].Date : DateTimeOffset.MinValue)
+            .ToList();
+    }
+}

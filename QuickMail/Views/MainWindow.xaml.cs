@@ -97,7 +97,9 @@ public partial class MainWindow : Window
         // (happens after Refresh, Load More, and folder changes).
         vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(MainViewModel.Messages) or nameof(MainViewModel.Conversations) && IsActive)
+            if (e.PropertyName is nameof(MainViewModel.Messages)
+                               or nameof(MainViewModel.Conversations)
+                               or nameof(MainViewModel.SenderGroups) && IsActive)
                 Dispatcher.InvokeAsync(FocusActiveMessagePanel, DispatcherPriority.Input);
 
             if (e.PropertyName == nameof(MainViewModel.StatusText) && !string.IsNullOrEmpty(vm.StatusText))
@@ -137,9 +139,9 @@ public partial class MainWindow : Window
             defaultKey: Key.Y, defaultModifiers: ModifierKeys.Control));
 
         _registry.Register(new CommandDefinition(
-            id: "view.toggleConversation", category: "View", title: "Toggle Conversation View",
-            execute: () => _vm.IsConversationView = !_vm.IsConversationView,
-            defaultKey: Key.C, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+            id: "view.toggleConversation", category: "View", title: "Cycle View Mode",
+            execute: () => _vm.ViewMode = (Models.ViewMode)(((int)_vm.ViewMode + 1) % 3),
+            defaultKey: Key.V, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
 
         _registry.Register(new CommandDefinition(
             id: "view.focusStatusBar", category: "View", title: "Focus Status Bar",
@@ -225,8 +227,10 @@ public partial class MainWindow : Window
                 case Key.D1: AccountList.Focus();        e.Handled = true; return;
                 case Key.D2: FolderList.Focus();         e.Handled = true; return;
                 case Key.D3:
-                    if (_vm.IsConversationView)
+                    if (_vm.IsConversationsView)
                         ConversationTree.Focus();
+                    else if (_vm.IsFromView)
+                        SenderGroupTree.Focus();
                     else
                         MessageList.Focus();
                     e.Handled = true;
@@ -659,9 +663,14 @@ public partial class MainWindow : Window
     // Return keyboard focus to the active message panel after reading a message.
     private void ReturnFocusToMessageList()
     {
-        if (_vm.IsConversationView)
+        if (_vm.IsConversationsView)
         {
             FocusConversationTreeFirstItem();
+            return;
+        }
+        if (_vm.IsFromView)
+        {
+            FocusSenderGroupTreeFirstItem();
             return;
         }
         if (MessageList.Items.Count == 0) { MessageList.Focus(); return; }
@@ -673,8 +682,10 @@ public partial class MainWindow : Window
     // Routes focus to whichever message panel is currently visible.
     private void FocusActiveMessagePanel()
     {
-        if (_vm.IsConversationView)
+        if (_vm.IsConversationsView)
             FocusConversationTreeFirstItem();
+        else if (_vm.IsFromView)
+            FocusSenderGroupTreeFirstItem();
         else
             FocusMessageListFirstItem();
     }
@@ -702,7 +713,7 @@ public partial class MainWindow : Window
         if (MainToolbar.IsKeyboardFocusWithin)  return 0;
         if (AccountList.IsKeyboardFocusWithin)  return 1;
         if (FolderList.IsKeyboardFocusWithin)   return 2;
-        if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin) return 3;
+        if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin || SenderGroupTree.IsKeyboardFocusWithin) return 3;
         if (MessageBody.IsKeyboardFocusWithin)  return 4;
         if (MainStatusBar.IsKeyboardFocusWithin) return 5;
         return 0;
@@ -885,6 +896,120 @@ public partial class MainWindow : Window
             }, DispatcherPriority.Input);
         }
         _vm.PropertyChanged += OnPropertyChanged;
+    }
+
+    // ── SenderGroup tree focus helpers ───────────────────────────────────────
+
+    private void FocusSenderGroupTreeFirstItem()
+    {
+        if (SenderGroupTree.Items.Count == 0) { SenderGroupTree.Focus(); return; }
+        Dispatcher.InvokeAsync(SenderGroupTree.Focus, DispatcherPriority.Input);
+    }
+
+    // ── SenderGroup tree event handlers ─────────────────────────────────────
+
+    private void SenderGroupTree_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (SenderGroupTree.SelectedItem == null && SenderGroupTree.Items.Count > 0)
+        {
+            if (SenderGroupTree.ItemContainerGenerator.ContainerFromIndex(0) is TreeViewItem first)
+            {
+                first.IsSelected = true;
+                first.Focus();
+            }
+        }
+    }
+
+    private void SenderGroupTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is MailMessageSummary msg)
+            _vm.SelectedMessage = msg;
+
+        if (SenderGroupTree.IsKeyboardFocusWithin)
+        {
+            switch (e.NewValue)
+            {
+                case MailMessageSummary m:
+                    AccessibilityHelper.Announce(this, MessageSummaryAnnouncement(m), interrupt: true);
+                    break;
+                case SenderGroup grp:
+                    AccessibilityHelper.Announce(this, grp.AutomationName, interrupt: true);
+                    break;
+            }
+        }
+    }
+
+    private async void SenderGroupTree_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            if (SenderGroupTree.SelectedItem is MailMessageSummary msg)
+            {
+                e.Handled = true;
+                await _vm.SelectMessageCommand.ExecuteAsync(msg);
+                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+                    await ShowMessageBodyAsync(_vm.MessageDetail);
+            }
+            else if (SenderGroupTree.SelectedItem is SenderGroup group)
+            {
+                e.Handled = true;
+                if (group.Messages.Count == 1)
+                {
+                    var singleMsg = group.Messages[0];
+                    _vm.SelectedMessage = singleMsg;
+                    await _vm.SelectMessageCommand.ExecuteAsync(singleMsg);
+                    if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+                        await ShowMessageBodyAsync(_vm.MessageDetail);
+                }
+                else
+                {
+                    if (SenderGroupTree.ItemContainerGenerator.ContainerFromItem(group) is TreeViewItem tvi)
+                        tvi.IsExpanded = !tvi.IsExpanded;
+                }
+            }
+        }
+        else if (e.Key == Key.Delete)
+        {
+            e.Handled = true;
+            if (SenderGroupTree.SelectedItem is MailMessageSummary toDelete)
+            {
+                _vm.SelectedMessage = toDelete;
+                await _vm.DeleteMessageCommand.ExecuteAsync(null);
+            }
+            else if (SenderGroupTree.SelectedItem is SenderGroup group)
+            {
+                await _vm.DeleteSenderGroupCommand.ExecuteAsync(group);
+            }
+        }
+    }
+
+    private void SenderGroupTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null && source is not TreeViewItem)
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+
+        if (source is TreeViewItem tvi)
+        {
+            tvi.IsSelected = true;
+            tvi.Focus();
+        }
+    }
+
+    private void SenderGroupTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        switch (SenderGroupTree.SelectedItem)
+        {
+            case SenderGroup:
+                SenderGroupTree.ContextMenu = (ContextMenu)FindResource("SenderGroupContextMenu");
+                break;
+            case MailMessageSummary:
+                e.Handled = true;
+                break;
+            default:
+                e.Handled = true;
+                break;
+        }
     }
 
     private void OpenComposeWindow(ComposeModel composeModel)

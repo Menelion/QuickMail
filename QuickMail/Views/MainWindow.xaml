@@ -19,6 +19,45 @@
 
         <!-- ── Shared context menus ── -->
 
+        <!-- Sender-group context menu (root level of SenderGroupTree) -->
+        <ContextMenu x:Key="SenderGroupContextMenu"
+                     AutomationProperties.Name="Sender group actions"
+                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="_Reply"
+                      AutomationProperties.Name="Reply"
+                      Command="{Binding ReplySenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Reply _All"
+                      AutomationProperties.Name="Reply All"
+                      Command="{Binding ReplyAllSenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="_Forward"
+                      AutomationProperties.Name="Forward"
+                      Command="{Binding ForwardSenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="_Delete All from Sender"
+                      AutomationProperties.Name="Delete All from Sender"
+                      Command="{Binding DeleteSenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="E_xpand Group"
+                      AutomationProperties.Name="Expand Group"
+                      Command="{Binding ExpandSenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Colla_pse Group"
+                      AutomationProperties.Name="Collapse Group"
+                      Command="{Binding CollapseSenderGroupCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="_Expand All Groups"
+                      AutomationProperties.Name="Expand All Groups"
+                      Command="{Binding ExpandAllSenderGroupsCommand}"/>
+            <MenuItem Header="Collapse A_ll Groups"
+                      AutomationProperties.Name="Collapse All Groups"
+                      Command="{Binding CollapseAllSenderGroupsCommand}"/>
+        </ContextMenu>
+
         <!-- Conversation-group context menu (root level of ConversationTree) -->
         <ContextMenu x:Key="ConversationGroupContextMenu"
                      AutomationProperties.Name="Conversation actions"
@@ -171,11 +210,27 @@
                     ToolTip="Load 100 more messages (Ctrl+M)"
                     Content="Load _More"/>
             <Separator/>
-            <ToggleButton Style="{StaticResource ToolbarToggleButton}"
-                          IsChecked="{Binding IsConversationView, Mode=TwoWay}"
-                          AutomationProperties.Name="Conversation view (Ctrl+Shift+C)"
-                          ToolTip="Group messages by subject (Ctrl+Shift+C)"
-                          Content="Conver_sation"/>
+            <Menu Background="Transparent"
+                  AutomationProperties.Name="View mode">
+                <MenuItem Header="{Binding ViewModeLabel}"
+                          ToolTip="Select message view mode (Ctrl+Shift+V)">
+                    <MenuItem Header="_Messages"
+                              IsCheckable="True"
+                              IsChecked="{Binding IsMessagesView, Mode=OneWay}"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="Messages"/>
+                    <MenuItem Header="_Conversations"
+                              IsCheckable="True"
+                              IsChecked="{Binding IsConversationsView, Mode=OneWay}"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="Conversations"/>
+                    <MenuItem Header="_From"
+                              IsCheckable="True"
+                              IsChecked="{Binding IsFromView, Mode=OneWay}"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="From"/>
+                </MenuItem>
+            </Menu>
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding EmptyTrashCommand}"
@@ -418,12 +473,12 @@
                     </TextBlock>
 
                     <!-- Standard list view and conversation tree occupy the same space;
-                         only one is visible at a time based on IsConversationView. -->
+                         only one is visible at a time based on ViewMode. -->
                     <Grid>
                     <ListView x:Name="MessageList"
                               AutomationProperties.Name="Messages"
                               ContextMenu="{StaticResource MessageContextMenu}"
-                              Visibility="{Binding IsConversationView, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                              Visibility="{Binding IsMessagesView, Converter={StaticResource BoolToVisibilityConverter}}"
                               ItemsSource="{Binding Messages}"
                               SelectedItem="{Binding SelectedMessage, Mode=TwoWay}"
                               SelectionMode="Extended"
@@ -544,7 +599,7 @@
                     <!-- Conversation tree view: one root node per subject group, children are individual messages. -->
                     <TreeView x:Name="ConversationTree"
                               AutomationProperties.Name="Messages"
-                              Visibility="{Binding IsConversationView, Converter={StaticResource BoolToVisibilityConverter}}"
+                              Visibility="{Binding IsConversationsView, Converter={StaticResource BoolToVisibilityConverter}}"
                               ItemsSource="{Binding Conversations}"
                               BorderThickness="0"
                               TabIndex="3"
@@ -637,6 +692,109 @@
                         </TreeView.Resources>
                         <TreeView.ItemContainerStyle>
                             <!-- Style for root-level conversation group nodes: starts collapsed -->
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+
+                    <!-- From view: one root node per sender, children are individual messages. -->
+                    <TreeView x:Name="SenderGroupTree"
+                              AutomationProperties.Name="Messages"
+                              Visibility="{Binding IsFromView, Converter={StaticResource BoolToVisibilityConverter}}"
+                              ItemsSource="{Binding SenderGroups}"
+                              BorderThickness="0"
+                              TabIndex="3"
+                              KeyboardNavigation.TabNavigation="Once"
+                              KeyboardNavigation.DirectionalNavigation="Contained"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.CanContentScroll="True"
+                              GotKeyboardFocus="SenderGroupTree_GotKeyboardFocus"
+                              SelectedItemChanged="SenderGroupTree_SelectedItemChanged"
+                              PreviewKeyDown="SenderGroupTree_PreviewKeyDown"
+                              PreviewMouseRightButtonDown="SenderGroupTree_PreviewMouseRightButtonDown"
+                              ContextMenuOpening="SenderGroupTree_ContextMenuOpening">
+                        <TreeView.Resources>
+                            <!-- Style for level-2 message rows (children of a sender group node) -->
+                            <Style x:Key="SenderMessageTreeItemStyle" TargetType="TreeViewItem"
+                                   BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="AutomationProperties.Name">
+                                    <Setter.Value>
+                                        <MultiBinding StringFormat="{}{0}. {1}. {2}. {3}. {4}.">
+                                            <Binding Path="ReadStatusLabel"/>
+                                            <Binding Path="From"/>
+                                            <Binding Path="Subject"/>
+                                            <Binding Path="Preview"/>
+                                            <Binding Path="DateDisplay"/>
+                                        </MultiBinding>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="ContextMenu" Value="{StaticResource MessageContextMenu}"/>
+                            </Style>
+
+                            <!-- Level 1: sender group header with name + count + newest subject -->
+                            <HierarchicalDataTemplate DataType="{x:Type models:SenderGroup}"
+                                                      ItemsSource="{Binding Messages}"
+                                                      ItemContainerStyle="{StaticResource SenderMessageTreeItemStyle}">
+                                <StackPanel>
+                                    <TextBlock TextTrimming="CharacterEllipsis"
+                                               FontWeight="{Binding HasUnread, Converter={StaticResource BoolToWeightConverter}}">
+                                        <Run Text="{Binding SenderName, Mode=OneWay}"/>
+                                        <Run Text=" "/>
+                                        <Run Text="{Binding Count, StringFormat=({0}), Mode=OneWay}"/>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding NewestSubject}"
+                                               FontSize="11" Opacity="0.85"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding NewestSubject}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Preview}"
+                                               FontSize="11" Opacity="0.7"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Preview}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+
+                            <!-- Level 2: individual message row matching the ListView column layout -->
+                            <DataTemplate DataType="{x:Type models:MailMessageSummary}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding From}"
+                                               FontWeight="{Binding IsRead, Converter={StaticResource BoolToWeightConverter}}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Subject}"
+                                               FontWeight="{Binding IsRead, Converter={StaticResource BoolToWeightConverter}}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding DateDisplay}"
+                                               TextAlignment="Right"/>
+                                </Grid>
+                            </DataTemplate>
+                        </TreeView.Resources>
+                        <TreeView.ItemContainerStyle>
+                            <!-- Style for root-level sender group nodes: starts collapsed -->
                             <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                 <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/>

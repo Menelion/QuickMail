@@ -34,8 +34,9 @@ public partial class MainViewModel : ObservableObject
     // How many messages to fetch; increased by LoadMoreMessagesCommand
     private int _messageLimit = 100;
 
-    // Version stamp for conversation rebuilds; latest wins, stale results discarded
+    // Version stamps for grouped-view rebuilds; latest wins, stale results discarded
     private int _conversationRebuildVersion;
+    private int _senderGroupRebuildVersion;
 
     // Retains folder lists for every account that has been connected this session
     private readonly Dictionary<Guid, List<MailFolderModel>> _cachedFolders = new();
@@ -84,10 +85,24 @@ public partial class MainViewModel : ObservableObject
     private bool _isMessageOpen;
 
     [ObservableProperty]
-    private bool _isConversationView = false;
+    private ViewMode _viewMode = ViewMode.Messages;
 
     [ObservableProperty]
     private ObservableCollection<ConversationGroup> _conversations = [];
+
+    [ObservableProperty]
+    private ObservableCollection<SenderGroup> _senderGroups = [];
+
+    public bool IsMessagesView      => ViewMode == ViewMode.Messages;
+    public bool IsConversationsView => ViewMode == ViewMode.Conversations;
+    public bool IsFromView          => ViewMode == ViewMode.From;
+
+    public string ViewModeLabel => ViewMode switch
+    {
+        ViewMode.Conversations => "View: Conversations",
+        ViewMode.From          => "View: From",
+        _                      => "View: Messages",
+    };
 
     [ObservableProperty]
     private string _statusText = "Ready";
@@ -131,8 +146,13 @@ public partial class MainViewModel : ObservableObject
         _configService  = configService;
 
         var cfg = _configService.Load();
-        _showMessageStatus  = cfg.ShowMessageStatus;
-        _isConversationView = cfg.ConversationView;
+        _showMessageStatus = cfg.ShowMessageStatus;
+        _viewMode = cfg.ViewMode switch
+        {
+            "conversations" => ViewMode.Conversations,
+            "from"          => ViewMode.From,
+            _               => ViewMode.Messages,
+        };
 
         _syncService.FolderSynced    += OnFolderSynced;
         _syncService.MessagesRemoved += OnMessagesRemoved;
@@ -192,8 +212,8 @@ public partial class MainViewModel : ObservableObject
             defaultKey: Key.E, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
 
         registry.Register(new CommandDefinition(
-            id: "view.toggleConversation", category: "View", title: "Toggle Conversation View",
-            execute: () => IsConversationView = !IsConversationView));
+            id: "view.toggleConversation", category: "View", title: "Cycle View Mode",
+            execute: () => ViewMode = (ViewMode)(((int)ViewMode + 1) % 3)));
 
         registry.Register(new CommandDefinition(
             id: "account.manage", category: "Account", title: "Manage Accounts",
@@ -292,8 +312,10 @@ public partial class MainViewModel : ObservableObject
 
         StatusText = $"{Messages.Count} messages";
 
-        if (IsConversationView)
+        if (ViewMode == ViewMode.Conversations)
             ScheduleConversationRebuild();
+        else if (ViewMode == ViewMode.From)
+            ScheduleSenderGroupRebuild();
     }
     private void OnMessagesRemoved(IReadOnlyList<MailMessageSummary> removed)
     {
@@ -321,8 +343,10 @@ public partial class MainViewModel : ObservableObject
         if (removed.Count > 0)
             StatusText = $"{Messages.Count} messages";
 
-        if (IsConversationView)
+        if (ViewMode == ViewMode.Conversations)
             ScheduleConversationRebuild();
+        else if (ViewMode == ViewMode.From)
+            ScheduleSenderGroupRebuild();
     }
 
     // Binary-insert into the descending-by-date Messages collection.
@@ -458,25 +482,42 @@ public partial class MainViewModel : ObservableObject
         FolderTree = new ObservableCollection<FolderTreeNode>(roots);
     }
 
-    // ── Conversation grouping ─────────────────────────────────────────────────────
+    // ── View-mode grouping ────────────────────────────────────────────────────────
 
-    partial void OnIsConversationViewChanged(bool value)
+    partial void OnViewModeChanged(ViewMode value)
     {
-        if (value)
+        OnPropertyChanged(nameof(IsMessagesView));
+        OnPropertyChanged(nameof(IsConversationsView));
+        OnPropertyChanged(nameof(IsFromView));
+        OnPropertyChanged(nameof(ViewModeLabel));
+
+        if (value == ViewMode.Conversations)
             ScheduleConversationRebuild();
         else
             Conversations = [];
 
+        if (value == ViewMode.From)
+            ScheduleSenderGroupRebuild();
+        else
+            SenderGroups = [];
+
         var cfg = _configService.Load();
-        cfg.ConversationView = value;
+        cfg.ViewMode = value switch
+        {
+            ViewMode.Conversations => "conversations",
+            ViewMode.From          => "from",
+            _                      => "messages",
+        };
         _configService.Save(cfg);
     }
 
     /// <summary>Called by MVVM Toolkit whenever the Messages property is replaced.</summary>
     partial void OnMessagesChanged(ObservableCollection<MailMessageSummary> value)
     {
-        if (IsConversationView)
+        if (ViewMode == ViewMode.Conversations)
             ScheduleConversationRebuild();
+        else if (ViewMode == ViewMode.From)
+            ScheduleSenderGroupRebuild();
     }
 
     /// <summary>
@@ -487,15 +528,29 @@ public partial class MainViewModel : ObservableObject
     private void ScheduleConversationRebuild()
     {
         var version  = Interlocked.Increment(ref _conversationRebuildVersion);
-        var snapshot = Messages.ToList(); // snapshot on UI thread; safe to read on background
+        var snapshot = Messages.ToList();
         Task.Run(() =>
         {
             var groups = ConversationBuilder.Build(snapshot);
             App.Current.Dispatcher.InvokeAsync(() =>
             {
-                // Discard stale results if a newer rebuild was already scheduled
                 if (version == _conversationRebuildVersion)
                     Conversations = new ObservableCollection<ConversationGroup>(groups);
+            });
+        });
+    }
+
+    private void ScheduleSenderGroupRebuild()
+    {
+        var version  = Interlocked.Increment(ref _senderGroupRebuildVersion);
+        var snapshot = Messages.ToList();
+        Task.Run(() =>
+        {
+            var groups = SenderGroupBuilder.Build(snapshot);
+            App.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (version == _senderGroupRebuildVersion)
+                    SenderGroups = new ObservableCollection<SenderGroup>(groups);
             });
         });
     }
@@ -780,8 +835,10 @@ public partial class MainViewModel : ObservableObject
             foreach (var msg in toDelete)
                 Messages.Remove(msg);
 
-            if (IsConversationView)
+            if (ViewMode == ViewMode.Conversations)
                 ScheduleConversationRebuild();
+            else if (ViewMode == ViewMode.From)
+                ScheduleSenderGroupRebuild();
 
             if (Messages.Count > 0)
             {
@@ -1257,8 +1314,10 @@ public partial class MainViewModel : ObservableObject
             foreach (var msg in messages)
                 Messages.Remove(msg);
 
-            if (IsConversationView)
+            if (ViewMode == ViewMode.Conversations)
                 ScheduleConversationRebuild();
+            else if (ViewMode == ViewMode.From)
+                ScheduleSenderGroupRebuild();
 
             StatusText = $"{messages.Count} {(messages.Count == 1 ? "message" : "messages")} moved to {destination.DisplayName}.";
             Announce(StatusText);
@@ -1361,6 +1420,81 @@ public partial class MainViewModel : ObservableObject
     {
         if (group == null || group.Messages.Count == 0) return;
         await DeleteMessagesAsync(group.Messages);
+    }
+
+    // ── SenderGroup context menu commands ─────────────────────────────────────
+
+    [RelayCommand]
+    private void ExpandSenderGroup(SenderGroup? group)
+    {
+        if (group != null) group.IsExpanded = true;
+    }
+
+    [RelayCommand]
+    private void CollapseSenderGroup(SenderGroup? group)
+    {
+        if (group != null) group.IsExpanded = false;
+    }
+
+    [RelayCommand]
+    private void ExpandAllSenderGroups()
+    {
+        foreach (var g in SenderGroups) g.IsExpanded = true;
+    }
+
+    [RelayCommand]
+    private void CollapseAllSenderGroups()
+    {
+        foreach (var g in SenderGroups) g.IsExpanded = false;
+    }
+
+    [RelayCommand]
+    private async Task ReplySenderGroupAsync(SenderGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0];
+        var detail = await EnsureDetailAsync();
+        if (detail == null) return;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReply(detail, detail.AccountId));
+    }
+
+    [RelayCommand]
+    private async Task ReplyAllSenderGroupAsync(SenderGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0];
+        var detail = await EnsureDetailAsync();
+        if (detail == null) return;
+        var ownAddress = Accounts.FirstOrDefault(a => a.Id == detail.AccountId)?.Username ?? string.Empty;
+        ComposeRequested?.Invoke(ComposeViewModel.CreateReplyAll(detail, detail.AccountId, ownAddress));
+    }
+
+    [RelayCommand]
+    private async Task ForwardSenderGroupAsync(SenderGroup? group)
+    {
+        if (group?.Messages.Count == 0) return;
+        SelectedMessage = group!.Messages[0];
+        await Forward();
+    }
+
+    [RelayCommand]
+    private async Task DeleteSenderGroupAsync(SenderGroup? group)
+    {
+        if (group == null || group.Messages.Count == 0) return;
+        await DeleteMessagesAsync(group.Messages);
+    }
+
+    // ── View mode command ─────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void SetViewMode(string? mode)
+    {
+        ViewMode = mode?.ToLowerInvariant() switch
+        {
+            "conversations" => ViewMode.Conversations,
+            "from"          => ViewMode.From,
+            _               => ViewMode.Messages,
+        };
     }
 
     [RelayCommand]

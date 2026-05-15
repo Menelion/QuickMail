@@ -143,10 +143,13 @@ public class ConfigService : IConfigService
                             || value.Equals("true", StringComparison.OrdinalIgnoreCase)
                             || value == "1";
                         break;
-                    case "conversationview":
-                        config.ConversationView = value.Equals("on", StringComparison.OrdinalIgnoreCase)
-                            || value.Equals("true", StringComparison.OrdinalIgnoreCase)
-                            || value == "1";
+                    case "viewmode":
+                        config.ViewMode = value.ToLowerInvariant() switch
+                        {
+                            "conversations" => "conversations",
+                            "from"          => "from",
+                            _               => "messages",
+                        };
                         break;
                 }
             }
@@ -192,9 +195,9 @@ public class ConfigService : IConfigService
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 
-        sb.AppendLine($"ConversationView = {(config.ConversationView ? "on" : "off")}");
-        sb.AppendLine("# Group messages into conversation threads instead of a flat list.");
-        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine($"ViewMode = {config.ViewMode}");
+        sb.AppendLine("# How to display the message list.");
+        sb.AppendLine("# Values: messages (flat list), conversations (grouped by subject), from (grouped by sender).");
         sb.AppendLine();
 
         // ── [account:guid] overrides ─────────────────────────────────────────────
