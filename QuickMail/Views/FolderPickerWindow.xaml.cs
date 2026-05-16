@@ -82,6 +82,12 @@ public partial class FolderPickerWindow : Window
 
     private void FolderTreeView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (TryGetTypeAheadKeyText(e, out var searchText) && TryHandleFolderTreeTypeAhead(searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter)
         {
             e.Handled = true;
@@ -92,10 +98,18 @@ public partial class FolderPickerWindow : Window
     // First-letter navigation for the folder TreeView (TreeView has no built-in TextSearch).
     private void FolderTreeView_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
+        if (TryHandleFolderTreeTypeAhead(e.Text))
+            e.Handled = true;
+    }
+
+    private bool TryHandleFolderTreeTypeAhead(string? text)
+    {
+        if (string.IsNullOrEmpty(text) || char.IsControl(text[0]))
+            return false;
 
         var allNodes = GetVisibleTreeNodes(FolderTreeView.Items.OfType<FolderTreeNode>()).ToList();
-        if (allNodes.Count == 0) return;
+        if (allNodes.Count == 0)
+            return false;
 
         var current = FolderTreeView.SelectedItem as FolderTreeNode;
         var startIdx = current != null ? allNodes.IndexOf(current) : -1;
@@ -103,13 +117,42 @@ public partial class FolderPickerWindow : Window
         for (int i = 1; i <= allNodes.Count; i++)
         {
             var candidate = allNodes[(startIdx + i) % allNodes.Count];
-            if (candidate.Label.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
-            {
-                SelectTreeViewNode(FolderTreeView, candidate);
-                e.Handled = true;
-                return;
-            }
+            if (!candidate.Label.StartsWith(text, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return SelectTreeViewNode(FolderTreeView, candidate);
         }
+
+        return false;
+    }
+
+    private static bool TryGetTypeAheadKeyText(KeyEventArgs e, out string text)
+    {
+        text = string.Empty;
+
+        if (Keyboard.Modifiers != ModifierKeys.None)
+            return false;
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is >= Key.A and <= Key.Z)
+        {
+            text = key.ToString();
+            return true;
+        }
+
+        if (key is >= Key.D0 and <= Key.D9)
+        {
+            text = ((char)('0' + (key - Key.D0))).ToString();
+            return true;
+        }
+
+        if (key is >= Key.NumPad0 and <= Key.NumPad9)
+        {
+            text = ((char)('0' + (key - Key.NumPad0))).ToString();
+            return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<FolderTreeNode> GetVisibleTreeNodes(IEnumerable<FolderTreeNode> nodes)

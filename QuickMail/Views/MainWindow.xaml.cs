@@ -70,6 +70,7 @@ public partial class MainWindow : Window
     private bool _webViewReady;
     private string _typeAheadBuffer = string.Empty;
     private DateTime _typeAheadLastInputUtc = DateTime.MinValue;
+    private object? _typeAheadScope;
 
     public MainWindow(
         MainViewModel vm,
@@ -439,6 +440,13 @@ public partial class MainWindow : Window
     // Account-group nodes (IsHeader=true) and intermediate path nodes (Folder=null) are skipped.
     private async void FolderList_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (TryGetTypeAheadKeyText(e, out var searchText) &&
+            TryHandleFolderTreeTypeAhead(FolderList, FolderList.Items.OfType<FolderTreeNode>(), searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter &&
             FolderList.SelectedItem is FolderTreeNode node &&
             node.Folder != null)
@@ -452,49 +460,14 @@ public partial class MainWindow : Window
     // First-letter navigation for the folder TreeView (TreeView has no built-in TextSearch).
     private void FolderList_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
     {
-        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
-
-        var allNodes = GetVisibleTreeNodes(FolderList.Items.OfType<FolderTreeNode>()).ToList();
-        if (allNodes.Count == 0) return;
-
-        var current = FolderList.SelectedItem as FolderTreeNode;
-        var startIdx = current != null ? allNodes.IndexOf(current) : -1;
-
-        for (int i = 1; i <= allNodes.Count; i++)
-        {
-            var candidate = allNodes[(startIdx + i) % allNodes.Count];
-            if (candidate.Label.StartsWith(e.Text, StringComparison.OrdinalIgnoreCase))
-            {
-                SelectTreeViewNode(FolderList, candidate);
-                e.Handled = true;
-                return;
-            }
-        }
+        if (TryHandleFolderTreeTypeAhead(FolderList, FolderList.Items.OfType<FolderTreeNode>(), e.Text))
+            e.Handled = true;
     }
 
     private void MessageList_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (!TryBuildTypeAheadPrefix(e.Text, out var prefix)) return;
-
-        var items = MessageList.Items.OfType<MailMessageSummary>().ToList();
-        if (items.Count == 0) return;
-
-        var current = MessageList.SelectedItem as MailMessageSummary;
-        var startIdx = current != null ? items.IndexOf(current) : -1;
-
-        for (int i = 1; i <= items.Count; i++)
-        {
-            var candidate = items[(startIdx + i) % items.Count];
-            if (GetTypeAheadText(candidate).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                MessageList.SelectedItem = candidate;
-                MessageList.ScrollIntoView(candidate);
-                var targetIndex = MessageList.Items.IndexOf(candidate);
-                Dispatcher.InvokeAsync(() => FocusItemAt(targetIndex), DispatcherPriority.Input);
-                e.Handled = true;
-                return;
-            }
-        }
+        if (TryHandleMessageListTypeAhead(e.Text))
+            e.Handled = true;
     }
 
     // Recursively yields visible (expanded) FolderTreeNode items in depth-first order.
@@ -531,7 +504,59 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private bool TryBuildTypeAheadPrefix(string? text, out string prefix)
+    private bool TryHandleFolderTreeTypeAhead(TreeView tree, System.Collections.Generic.IEnumerable<FolderTreeNode> roots, string? text)
+    {
+        if (string.IsNullOrEmpty(text) || char.IsControl(text[0]))
+            return false;
+
+        var allNodes = GetVisibleTreeNodes(roots).ToList();
+        if (allNodes.Count == 0)
+            return false;
+
+        var current = tree.SelectedItem as FolderTreeNode;
+        var startIdx = current != null ? allNodes.IndexOf(current) : -1;
+
+        for (int i = 1; i <= allNodes.Count; i++)
+        {
+            var candidate = allNodes[(startIdx + i) % allNodes.Count];
+            if (!candidate.Label.StartsWith(text, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return SelectTreeViewNode(tree, candidate);
+        }
+
+        return false;
+    }
+
+    private bool TryHandleMessageListTypeAhead(string? text)
+    {
+        if (!TryBuildTypeAheadPrefix(text, MessageList, out var prefix))
+            return false;
+
+        var items = MessageList.Items.OfType<MailMessageSummary>().ToList();
+        if (items.Count == 0)
+            return false;
+
+        var current = MessageList.SelectedItem as MailMessageSummary;
+        var startIdx = current != null ? items.IndexOf(current) : -1;
+
+        for (int i = 1; i <= items.Count; i++)
+        {
+            var candidate = items[(startIdx + i) % items.Count];
+            if (!GetTypeAheadText(candidate).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            MessageList.SelectedItem = candidate;
+            MessageList.ScrollIntoView(candidate);
+            var targetIndex = MessageList.Items.IndexOf(candidate);
+            Dispatcher.InvokeAsync(() => FocusItemAt(targetIndex), DispatcherPriority.Input);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryBuildTypeAheadPrefix(string? text, object scope, out string prefix)
     {
         prefix = string.Empty;
 
@@ -543,14 +568,44 @@ public partial class MainWindow : Window
             return false;
 
         var now = DateTime.UtcNow;
-        if (now - _typeAheadLastInputUtc > TypeAheadResetDelay)
+        if (!ReferenceEquals(_typeAheadScope, scope) || now - _typeAheadLastInputUtc > TypeAheadResetDelay)
             _typeAheadBuffer = trimmed;
         else
             _typeAheadBuffer += trimmed;
 
+        _typeAheadScope = scope;
         _typeAheadLastInputUtc = now;
         prefix = _typeAheadBuffer;
         return true;
+    }
+
+    private static bool TryGetTypeAheadKeyText(KeyEventArgs e, out string text)
+    {
+        text = string.Empty;
+
+        if (Keyboard.Modifiers != ModifierKeys.None)
+            return false;
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is >= Key.A and <= Key.Z)
+        {
+            text = key.ToString();
+            return true;
+        }
+
+        if (key is >= Key.D0 and <= Key.D9)
+        {
+            text = ((char)('0' + (key - Key.D0))).ToString();
+            return true;
+        }
+
+        if (key is >= Key.NumPad0 and <= Key.NumPad9)
+        {
+            text = ((char)('0' + (key - Key.NumPad0))).ToString();
+            return true;
+        }
+
+        return false;
     }
 
     private static string GetTypeAheadText(object? item) => item switch
@@ -630,6 +685,29 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool TryHandleMessageTreeTypeAhead(
+        TreeView tree,
+        object? currentSelection,
+        System.Collections.Generic.List<object> visibleItems,
+        string? text)
+    {
+        if (!TryBuildTypeAheadPrefix(text, tree, out var prefix) || visibleItems.Count == 0)
+            return false;
+
+        var startIdx = currentSelection != null ? visibleItems.IndexOf(currentSelection) : -1;
+        for (int i = 1; i <= visibleItems.Count; i++)
+        {
+            var candidate = visibleItems[(startIdx + i) % visibleItems.Count];
+            if (!GetTypeAheadText(candidate).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            FocusTreeItem(tree, candidate);
+            return true;
+        }
+
+        return false;
+    }
+
     // Focuses the first (or currently selected) ListViewItem so Up/Down arrow work
     // immediately after loading a folder.
     //
@@ -706,6 +784,12 @@ public partial class MainWindow : Window
     private async void MessageList_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         LogService.Debug($"MessageList_PreviewKeyDown key={e.Key} mod={Keyboard.Modifiers} focused={Keyboard.FocusedElement?.GetType().Name}");
+        if (TryGetTypeAheadKeyText(e, out var searchText) && TryHandleMessageListTypeAhead(searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter && MessageList.SelectedItem is MailMessageSummary summary)
         {
             e.Handled = true;
@@ -746,10 +830,9 @@ public partial class MainWindow : Window
 
     private void ConversationTree_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (!TryBuildTypeAheadPrefix(e.Text, out var prefix)) return;
-
         var visibleItems = GetVisibleConversationItems(_vm.Conversations).ToList();
-        HandleMessageTreeTypeAhead(ConversationTree, ConversationTree.SelectedItem, visibleItems, prefix, e);
+        if (TryHandleMessageTreeTypeAhead(ConversationTree, ConversationTree.SelectedItem, visibleItems, e.Text))
+            e.Handled = true;
     }
 
     // Extends (or shrinks) the MessageList selection by one step in the given direction.
@@ -1116,6 +1199,17 @@ public partial class MainWindow : Window
     private async void ConversationTree_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         LogService.Debug($"[FOCUS] ConvTree KeyDown key={e.Key} mod={Keyboard.Modifiers} {FocusInfo()} items={ConversationTree.Items.Count} selected={ConversationTree.SelectedItem?.GetType().Name ?? "null"}");
+        if (TryGetTypeAheadKeyText(e, out var searchText) &&
+            TryHandleMessageTreeTypeAhead(
+                ConversationTree,
+                ConversationTree.SelectedItem,
+                GetVisibleConversationItems(_vm.Conversations).ToList(),
+                searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter)
         {
             if (ConversationTree.SelectedItem is MailMessageSummary msg)
@@ -1372,6 +1466,17 @@ public partial class MainWindow : Window
     private async void SenderGroupTree_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         LogService.Debug($"[FOCUS] SenderTree KeyDown key={e.Key} mod={Keyboard.Modifiers} {FocusInfo()} items={SenderGroupTree.Items.Count} selected={SenderGroupTree.SelectedItem?.GetType().Name ?? "null"}");
+        if (TryGetTypeAheadKeyText(e, out var searchText) &&
+            TryHandleMessageTreeTypeAhead(
+                SenderGroupTree,
+                SenderGroupTree.SelectedItem,
+                GetVisibleSenderItems(_vm.SenderGroups).ToList(),
+                searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter)
         {
             if (SenderGroupTree.SelectedItem is MailMessageSummary msg)
@@ -1427,10 +1532,9 @@ public partial class MainWindow : Window
 
     private void SenderGroupTree_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (!TryBuildTypeAheadPrefix(e.Text, out var prefix)) return;
-
         var visibleItems = GetVisibleSenderItems(_vm.SenderGroups).ToList();
-        HandleMessageTreeTypeAhead(SenderGroupTree, SenderGroupTree.SelectedItem, visibleItems, prefix, e);
+        if (TryHandleMessageTreeTypeAhead(SenderGroupTree, SenderGroupTree.SelectedItem, visibleItems, e.Text))
+            e.Handled = true;
     }
 
     private void SenderGroupTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -1504,6 +1608,17 @@ public partial class MainWindow : Window
     private async void ToGroupTree_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         LogService.Debug($"[FOCUS] ToTree KeyDown key={e.Key} mod={Keyboard.Modifiers} {FocusInfo()} items={ToGroupTree.Items.Count} selected={ToGroupTree.SelectedItem?.GetType().Name ?? "null"}");
+        if (TryGetTypeAheadKeyText(e, out var searchText) &&
+            TryHandleMessageTreeTypeAhead(
+                ToGroupTree,
+                ToGroupTree.SelectedItem,
+                GetVisibleSenderItems(_vm.ToGroups).ToList(),
+                searchText))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter)
         {
             if (ToGroupTree.SelectedItem is MailMessageSummary msg)
@@ -1559,10 +1674,9 @@ public partial class MainWindow : Window
 
     private void ToGroupTree_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (!TryBuildTypeAheadPrefix(e.Text, out var prefix)) return;
-
         var visibleItems = GetVisibleSenderItems(_vm.ToGroups).ToList();
-        HandleMessageTreeTypeAhead(ToGroupTree, ToGroupTree.SelectedItem, visibleItems, prefix, e);
+        if (TryHandleMessageTreeTypeAhead(ToGroupTree, ToGroupTree.SelectedItem, visibleItems, e.Text))
+            e.Handled = true;
     }
 
     private void ToGroupTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
