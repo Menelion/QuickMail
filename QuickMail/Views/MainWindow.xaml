@@ -536,6 +536,7 @@
                               KeyboardNavigation.TabNavigation="Once"
                               KeyboardNavigation.DirectionalNavigation="Contained"
                               GotKeyboardFocus="List_GotKeyboardFocus"
+                              PreviewTextInput="MessageList_PreviewTextInput"
                               PreviewKeyDown="MessageList_PreviewKeyDown"
                               MouseLeftButtonUp="MessageList_MouseLeftButtonUp">
                         <ListView.Resources>
@@ -659,6 +660,7 @@
                               ScrollViewer.CanContentScroll="True"
                               GotKeyboardFocus="ConversationTree_GotKeyboardFocus"
                               SelectedItemChanged="ConversationTree_SelectedItemChanged"
+                              PreviewTextInput="ConversationTree_PreviewTextInput"
                               PreviewKeyDown="ConversationTree_PreviewKeyDown"
                               PreviewMouseRightButtonDown="ConversationTree_PreviewMouseRightButtonDown"
                               ContextMenuOpening="ConversationTree_ContextMenuOpening">
@@ -762,6 +764,7 @@
                               ScrollViewer.CanContentScroll="True"
                               GotKeyboardFocus="SenderGroupTree_GotKeyboardFocus"
                               SelectedItemChanged="SenderGroupTree_SelectedItemChanged"
+                              PreviewTextInput="SenderGroupTree_PreviewTextInput"
                               PreviewKeyDown="SenderGroupTree_PreviewKeyDown"
                               PreviewMouseRightButtonDown="SenderGroupTree_PreviewMouseRightButtonDown"
                               ContextMenuOpening="SenderGroupTree_ContextMenuOpening">
@@ -867,6 +870,7 @@
                               ScrollViewer.CanContentScroll="True"
                               GotKeyboardFocus="ToGroupTree_GotKeyboardFocus"
                               SelectedItemChanged="ToGroupTree_SelectedItemChanged"
+                              PreviewTextInput="ToGroupTree_PreviewTextInput"
                               PreviewKeyDown="ToGroupTree_PreviewKeyDown"
                               PreviewMouseRightButtonDown="ToGroupTree_PreviewMouseRightButtonDown"
                               ContextMenuOpening="ToGroupTree_ContextMenuOpening">
