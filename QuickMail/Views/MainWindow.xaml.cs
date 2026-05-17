@@ -512,37 +512,11 @@ public partial class MainWindow : Window
     // Recursively yields visible (expanded) FolderTreeNode items in depth-first order.
     private static System.Collections.Generic.IEnumerable<FolderTreeNode> GetVisibleTreeNodes(
         System.Collections.Generic.IEnumerable<FolderTreeNode> nodes)
-    {
-        foreach (var node in nodes)
-        {
-            yield return node;
-            if (node.IsExpanded && node.Children.Count > 0)
-                foreach (var child in GetVisibleTreeNodes(node.Children))
-                    yield return child;
-        }
-    }
+        => TreeViewFocusHelper.GetVisibleTreeNodes(nodes);
 
     // Walks the TreeView container hierarchy to find and select the target node.
     private static bool SelectTreeViewNode(System.Windows.Controls.ItemsControl parent, FolderTreeNode target, bool focusNode = true)
-    {
-        foreach (var item in parent.Items)
-        {
-            if (item is not FolderTreeNode node) continue;
-            if (parent.ItemContainerGenerator.ContainerFromItem(item) is not TreeViewItem container) continue;
-
-            if (node == target)
-            {
-                container.IsSelected = true;
-                container.BringIntoView();
-                if (focusNode)
-                    container.Focus();
-                return true;
-            }
-            if (node.IsExpanded && SelectTreeViewNode(container, target, focusNode))
-                return true;
-        }
-        return false;
-    }
+        => TreeViewFocusHelper.SelectTreeViewNode(parent, target, focusNode);
 
     private bool SyncFolderTreeSelection(bool focusNode)
     {
@@ -562,40 +536,13 @@ public partial class MainWindow : Window
     }
 
     private static FolderTreeNode? FindFolderTreeNode(System.Collections.Generic.IEnumerable<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FolderMatches(node.Folder, target))
-                return node;
-
-            var child = FindFolderTreeNode(node.Children, target);
-            if (child != null)
-                return child;
-        }
-
-        return null;
-    }
+        => TreeViewFocusHelper.FindFolderTreeNode(nodes, target);
 
     private static bool FindAndExpandFolderPath(System.Collections.Generic.IEnumerable<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FolderMatches(node.Folder, target))
-                return true;
+        => TreeViewFocusHelper.FindAndExpandFolderPath(nodes, target);
 
-            if (FindAndExpandFolderPath(node.Children, target))
-            {
-                node.IsExpanded = true;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool FolderMatches(MailFolderModel left, MailFolderModel right) =>
-        left.AccountId == right.AccountId &&
-        string.Equals(left.FullName, right.FullName, StringComparison.OrdinalIgnoreCase);
+    private static bool FolderMatches(MailFolderModel left, MailFolderModel right)
+        => TreeViewFocusHelper.FoldersMatch(left, right);
 
     private static bool IsDescendantOf(DependencyObject ancestor, DependencyObject descendant)
     {
@@ -693,33 +640,7 @@ public partial class MainWindow : Window
     }
 
     private static bool TryGetTypeAheadKeyText(KeyEventArgs e, out string text)
-    {
-        text = string.Empty;
-
-        if (Keyboard.Modifiers != ModifierKeys.None)
-            return false;
-
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is >= Key.A and <= Key.Z)
-        {
-            text = key.ToString();
-            return true;
-        }
-
-        if (key is >= Key.D0 and <= Key.D9)
-        {
-            text = ((char)('0' + (key - Key.D0))).ToString();
-            return true;
-        }
-
-        if (key is >= Key.NumPad0 and <= Key.NumPad9)
-        {
-            text = ((char)('0' + (key - Key.NumPad0))).ToString();
-            return true;
-        }
-
-        return false;
-    }
+        => TreeViewFocusHelper.TryGetTypeAheadKeyText(e, out text);
 
     private static string GetTypeAheadText(object? item) => item switch
     {

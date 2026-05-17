@@ -1,11 +1,8 @@
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using MimeKit;
 using QuickMail.Models;
 
 namespace QuickMail.Services;
@@ -20,43 +17,7 @@ public class SmtpService : ISmtpService
 
     public async Task SendAsync(ComposeModel compose, AccountModel account, string? password, CancellationToken ct = default)
     {
-        var message = new MimeMessage();
-
-        message.Headers.Add(HeaderId.UserAgent, UserAgent);
-        message.From.Add(new MailboxAddress(account.SenderDisplayName, account.Username));
-        AddAddresses(message.To, compose.To);
-        AddAddresses(message.Cc, compose.Cc);
-        AddAddresses(message.Bcc, compose.Bcc);
-        message.Subject = compose.Subject;
-
-        if (!string.IsNullOrEmpty(compose.InReplyToMessageId))
-            message.InReplyTo = compose.InReplyToMessageId;
-
-        var loadedAttachments = compose.Attachments.Where(a => a.IsLoaded).ToList();
-        if (loadedAttachments.Count > 0)
-        {
-            var multipart = new Multipart("mixed");
-            multipart.Add(new TextPart("plain") { Text = compose.Body });
-            foreach (var att in loadedAttachments)
-            {
-                var slash = att.ContentType.IndexOf('/');
-                var mediaType    = slash >= 0 ? att.ContentType[..slash] : "application";
-                var mediaSubtype = slash >= 0 ? att.ContentType[(slash + 1)..] : "octet-stream";
-                var mimePart = new MimePart(mediaType, mediaSubtype)
-                {
-                    Content                 = new MimeContent(new MemoryStream(att.Content!)),
-                    ContentDisposition      = new ContentDisposition(ContentDisposition.Attachment),
-                    ContentTransferEncoding = ContentEncoding.Base64,
-                    FileName                = att.FileName,
-                };
-                multipart.Add(mimePart);
-            }
-            message.Body = multipart;
-        }
-        else
-        {
-            message.Body = new TextPart("plain") { Text = compose.Body };
-}
+        var message = MimeMessageBuilder.Build(compose, account, UserAgent);
 
         using var client = new SmtpClient();
 
@@ -84,16 +45,5 @@ public class SmtpService : ISmtpService
         await client.SendAsync(message, ct);
         LogService.Log($"SmtpService: send complete");
         await client.DisconnectAsync(true, ct);
-    }
-
-    private static void AddAddresses(InternetAddressList list, string addressString)
-    {
-        if (string.IsNullOrWhiteSpace(addressString)) return;
-        foreach (var part in addressString.Split(',', ';'))
-        {
-            var trimmed = part.Trim();
-            if (!string.IsNullOrEmpty(trimmed) && MailboxAddress.TryParse(trimmed, out var addr))
-                list.Add(addr);
-        }
     }
 }

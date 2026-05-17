@@ -89,7 +89,8 @@ public class SyncService : ISyncService
     {
         // ── New messages ─────────────────────────────────────────────────────────
         var maxUid   = await _store.GetMaxUidAsync(account.Id, folder.FullName);
-        var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, ct);
+        var initialCount = _config.Load().InitialSyncCount;
+        var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, initialCount, ct);
 
         if (incoming.Count > 0)
         {

@@ -107,7 +107,7 @@ public partial class FolderPickerWindow : Window
         if (string.IsNullOrEmpty(text) || char.IsControl(text[0]))
             return false;
 
-        var allNodes = GetVisibleTreeNodes(FolderTreeView.Items.OfType<FolderTreeNode>()).ToList();
+        var allNodes = TreeViewFocusHelper.GetVisibleTreeNodes(FolderTreeView.Items.OfType<FolderTreeNode>()).ToList();
         if (allNodes.Count == 0)
             return false;
 
@@ -120,105 +120,32 @@ public partial class FolderPickerWindow : Window
             if (!candidate.Label.StartsWith(text, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            return SelectTreeViewNode(FolderTreeView, candidate);
+            return TreeViewFocusHelper.SelectTreeViewNode(FolderTreeView, candidate);
         }
 
         return false;
     }
 
     private static bool TryGetTypeAheadKeyText(KeyEventArgs e, out string text)
-    {
-        text = string.Empty;
-
-        if (Keyboard.Modifiers != ModifierKeys.None)
-            return false;
-
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is >= Key.A and <= Key.Z)
-        {
-            text = key.ToString();
-            return true;
-        }
-
-        if (key is >= Key.D0 and <= Key.D9)
-        {
-            text = ((char)('0' + (key - Key.D0))).ToString();
-            return true;
-        }
-
-        if (key is >= Key.NumPad0 and <= Key.NumPad9)
-        {
-            text = ((char)('0' + (key - Key.NumPad0))).ToString();
-            return true;
-        }
-
-        return false;
-    }
+        => TreeViewFocusHelper.TryGetTypeAheadKeyText(e, out text);
 
     private static IEnumerable<FolderTreeNode> GetVisibleTreeNodes(IEnumerable<FolderTreeNode> nodes)
-    {
-        foreach (var node in nodes)
-        {
-            yield return node;
-            if (node.IsExpanded && node.Children.Count > 0)
-                foreach (var child in GetVisibleTreeNodes(node.Children))
-                    yield return child;
-        }
-    }
+        => TreeViewFocusHelper.GetVisibleTreeNodes(nodes);
 
     // Finds a node whose Folder matches the target, searching all nodes regardless of expansion.
     private static FolderTreeNode? FindNode(IEnumerable<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FoldersMatch(node.Folder, target))
-                return node;
-            var found = FindNode(node.Children, target);
-            if (found != null) return found;
-        }
-        return null;
-    }
+        => TreeViewFocusHelper.FindFolderTreeNode(nodes, target);
 
     // Expands all ancestor nodes along the path to the target so their
     // children's item containers are generated before SelectTreeViewNode runs.
     private static bool FindAndExpandPath(IList<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FoldersMatch(node.Folder, target))
-                return true;
-            if (FindAndExpandPath(node.Children, target))
-            {
-                node.IsExpanded = true;
-                return true;
-            }
-        }
-        return false;
-    }
+        => TreeViewFocusHelper.FindAndExpandFolderPath(nodes, target);
 
-    private static bool FoldersMatch(MailFolderModel a, MailFolderModel b) =>
-        a.FullName.Equals(b.FullName, StringComparison.OrdinalIgnoreCase) &&
-        (a.AccountId == b.AccountId || a.AccountId == Guid.Empty || b.AccountId == Guid.Empty);
+    private static bool FoldersMatch(MailFolderModel a, MailFolderModel b)
+        => TreeViewFocusHelper.FoldersMatch(a, b);
 
     private static bool SelectTreeViewNode(ItemsControl parent, FolderTreeNode target)
-    {
-        foreach (var item in parent.Items)
-        {
-            if (item is not FolderTreeNode node) continue;
-            if (parent.ItemContainerGenerator.ContainerFromItem(item) is not TreeViewItem container) continue;
-
-            if (node == target)
-            {
-                container.IsSelected = true;
-                container.BringIntoView();
-                container.Focus();
-                return true;
-            }
-            if (node.IsExpanded && SelectTreeViewNode(container, target))
-                return true;
-        }
-        return false;
-    }
+        => TreeViewFocusHelper.SelectTreeViewNode(parent, target, focusNode: true);
 
     private void Commit()
     {
