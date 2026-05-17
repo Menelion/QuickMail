@@ -10,7 +10,12 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 - [Connecting accounts](#connecting-accounts)
 - [Managing accounts](#managing-accounts)
 - [Reading mail](#reading-mail)
+- [Virtual folders](#virtual-folders)
 - [Conversation view](#conversation-view)
+- [From view (by sender)](#from-view-by-sender)
+- [To view (by recipient)](#to-view-by-recipient)
+- [Command palette](#command-palette)
+- [Context menus](#context-menus)
 - [Composing messages](#composing-messages)
 - [Drafts](#drafts)
 - [Deleting messages](#deleting-messages)
@@ -119,9 +124,27 @@ The message list shows the 100 most recent messages by default. Activate **Load 
 
 At the top of the folder list is an **All Mail** entry. Selecting it shows messages from all folders across all your accounts, sorted newest-first. This is a virtual view — no messages are moved or copied.
 
+For more about virtual folders, including the per-account All Mail folders, see [Virtual folders](#virtual-folders) below.
+
 ### Selecting multiple messages
 
 Hold **Shift** and press **Up** or **Down** in the message list to extend your selection. You can then act on all selected messages at once (for example, pressing **Delete** removes them all).
+
+---
+
+## Virtual folders
+
+The top of the folder list contains a group of **virtual folders** that aggregate messages across all your accounts. They are read-only views — no mail is moved or copied.
+
+| Virtual folder | What it shows |
+|----------------|---------------|
+| **All Mail** | Every non-excluded message across all accounts and folders, sorted newest-first |
+| **All Inboxes** | Inbox messages from every account |
+| **All Drafts** | Draft messages from every account |
+| **All Sent** | Sent messages from every account |
+| **All Trash** | Deleted messages from every account |
+
+Each account also has its own **All Mail — {Account Name}** entry directly under that account in the folder tree. Selecting it shows all mail for that account only, without mixing in messages from other accounts. These per-account folders also appear in the **Ctrl+Y** folder picker.
 
 ---
 
@@ -141,12 +164,62 @@ When conversation view is on:
 
 ---
 
+## From view (by sender)
+
+From view groups messages by the sender's name and address, so you can see at a glance who has written to you and how many messages you have from each person.
+
+**Toggle From view:**
+- Open the **View** menu and choose **From**, or
+- Press **Ctrl+Shift+V** to cycle through view modes.
+
+When From view is on:
+
+- Each row in the message list represents a sender group rather than a single message.
+- Select the arrow next to a group (or press **Right** arrow) to expand it and read individual messages inside.
+- Press **Delete** on a group to delete all messages from that sender at once.
+
+---
+
+## To view (by recipient)
+
+To view groups messages by the recipient address. This is useful for folders that receive mail sent to several different addresses — for example, a shared mailbox or an alias.
+
+Toggling and navigation work the same way as [From view](#from-view-by-sender). Press **Ctrl+Shift+V** to cycle between Messages, From, To, and Conversations.
+
+---
+
+## Command palette
+
+Press **Ctrl+Shift+P** to open the command palette. Type any part of a command name and press **Enter** (or click) to run it — no need to remember every shortcut.
+
+- All actions are searchable, including folder navigation, compose, delete, view switching, and account management.
+- Press **Escape** to close without running a command. Focus returns to where it was before.
+
+---
+
+## Context menus
+
+Right-click (or press **Shift+F10**) anywhere in the message list, folder tree, sender groups, or conversation groups to open a context menu with relevant actions.
+
+Common actions available through context menus:
+
+- Reply, Reply All, Forward
+- Delete
+- Mark as Read / Mark as Unread
+- Move to Folder
+
+---
+
 ## Composing messages
 
 ### New message
 
 - Press `Ctrl+N`, or activate **New** in the toolbar.
 - The compose window opens. If you have more than one account, the **From** field lets you choose which account to send from.
+
+### Spell check
+
+The message body has spell checking enabled. Misspelled words are underlined as you type. Right-click a word (or press **Shift+F10**) for suggested corrections.
 
 ### Reply, Reply All, and Forward
 
@@ -279,10 +352,13 @@ A security warning is shown before opening executable file types.
 | Ctrl+F | Forward |
 | Delete | Delete selected message(s) |
 | Ctrl+Y | Open folder picker |
+| Ctrl+Shift+V | Cycle view mode (Messages / From / To / Conversations) |
 | Ctrl+Shift+C | Toggle conversation view |
+| Ctrl+Shift+P | Open command palette |
 | Ctrl+M | Load more messages |
 | Ctrl+Shift+E | Empty Trash |
 | Shift+Up / Shift+Down | Extend message selection |
+| Shift+F10 | Open context menu for focused item |
 | Escape | Close reading pane |
 
 ### Compose window
@@ -328,6 +404,8 @@ Lines starting with `#` are comments and are ignored. The file uses a simple `ke
 | `PreviewLines` | `0`–`5` | `3` | Number of body-preview lines shown under each subject in the message list. Set to `0` to hide previews entirely. |
 | `ShowMessageStatus` | `true` / `false` | `true` | Show or hide the read/unread status indicator column in the message list. |
 | `ConversationView` | `true` / `false` | `false` | Start with conversation threading on. |
+| `SyncDays` | integer ≥ `0` | `30` | How many days back to look for messages when syncing. Set to `0` to fetch all messages (may be slow on large mailboxes). |
+| `InitialSyncCount` | integer ≥ `0` | `500` | Maximum number of messages fetched per folder on the very first sync of a newly connected account. |
 
 ### `[account:<guid>]` overrides
 
