@@ -26,6 +26,12 @@ public class ConfigModel
     /// </summary>
     public int SyncDays { get; set; } = 30;
 
+    /// <summary>
+    /// Number of messages to fetch on the initial sync of a folder (when no local UID exists).
+    /// Default is 500. Set to 0 to fetch all messages in the folder.
+    /// </summary>
+    public int InitialSyncCount { get; set; } = 500;
+
     // ── Custom hotkey overrides ──────────────────────────────────────────────────
 
     /// <summary>User-defined keyboard shortcut overrides, stored in hotkeys.json.</summary>

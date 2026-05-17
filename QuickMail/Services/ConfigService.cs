@@ -155,6 +155,9 @@ public class ConfigService : IConfigService
                     case "syncdays":
                         if (int.TryParse(value, out var sd)) config.SyncDays = Math.Max(0, sd);
                         break;
+                    case "initialsynccount":
+                        if (int.TryParse(value, out var isc)) config.InitialSyncCount = Math.Max(0, isc);
+                        break;
                 }
             }
             else if (section == "account" && acctGuid != Guid.Empty)
@@ -208,6 +211,11 @@ public class ConfigService : IConfigService
         sb.AppendLine("# How many days of mail to sync when opening a folder.");
         sb.AppendLine("# Set to 0 to sync all mail (no date filter).");
         sb.AppendLine("# Supported values: 7, 30, 180, 365, or 0 (all).");
+        sb.AppendLine();
+
+        sb.AppendLine($"InitialSyncCount = {config.InitialSyncCount}");
+        sb.AppendLine("# Number of messages to fetch on the initial sync of a folder.");
+        sb.AppendLine("# Default is 500. Set to 0 to fetch all messages in the folder.");
         sb.AppendLine();
 
         // ── [account:guid] overrides ─────────────────────────────────────────────

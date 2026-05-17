@@ -1059,7 +1059,8 @@ public partial class MainViewModel : ObservableObject
                 else
                 {
                     // Incremental sync: UID-based is correct (fetch everything newer than last seen).
-                    msgs = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, ct);
+                    var initialCount = _configService.Load().InitialSyncCount;
+                    msgs = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, initialCount, ct);
                 }
                 result.AddRange(msgs);
             }
