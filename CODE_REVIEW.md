@@ -390,11 +390,11 @@ QuickMail's accessibility implementation is **exceptional** for a v0.5 desktop a
 
 1. **Add unit tests for `ConversationBuilder`, `SenderGroupBuilder`, `CommandRegistry`, and `ConfigService`.** These are pure functions with no external dependencies — the easiest and highest-value tests to write.
 
-2. **Extract duplicated code:**
-   - `AddressParser` utility (used in `SmtpService` and `ImapService`)
-   - `MimeMessageBuilder` (used in `SmtpService` and `ImapService`)
-   - `TreeViewFocusHelper` (duplicated across `MainWindow` and `FolderPickerWindow`)
-   - `AccountEditorViewModel` base class (duplicated between `AccountManagerViewModel` and `AddAccountViewModel`)
+2. ~~**Extract duplicated code:**~~ ✅ **Completed** (PR #10, DeepSeek4 branch, merged May 17 2026)
+   - ✅ `AddressParser` — new static utility in `Services/AddressParser.cs`; both `SmtpService` and `ImapService.AppendDraftAsync` now delegate to `AddressParser.AddAddresses`. Normalised to `MailboxAddress.TryParse` (silent-skip on invalid addresses).
+   - ✅ `MimeMessageBuilder` — new static class in `Services/MimeMessageBuilder.cs`; builds a `MimeMessage` from `ComposeModel` + `AccountModel`. Accepts an optional `userAgent` string so `SmtpService` can set the `User-Agent` header while `ImapService` (draft save) omits it.
+   - ✅ `TreeViewFocusHelper` — new static class in `Views/TreeViewFocusHelper.cs`; consolidates `GetVisibleTreeNodes`, `SelectTreeViewNode`, `TryGetTypeAheadKeyText`, `FindFolderTreeNode`, `FindAndExpandFolderPath`, and `FoldersMatch`. **Note:** after merge, `MainWindow.FolderMatches` was reverted to strict `AccountId` equality (the helper's `Guid.Empty` wildcard is correct for `FolderPickerWindow` but would allow cross-account folder collisions in the main window).
+   - ✅ `AccountEditorViewModel` — new abstract base class in `ViewModels/AccountEditorViewModel.cs`; holds all shared form fields, auth-type helpers, and the `SignInMicrosoft` / `TestConnection` commands. Both `AccountManagerViewModel` and `AddAccountViewModel` now derive from it, eliminating ~200 lines of duplication.
 
 3. **Fix `MailMessageDetail.To` shadowing `MailMessageSummary.To`.** Remove `To` from the base class or use explicit `new` in the derived class.
 
@@ -421,7 +421,11 @@ QuickMail's accessibility implementation is **exceptional** for a v0.5 desktop a
 
 11. **Consider `WeakReferenceMessenger`** for cross-ViewModel communication.
 
-12. **Make the initial sync message count (500) configurable.**
+12. ~~**Make the initial sync message count (500) configurable.**~~ ✅ **Completed** (PR #10, DeepSeek4 branch, merged May 17 2026)
+    - `InitialSyncCount` property added to `ConfigModel` (default: 500; set to 0 to fetch all messages).
+    - `ConfigService` updated to parse and write `InitialSyncCount` in `config.ini`.
+    - `IImapService.GetMessagesSinceAsync` signature updated with an `int initialCount` parameter; `ImapService`, `SyncService`, `MainViewModel`, and `StubServices` all updated accordingly.
+    - **Bonus fix:** `SyncService.SyncFolderAsync` now uses `GetMessagesSinceDateAsync` when `maxUid == 0` and `SyncDays > 0`, so an initial sync respects the date window instead of falling back to the count-based fetch unconditionally.
 
 13. **Add code signing** to the publish workflow.
 
