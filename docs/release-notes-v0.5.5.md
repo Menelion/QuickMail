@@ -1,4 +1,4 @@
-# QuickMail v0.6.0 Release Notes
+# QuickMail v0.5.5 Release Notes
 
 ## New Features
 
@@ -12,7 +12,7 @@ The per-account All Mail folders also appear in the **Ctrl+Y** folder picker und
 
 A new **To** view groups messages by recipient, complementing the existing **From** (sender) view. This is useful when a folder contains mail sent to multiple addresses — for example, a shared mailbox or an alias — letting you quickly scan messages by who they were addressed to.
 
-Toggle between Messages, From, To, and Conversations views from the View menu or by pressing **Ctrl+Shift+V** repeatedly.
+Toggle between Messages, From, To, and Conversations views from the View menu.
 
 ### Type-ahead navigation
 
@@ -20,7 +20,7 @@ First-letter type-ahead is now available in the folder tree and message list. Wi
 
 ### Spell check in compose
 
-The compose window body field now has spell checking enabled. Misspelled words are underlined as you type; right-click a word for suggested corrections.
+The compose window body field now has spell checking enabled. Misspelled words are underlined as you type; right-click or use Shift+F10 a word for suggested corrections. Note, not all screen readers are picking up spelling notifications yet.
 
 ### Configurable sync range
 
