@@ -392,7 +392,7 @@ public partial class MainWindow : Window
             .Where(a => _vm.CachedFolders.ContainsKey(a.Id))
             .ToDictionary(a => a.Id, a => MainViewModel.CreateAccountMailVirtualFolder(a));
         var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders,
-            [MainViewModel.AllInboxesFolder, MainViewModel.AllMailFolder,
+            [MainViewModel.AllMailFolder,    MainViewModel.AllInboxesFolder,
              MainViewModel.AllDraftsFolder,  MainViewModel.AllSentFolder,
              MainViewModel.AllTrashFolder],
             initialFolder: _vm.SelectedFolder,

@@ -549,7 +549,7 @@ public partial class MainViewModel : ObservableObject
         var saved = SelectedFolder;
         var items = new List<MailFolderModel>
         {
-            AllInboxesFolder, AllMailFolder, AllDraftsFolder, AllSentFolder, AllTrashFolder
+            AllMailFolder, AllInboxesFolder, AllDraftsFolder, AllSentFolder, AllTrashFolder
         };
 
         foreach (var account in Accounts)
@@ -590,8 +590,8 @@ public partial class MainViewModel : ObservableObject
             Label      = "All Mail",
             IsExpanded = true,
         };
-        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllInboxesFolder, Label = AllInboxesFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllMailFolder,    Label = AllMailFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllInboxesFolder, Label = AllInboxesFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllDraftsFolder,  Label = AllDraftsFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllSentFolder,    Label = AllSentFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllTrashFolder,   Label = AllTrashFolder.DisplayName });
