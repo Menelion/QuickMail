@@ -89,8 +89,20 @@ public class SyncService : ISyncService
     {
         // ── New messages ─────────────────────────────────────────────────────────
         var maxUid   = await _store.GetMaxUidAsync(account.Id, folder.FullName);
-        var initialCount = _config.Load().InitialSyncCount;
-        var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, initialCount, ct);
+        var cfg      = _config.Load();
+        List<MailMessageSummary> incoming;
+
+        if (maxUid == 0 && cfg.SyncDays > 0)
+        {
+            // Fresh start with a date filter: use SEARCH SINCE rather than count-based fallback.
+            incoming = await _imap.GetMessagesSinceDateAsync(
+                account.Id, folder.FullName, DateTime.UtcNow.AddDays(-cfg.SyncDays), ct);
+        }
+        else
+        {
+            incoming = await _imap.GetMessagesSinceAsync(
+                account.Id, folder.FullName, maxUid, cfg.InitialSyncCount, ct);
+        }
 
         if (incoming.Count > 0)
         {
