@@ -36,13 +36,14 @@
 
         <!-- Address checklist -->
         <ScrollViewer VerticalScrollBarVisibility="Auto"
-                      IsTabStop="False">
+                      IsTabStop="False"
+                      AutomationProperties.Name="Addresses from message">
             <ItemsControl x:Name="AddressList"
-                          AutomationProperties.Name="Addresses from message"
-                          AutomationProperties.AutomationId="AddressList"
                           KeyboardNavigation.TabNavigation="Contained"
                           KeyboardNavigation.DirectionalNavigation="Contained"
-                          IsTabStop="False">
+                          IsTabStop="False"
+                          AutomationProperties.AccessKey=""
+                          Focusable="False">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <CheckBox IsChecked="{Binding IsChecked}"
