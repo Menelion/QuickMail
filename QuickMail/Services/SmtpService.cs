@@ -34,14 +34,14 @@ public class SmtpService : ISmtpService
         if (account.AuthType == AuthType.OAuth2Microsoft)
         {
             var token = await _oauth.GetAccessTokenAsync(account, ct);
-            LogService.Log($"SmtpService: authenticating {account.Username} via XOAUTH2");
+            LogService.Debug($"SmtpService: authenticating via XOAUTH2");
             await client.AuthenticateAsync(new SaslMechanismOAuth2(account.Username, token), ct);
         }
         else
         {
             await client.AuthenticateAsync(account.Username, password!, ct);
         }
-        LogService.Log($"SmtpService: authenticated, sending to {compose.To}");
+        LogService.Debug($"SmtpService: authenticated, sending.");
         await client.SendAsync(message, ct);
         LogService.Log($"SmtpService: send complete");
         await client.DisconnectAsync(true, ct);

@@ -103,6 +103,9 @@ public partial class MainWindow : Window
         vm.OpenAccountSettingsRequested += OpenAccountManagerForAccount;
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
         vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
+        vm.ConfirmationRequested = (message, title) =>
+            MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            == MessageBoxResult.Yes;
 
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
@@ -972,7 +975,7 @@ public partial class MainWindow : Window
             // was added via AddScriptToExecuteOnDocumentCreatedAsync and is unaffected by CSP.
             const string cspTag =
                 "<meta http-equiv=\"Content-Security-Policy\" " +
-                "content=\"script-src 'none'; object-src 'none'; frame-src 'none';\">";
+                "content=\"script-src 'none'; object-src 'none'; frame-src 'none'; img-src cid: data:;\">";
             var body = detail.HtmlBody;
 
             // Replace any existing <title> so screen readers announce our subject, not the sender's.
