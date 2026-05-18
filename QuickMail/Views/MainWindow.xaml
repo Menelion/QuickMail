@@ -217,7 +217,8 @@
                 <MenuItem Header="_Manage Accounts…"
                           Command="{Binding ManageAccountsCommand}"/>
                 <MenuItem Header="Address _Book…"
-                          Click="MenuAddressBook_Click"/>
+                          Click="MenuAddressBook_Click"
+                          InputGestureText="Ctrl+Shift+B"/>
                 <Separator/>
                 <MenuItem Header="E_xit"
                           Command="{Binding ExitCommand}"/>

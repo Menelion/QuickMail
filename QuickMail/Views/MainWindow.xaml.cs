@@ -236,6 +236,11 @@ public partial class MainWindow : Window
             defaultKey: Key.G, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
             isAvailable: () => _vm.IsMessageOpen));
 
+        _registry.Register(new CommandDefinition(
+            id: "contacts.openAddressBook", category: "Contacts", title: "Address Book",
+            execute: OpenAddressBook,
+            defaultKey: Key.B, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
         {
@@ -1921,6 +1926,9 @@ public partial class MainWindow : Window
     // ── Menu bar handlers ────────────────────────────────────────────────────
 
     private void MenuAddressBook_Click(object sender, RoutedEventArgs e)
+        => OpenAddressBook();
+
+    private void OpenAddressBook()
     {
         var vm  = new AddressBookViewModel(_contactService);
         var win = new AddressBookWindow(vm) { Owner = this };
