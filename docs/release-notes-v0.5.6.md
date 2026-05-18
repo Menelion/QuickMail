@@ -8,7 +8,7 @@ A new built-in address book stores email addresses and display names for quick r
 
 - Open **File → Address Book** (or press `Ctrl+Shift+B`) to manage contacts
 - Search by name or email address
-- Click on a contact to view and edit its details
+- Choose a contact to view and edit its details
 
 ### Grab addresses from messages
 
@@ -17,7 +17,7 @@ While reading a message, quickly save sender, recipient, and reply-to addresses 
 - Open **Message → Grab Addresses from Message** (or press `Ctrl+Shift+G`)
 - A dialog shows all addresses found in the message (From, To, Cc)
 - All addresses are checked by default; uncheck any you don't want to save
-- Click **Save** to add selected addresses to your address book
+- Activate **Save** to add selected addresses to your address book
 
 ### Address autocomplete in compose
 
@@ -47,9 +47,7 @@ All menu items show their keyboard shortcuts for quick reference.
 
 ### Accessibility
 
-- **Grab Addresses dialog** — Focus now starts on the first address so keyboard and screen reader users can immediately interact with the checkbox list. The mysterious empty list container is no longer announced separately.
 - **Address book** — Keyboard navigation and screen reader support throughout. Delete key removes selected contacts; Enter in the email field submits the add form.
-- **Autocomplete focus management** — Focus doesn't automatically move to the suggestion list — you must press Down arrow to enter it. This is the correct screen-reader-friendly pattern: announcements happen, focus stays put unless the user chooses to move it.
 
 ### Address separator consistency
 
