@@ -46,7 +46,8 @@ public class ImapService : IImapService
             ? SecureSocketOptions.SslOnConnect
             : SecureSocketOptions.StartTlsWhenAvailable;
 
-        LogService.Log($"Connecting to {account.ImapHost}:{account.ImapPort} ssl={account.ImapUseSsl} user={account.Username} auth={account.AuthType}");
+        LogService.Log($"Connecting to {account.ImapHost}:{account.ImapPort} ssl={account.ImapUseSsl} auth={account.AuthType}");
+        LogService.Debug($"  user={account.Username}");
         await client.ConnectAsync(account.ImapHost, account.ImapPort, ssl, ct);
 
         if (account.AuthType == AuthType.OAuth2Microsoft)
@@ -645,7 +646,7 @@ public class ImapService : IImapService
         if (_clients.TryGetValue(accountId, out client) && client.IsConnected && client.IsAuthenticated)
             return client;
 
-        LogService.Log($"Reconnecting {account.Username}…");
+        LogService.Debug($"Reconnecting…");
         await ConnectAsync(account, password, ct);
         return _clients[accountId];
     }

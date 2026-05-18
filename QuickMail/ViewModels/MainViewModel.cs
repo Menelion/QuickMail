@@ -1700,17 +1700,20 @@ public partial class MainViewModel : ObservableObject
 
     public event Action<AccountModel>? OpenAccountSettingsRequested;
 
+    /// <summary>
+    /// Set by the View to show a Yes/No confirmation dialog.
+    /// Parameters: message, title. Returns true when the user confirms.
+    /// </summary>
+    public Func<string, string, bool>? ConfirmationRequested { get; set; }
+
     [RelayCommand]
     private void DeleteAccount(AccountModel? account)
     {
         if (account == null) return;
 
-        var result = MessageBox.Show(
+        if (ConfirmationRequested?.Invoke(
             $"Remove the account '{account.AccountLabel}'? This only removes it from QuickMail — your mail on the server is not affected.",
-            "Remove Account",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Remove Account") != true) return;
 
         _credentials.DeletePassword(account.Id);
         Accounts.Remove(account);
@@ -1837,12 +1840,9 @@ public partial class MainViewModel : ObservableObject
     {
         if (node.Folder == null || node.IsHeader) return;
 
-        var result = MessageBox.Show(
+        if (ConfirmationRequested?.Invoke(
             $"Delete the folder '{node.Label}' and move all its messages to Trash?",
-            "Delete Folder",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Delete Folder") != true) return;
 
         StatusText = $"Deleting folder '{node.Label}'…";
         IsBusy     = true;
@@ -2219,7 +2219,13 @@ public partial class MainViewModel : ObservableObject
                         MessageDetail.UniqueId, att.PartSpecifier, cts.Token);
 
                 if (att.Content != null)
-                    await File.WriteAllBytesAsync(Path.Combine(folder, att.FileName), att.Content);
+                {
+                    // Strip directory components from the server-supplied filename to
+                    // prevent path traversal writing outside the chosen save folder.
+                    var safeFileName = Path.GetFileName(att.FileName);
+                    if (string.IsNullOrEmpty(safeFileName)) safeFileName = "attachment";
+                    await File.WriteAllBytesAsync(Path.Combine(folder, safeFileName), att.Content);
+                }
             }
             StatusText = "All attachments saved.";
         }
@@ -2257,20 +2263,22 @@ public partial class MainViewModel : ObservableObject
             IsBusy = false;
         }
 
-        var ext = Path.GetExtension(att.FileName).ToLowerInvariant();
+        // Strip any directory components from the server-supplied filename to prevent
+        // path traversal (e.g. a crafted name like "../../Startup/evil.exe").
+        var safeFileName = Path.GetFileName(att.FileName);
+        if (string.IsNullOrEmpty(safeFileName)) safeFileName = "attachment";
+
+        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
         if (DangerousExtensions.Contains(ext))
         {
-            var result = MessageBox.Show(
-                $"'{att.FileName}' is an executable file type. Opening it could be dangerous. Continue?",
-                "Security Warning",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes) return;
+            if (ConfirmationRequested?.Invoke(
+                $"'{safeFileName}' is an executable file type. Opening it could be dangerous. Continue?",
+                "Security Warning") != true) return;
         }
 
         var tempDir = Path.Combine(Path.GetTempPath(), "QuickMail");
         Directory.CreateDirectory(tempDir);
-        var tempPath = Path.Combine(tempDir, att.FileName);
+        var tempPath = Path.Combine(tempDir, safeFileName);
         await File.WriteAllBytesAsync(tempPath, att.Content!);
         Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
     }
