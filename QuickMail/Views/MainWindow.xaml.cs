@@ -75,6 +75,7 @@ public partial class MainWindow : Window
     private object? _typeAheadScope;
 
     private readonly IContactService _contactService;
+    private readonly IConfigService _configService;
 
     public MainWindow(
         MainViewModel vm,
@@ -84,7 +85,8 @@ public partial class MainWindow : Window
         IImapService imap,
         IOAuthService oauth,
         ICommandRegistry registry,
-        IContactService contactService)
+        IContactService contactService,
+        IConfigService configService)
     {
         _vm = vm;
         _smtp = smtp;
@@ -94,6 +96,7 @@ public partial class MainWindow : Window
         _oauth = oauth;
         _registry = registry;
         _contactService = contactService;
+        _configService = configService;
 
         InitializeComponent();
         DataContext = vm;
@@ -1936,6 +1939,18 @@ public partial class MainWindow : Window
         var vm  = new AddressBookViewModel(_contactService);
         var win = new AddressBookWindow(vm) { Owner = this };
         win.ShowDialog();
+    }
+
+    private void MenuSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = new SettingsViewModel(_configService, _registry);
+        var dialog = new SettingsDialog(vm) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            var cfg = _configService.Load();
+            _vm.ApplySettings(cfg);
+            _registry.ApplyUserOverrides(cfg.CustomHotkeys);
+        }
     }
 
     private void MenuGrabAddresses_Click(object sender, RoutedEventArgs e)

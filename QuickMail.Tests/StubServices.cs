@@ -104,15 +104,35 @@ sealed class StubSyncService : ISyncService
 
 sealed class StubCommandRegistry : ICommandRegistry
 {
-    public void Register(CommandDefinition command) { }
-    public IReadOnlyList<CommandDefinition> GetAll() => [];
-    public CommandDefinition? FindById(string id) => null;
-    public CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers) => null;
+    private readonly Dictionary<string, CommandDefinition> _commands = [];
+
+    public void Register(CommandDefinition command)
+        => _commands[command.Id] = command;
+
+    public IReadOnlyList<CommandDefinition> GetAll()
+        => _commands.Values.OrderBy(c => c.Category).ThenBy(c => c.Title).ToList();
+
+    public CommandDefinition? FindById(string id)
+        => _commands.TryGetValue(id, out var cmd) ? cmd : null;
+
+    public CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers)
+        => _commands.Values.FirstOrDefault(c => c.DefaultKey == key && c.DefaultModifiers == modifiers);
+
     public void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides) { }
+
+    // Test helpers
+    public void RegisterTestCommand(string id, string category, string title)
+    {
+        Register(new CommandDefinition(id, category, title, () => { }));
+    }
 }
 
 sealed class StubConfigService : IConfigService
 {
-    public ConfigModel Load() => new();
-    public void Save(ConfigModel config) { }
+    private ConfigModel _config = new();
+
+    public ConfigModel Load() => _config;
+
+    public void Save(ConfigModel config)
+        => _config = config;
 }
