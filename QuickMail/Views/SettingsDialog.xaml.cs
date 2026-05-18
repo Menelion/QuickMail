@@ -59,7 +59,10 @@ public partial class SettingsDialog : Window
 
     private void SetShortcutButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedHotkey == null) return;
+        // Get the HotkeyRowViewModel from the button's DataContext (the row it's in)
+        var button = sender as System.Windows.Controls.Button;
+        if (button?.DataContext is not SettingsViewModel.HotkeyRowViewModel row)
+            return;
 
         while (true)
         {
@@ -88,14 +91,18 @@ public partial class SettingsDialog : Window
                 }
             }
 
-            _vm.SelectedHotkey.SetCustomBinding(key, modifiers);
+            row.SetCustomBinding(key, modifiers);
             break;
         }
     }
 
     private void RestoreDefaultButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedHotkey == null) return;
-        _vm.SelectedHotkey.ClearCustomBinding();
+        // Get the HotkeyRowViewModel from the button's DataContext (the row it's in)
+        var button = sender as System.Windows.Controls.Button;
+        if (button?.DataContext is SettingsViewModel.HotkeyRowViewModel row)
+        {
+            row.ClearCustomBinding();
+        }
     }
 }
