@@ -119,11 +119,15 @@ public partial class ComposeWindow : Window
         var text  = _activeAddressBox.Text;
         var caret = _activeAddressBox.CaretIndex;
         var sub   = text[..caret];
-        var last  = Math.Max(sub.LastIndexOf(','), sub.LastIndexOf(';'));
+        var lastComma = sub.LastIndexOf(',');
+        var lastSemi = sub.LastIndexOf(';');
+        var last = Math.Max(lastComma, lastSemi);
+        // Determine which separator to use: whatever was last used, or default to semicolon
+        var separator = lastSemi > lastComma ? ";" : ",";
         var prefix = last < 0 ? string.Empty : text[..(last + 1)] + " ";
         var suffix = text[caret..].TrimStart();
-        _activeAddressBox.Text       = prefix + contact.Display + ", " + suffix;
-        _activeAddressBox.CaretIndex = (prefix + contact.Display + ", ").Length;
+        _activeAddressBox.Text       = prefix + contact.Display + separator + " " + suffix;
+        _activeAddressBox.CaretIndex = (prefix + contact.Display + separator + " ").Length;
         AutoCompletePopup.IsOpen     = false;
         _activeAddressBox.Focus();
     }
