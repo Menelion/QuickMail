@@ -3,19 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:QuickMail.Views"
         mc:Ignorable="d"
         Title="Settings"
         Height="560" Width="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
-        PreviewKeyDown="Window_PreviewKeyDown"
         Loaded="Window_Loaded">
-
-    <Window.Resources>
-        <local:EmptyStringToDashConverter x:Key="EmptyStringToDashConverter"/>
-    </Window.Resources>
 
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -49,6 +43,10 @@
                                         <ComboBoxItem Tag="4" Content="4 lines"/>
                                         <ComboBoxItem Tag="5" Content="5 lines"/>
                                     </ComboBox>
+                                    <TextBlock Text="Takes effect after reopening a folder."
+                                               Foreground="DimGray"
+                                               FontSize="11"
+                                               Margin="0,4,0,0"/>
                                 </StackPanel>
 
                                 <!-- Show Message Status -->

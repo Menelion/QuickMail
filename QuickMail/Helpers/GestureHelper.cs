@@ -25,6 +25,16 @@ public static class GestureHelper
         return string.Join("+", parts);
     }
 
+    /// <summary>
+    /// Converts legacy integer-format hotkey fields to a gesture string.
+    /// Returns null when <paramref name="key"/> is 0 (no binding stored).
+    /// </summary>
+    public static string? MigrateFromLegacyIntegers(int key, int modifiers)
+    {
+        if (key == 0) return null;
+        return Format((Key)key, (ModifierKeys)modifiers);
+    }
+
     public static bool TryParse(string gesture, out Key key, out ModifierKeys modifiers)
     {
         key = Key.None;
@@ -65,10 +75,10 @@ public static class GestureHelper
         var d = new Dictionary<Key, string>();
         for (int i = 0; i <= 9; i++) d[(Key)((int)Key.D0 + i)] = i.ToString();
         for (int i = 0; i <= 9; i++) d[(Key)((int)Key.NumPad0 + i)] = $"Num{i}";
-        d[Key.Add]      = "Num+";
-        d[Key.Subtract] = "Num-";
-        d[Key.Multiply] = "Num*";
-        d[Key.Divide]   = "Num/";
+        d[Key.Add]      = "NumAdd";
+        d[Key.Subtract] = "NumSub";
+        d[Key.Multiply] = "NumMul";
+        d[Key.Divide]   = "NumDiv";
         d[Key.Decimal]  = "Num.";
         d[Key.Space]    = "Space";
         d[Key.Return]   = "Enter";
@@ -93,10 +103,10 @@ public static class GestureHelper
         var d = new Dictionary<string, Key>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i <= 9; i++) d[i.ToString()] = (Key)((int)Key.D0 + i);
         for (int i = 0; i <= 9; i++) d[$"Num{i}"] = (Key)((int)Key.NumPad0 + i);
-        d["Num+"]      = Key.Add;
-        d["Num-"]      = Key.Subtract;
-        d["Num*"]      = Key.Multiply;
-        d["Num/"]      = Key.Divide;
+        d["NumAdd"]    = Key.Add;
+        d["NumSub"]    = Key.Subtract;
+        d["NumMul"]    = Key.Multiply;
+        d["NumDiv"]    = Key.Divide;
         d["Num."]      = Key.Decimal;
         d["Space"]     = Key.Space;
         d["Enter"]     = Key.Return;

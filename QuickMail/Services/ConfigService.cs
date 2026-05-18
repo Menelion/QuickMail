@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Windows.Input;
 using QuickMail.Helpers;
 using QuickMail.Models;
 
@@ -101,7 +100,7 @@ public class ConfigService : IConfigService
 
             // Migrate old integer format: if Gesture is absent but Key int is set, convert it
             if (string.IsNullOrEmpty(h.Gesture) && h.Key != 0)
-                h.Gesture = GestureHelper.Format((Key)h.Key, (ModifierKeys)h.Modifiers);
+                h.Gesture = GestureHelper.MigrateFromLegacyIntegers(h.Key, h.Modifiers) ?? string.Empty;
 
             // Skip entries whose gesture string can't be parsed into a valid key combination
             if (!GestureHelper.TryParse(h.Gesture, out _, out _))

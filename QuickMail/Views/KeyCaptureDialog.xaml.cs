@@ -24,8 +24,6 @@ public partial class KeyCaptureDialog : Window
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e) => CaptureKey(e);
-    private void Grid_KeyDown(object sender, KeyEventArgs e)          => CaptureKey(e);
-    private void Window_KeyDown(object sender, KeyEventArgs e)        => CaptureKey(e);
 
     private void CaptureKey(KeyEventArgs e)
     {

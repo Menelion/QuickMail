@@ -67,8 +67,7 @@ public class SettingsViewModelTests
         Assert.Single(loadedConfig.CustomHotkeys);
         var binding = loadedConfig.CustomHotkeys[0];
         Assert.Equal("test.cmd1", binding.CommandId);
-        Assert.Equal((int)Key.K, binding.Key);
-        Assert.Equal((int)(ModifierKeys.Control | ModifierKeys.Shift), binding.Modifiers);
+        Assert.Equal("Ctrl+Shift+K", binding.Gesture);
     }
 
     [Fact]
@@ -105,8 +104,7 @@ public class SettingsViewModelTests
         var binding = row.ToBinding();
 
         Assert.Equal("test.cmd", binding.CommandId);
-        Assert.Equal((int)Key.S, binding.Key);
-        Assert.Equal((int)(ModifierKeys.Control | ModifierKeys.Shift), binding.Modifiers);
+        Assert.Equal("Ctrl+Shift+S", binding.Gesture);
     }
 
     [Fact]
@@ -116,7 +114,7 @@ public class SettingsViewModelTests
         var cfg = configService.Load();
         cfg.CustomHotkeys = new List<HotkeyBinding>
         {
-            new() { CommandId = "test.cmd", Key = (int)Key.G, Modifiers = (int)ModifierKeys.Control }
+            new() { CommandId = "test.cmd", Gesture = "Ctrl+G" }
         };
         configService.Save(cfg);
 

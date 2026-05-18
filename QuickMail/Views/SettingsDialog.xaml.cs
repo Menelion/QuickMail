@@ -1,7 +1,5 @@
 using System;
-using System.Globalization;
 using System.Windows;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using QuickMail.Helpers;
@@ -9,23 +7,6 @@ using QuickMail.Services;
 using QuickMail.ViewModels;
 
 namespace QuickMail.Views;
-
-/// <summary>
-/// Converts an empty string to "—" (dash) for display purposes.
-/// </summary>
-public class EmptyStringToDashConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        var str = value as string;
-        return string.IsNullOrEmpty(str) ? "—" : str;
-    }
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        throw new NotSupportedException();
-    }
-}
 
 public partial class SettingsDialog : Window
 {
@@ -49,16 +30,6 @@ public partial class SettingsDialog : Window
         _vm.SaveCommand.Execute(null);
         DialogResult = true;
         Close();
-    }
-
-    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            DialogResult = false;
-            Close();
-            e.Handled = true;
-        }
     }
 
     private void HotkeyListView_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
