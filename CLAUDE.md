@@ -80,6 +80,7 @@ Trash, Junk, Sent, and Drafts are excluded from `\x00AllMail` via `folder.Exclud
 - **HTML sandbox**: WebView2 `NavigateToString` with strict CSP — no scripts, no object/embed, no frames
 - **Pagination**: messages fetched in batches of 100; "Load More" appends next batch
 - **Logging**: `LogService` appends to `%APPDATA%\QuickMail\quickmail.log`; `LogService.Debug()` only writes when `/debug` flag is present
+- **Inclusive language in documentation and UI text**: Use verbs like "activate", "select", "choose", or "press" instead of "click". This is more accessible to keyboard-only and screen reader users. Example: "Activate **File → Address Book**" instead of "Click File → Address Book".
 
 ## MVVM Rules — Enforced
 
