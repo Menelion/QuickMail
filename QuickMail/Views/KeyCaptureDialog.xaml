@@ -10,10 +10,12 @@
         ResizeMode="NoResize"
         WindowStyle="ToolWindow"
         ShowInTaskbar="False"
+        Loaded="Window_Loaded"
+        KeyDown="Window_KeyDown"
         PreviewKeyDown="Window_PreviewKeyDown"
         AutomationProperties.Name="Assign keyboard shortcut dialog">
 
-    <Grid Margin="20">
+    <Grid Margin="20" Focusable="True" x:Name="MainGrid" KeyDown="Grid_KeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
