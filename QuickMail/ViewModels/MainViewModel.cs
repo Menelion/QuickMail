@@ -261,6 +261,28 @@ public partial class MainViewModel : ObservableObject
         Accounts = new ObservableCollection<AccountModel>(_accountService.LoadAccounts());
     }
 
+    internal void ApplySettings(ConfigModel cfg)
+    {
+        ShowMessageStatus = cfg.ShowMessageStatus;
+
+        var newMode = cfg.ViewMode switch
+        {
+            "conversations" => ViewMode.Conversations,
+            "from"          => ViewMode.From,
+            "to"            => ViewMode.To,
+            _               => ViewMode.Messages,
+        };
+        ViewMode = newMode;
+
+        _syncDays = cfg.SyncDays;
+        OnPropertyChanged(nameof(IsSyncDays7));
+        OnPropertyChanged(nameof(IsSyncDays30));
+        OnPropertyChanged(nameof(IsSyncDays180));
+        OnPropertyChanged(nameof(IsSyncDays365));
+        OnPropertyChanged(nameof(IsSyncDaysAll));
+        OnPropertyChanged(nameof(SyncRangeLabel));
+    }
+
     private void RegisterCommands(ICommandRegistry registry)
     {
         registry.Register(new CommandDefinition(

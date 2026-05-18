@@ -1,0 +1,154 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using QuickMail.Models;
+using QuickMail.Services;
+
+namespace QuickMail.ViewModels;
+
+public partial class SettingsViewModel : ObservableObject
+{
+    private readonly IConfigService _configService;
+
+    [ObservableProperty]
+    private int _previewLines;
+
+    [ObservableProperty]
+    private bool _showMessageStatus;
+
+    [ObservableProperty]
+    private string _viewMode = "messages";
+
+    [ObservableProperty]
+    private int _syncDays;
+
+    [ObservableProperty]
+    private int _initialSyncCount;
+
+    public ObservableCollection<HotkeyRowViewModel> HotkeyRows { get; } = [];
+
+    [ObservableProperty]
+    private HotkeyRowViewModel? _selectedHotkey;
+
+    public SettingsViewModel(IConfigService configService, ICommandRegistry registry)
+    {
+        _configService = configService;
+        var cfg = configService.Load();
+
+        PreviewLines = cfg.PreviewLines;
+        ShowMessageStatus = cfg.ShowMessageStatus;
+        ViewMode = cfg.ViewMode;
+        SyncDays = cfg.SyncDays;
+        InitialSyncCount = cfg.InitialSyncCount;
+
+        foreach (var cmd in registry.GetAll())
+        {
+            var row = new HotkeyRowViewModel(cmd);
+            var customBinding = cfg.CustomHotkeys.FirstOrDefault(h => h.CommandId == cmd.Id);
+            if (customBinding != null)
+            {
+                row.SetCustomBinding((Key)customBinding.Key, (ModifierKeys)customBinding.Modifiers);
+            }
+            HotkeyRows.Add(row);
+        }
+    }
+
+    [RelayCommand]
+    private void Save()
+    {
+        var cfg = _configService.Load();
+
+        cfg.PreviewLines = PreviewLines;
+        cfg.ShowMessageStatus = ShowMessageStatus;
+        cfg.ViewMode = ViewMode;
+        cfg.SyncDays = SyncDays;
+        cfg.InitialSyncCount = InitialSyncCount;
+
+        cfg.CustomHotkeys = HotkeyRows
+            .Where(r => r.HasCustomBinding)
+            .Select(r => r.ToBinding())
+            .ToList();
+
+        _configService.Save(cfg);
+    }
+
+    [RelayCommand]
+    private void ClearHotkey(HotkeyRowViewModel? row)
+    {
+        if (row != null)
+        {
+            row.ClearCustomBinding();
+        }
+    }
+
+    // ── HotkeyRowViewModel ─────────────────────────────────────────────────────────
+
+    public partial class HotkeyRowViewModel : ObservableObject
+    {
+        private readonly CommandDefinition _command;
+        private Key _customKey = Key.None;
+        private ModifierKeys _customModifiers = ModifierKeys.None;
+
+        public string CommandId => _command.Id;
+        public string Category => _command.Category;
+        public string Title => _command.Title;
+
+        public string DefaultGesture => _command.GestureText;
+
+        [ObservableProperty]
+        private string _customGesture = string.Empty;
+
+        public bool HasCustomBinding => _customKey != Key.None;
+
+        public HotkeyRowViewModel(CommandDefinition command)
+        {
+            _command = command;
+        }
+
+        public void SetCustomBinding(Key key, ModifierKeys modifiers)
+        {
+            _customKey = key;
+            _customModifiers = modifiers;
+            UpdateCustomGesture();
+        }
+
+        public void ClearCustomBinding()
+        {
+            _customKey = Key.None;
+            _customModifiers = ModifierKeys.None;
+            CustomGesture = string.Empty;
+        }
+
+        public HotkeyBinding ToBinding() => new()
+        {
+            CommandId = CommandId,
+            Key = (int)_customKey,
+            Modifiers = (int)_customModifiers,
+        };
+
+        private void UpdateCustomGesture()
+        {
+            if (_customKey == Key.None)
+            {
+                CustomGesture = string.Empty;
+                return;
+            }
+
+            var parts = new List<string>();
+            if ((_customModifiers & ModifierKeys.Control) != 0) parts.Add("Ctrl");
+            if ((_customModifiers & ModifierKeys.Shift) != 0) parts.Add("Shift");
+            if ((_customModifiers & ModifierKeys.Alt) != 0) parts.Add("Alt");
+
+            var keyStr = _customKey.ToString();
+            if (keyStr.Length == 2 && keyStr[0] == 'D' && char.IsDigit(keyStr[1]))
+                keyStr = keyStr[1..];
+
+            parts.Add(keyStr);
+            CustomGesture = string.Join("+", parts);
+        }
+    }
+}

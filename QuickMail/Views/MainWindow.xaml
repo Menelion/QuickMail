@@ -220,6 +220,10 @@
                           Click="MenuAddressBook_Click"
                           InputGestureText="Ctrl+Shift+B"/>
                 <Separator/>
+                <MenuItem Header="S_ettings…"
+                          Click="MenuSettings_Click"
+                          InputGestureText="Ctrl+,"/>
+                <Separator/>
                 <MenuItem Header="E_xit"
                           Command="{Binding ExitCommand}"/>
             </MenuItem>
