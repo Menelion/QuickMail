@@ -1671,6 +1671,32 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── SenderGroup context menu handlers ────────────────────────────────────
+
+    private async void SenderGroupContextMenu_MoveToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (SenderGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var targetIdx = _vm.SenderGroups.IndexOf(group);
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+        LandOnSenderGroupAfterRebuild(targetIdx);
+    }
+
+    private async void SenderGroupContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (SenderGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopySelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+    }
+
     // ── ToGroup tree event handlers ──────────────────────────────────────────
 
     private void ToGroupTree_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
@@ -1815,6 +1841,32 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
         }
+    }
+
+    // ── ToGroup context menu handlers ─────────────────────────────────────────
+
+    private async void ToGroupContextMenu_MoveToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (ToGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var targetIdx = _vm.ToGroups.IndexOf(group);
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
+        LandOnToGroupAfterRebuild(targetIdx);
+    }
+
+    private async void ToGroupContextMenu_CopyToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (ToGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
+        if (_vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopySelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
     }
 
     private void OpenComposeWindow(ComposeModel composeModel)
