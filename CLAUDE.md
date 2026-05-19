@@ -26,12 +26,14 @@ xUnit 2.9.3 with `Xunit.StaFact` for WPF STA-thread tests.
 
 ```bat
 dotnet test QuickMail.Tests/QuickMail.Tests.csproj -c Release
+dotnet test QuickMail.Tests/QuickMail.Tests.csproj -c Release --filter "FullyQualifiedName~ClassName"
 ```
 
 Test types in `QuickMail.Tests/`:
 - **ViewModelConstructionTests** — VM instantiation with stub services (catches init crashes)
 - **XamlParseTests** — XAML loads without `XamlParseException` (requires STA thread via `[StaFact]`)
 - **LocalStoreServiceTests** — SQLite round-trip tests
+- **SettingsViewModelTests** — settings persistence and hotkey binding logic
 
 All tests use `StubServices.cs` stub implementations to avoid real network/DB calls.
 
@@ -40,7 +42,7 @@ All tests use `StubServices.cs` stub implementations to avoid real network/DB ca
 ### Service Layer
 
 **App.xaml.cs** is the manual DI composition root — no container. Services are wired in `OnStartup` in dependency order:
-`AccountService` → `CredentialService` → `OAuthService` → `ImapService` → `SmtpService` → `ConfigService` → `LocalStoreService` → `SyncService` → `CommandRegistry` → `MainViewModel` → `MainWindow`. Pass `/debug` on startup to enable verbose file logging.
+`AccountService` → `CredentialService` → `OAuthService` → `ImapService` → `SmtpService` → `ConfigService` → `LocalStoreService` → `ContactService` → `SyncService` → `CommandRegistry` → `MainViewModel` → `MainWindow`. Pass `/debug` on startup to enable verbose file logging.
 
 **ImapService** keeps one `ImapClient` per account `Guid` in a `ConcurrentDictionary`. Each account has a `SemaphoreSlim` that serializes IMAP operations to prevent concurrent client use. `GetOrReconnectAsync()` transparently reconnects stale clients. `ExecuteWithRetryAsync<T>()` retries once on transient connection errors (`ServiceNotConnectedException`, `ImapProtocolException`, `IOException`, `SocketException`). `OperationCanceledException` is never treated as transient.
 
@@ -49,6 +51,18 @@ All tests use `StubServices.cs` stub implementations to avoid real network/DB ca
 **SyncService** runs background IMAP polling. It raises `FolderSynced` and `MessagesRemoved` events; `MainViewModel` subscribes and merges new data into the observable collections. UI is populated from the SQLite cache immediately on startup (`InitialLoadAsync`), then background sync fills gaps.
 
 **OAuthService** wraps MSAL (`Microsoft.Identity.Client`) for Microsoft 365 / Outlook OAuth2. Token refresh is handled automatically; passwords for OAuth accounts are not stored in Credential Manager.
+
+**ConfigService** reads/writes `%APPDATA%\QuickMail\config.ini` (INI format, human-editable) and `hotkeys.json` (JSON). Settings include `PreviewLines`, `ShowMessageStatus`, `ViewMode`, `SyncDays`, `InitialSyncCount`, with optional per-account `[account:{guid}]` overrides. Results are cached after first load.
+
+**ContactService** stores the address book in `%APPDATA%\QuickMail\contacts.json`. Upserts by email address (case-insensitive); `SearchContactsAsync` returns up to 10 results ordered by `LastUsedTicks`. Contacts are auto-upserted when mail is sent.
+
+**CommandRegistry** holds all `CommandDefinition` instances (id, category, title, default gesture, execute action). Commands are registered in `MainWindow`'s constructor. `FindByGesture()` checks user overrides from `hotkeys.json` first, then falls back to defaults. The command palette (`Ctrl+P`) uses `CommandPaletteViewModel` to display and invoke them.
+
+**Static utilities** (no DI required):
+- `ConversationBuilder` — groups messages by normalized subject (strips all leading Re:/Fwd: chains); used for Conversations view mode
+- `SenderGroupBuilder` — groups messages by From or To; used for From/To view modes
+- `MimeMessageBuilder` — builds a `MimeMessage` from `ComposeModel` + `AccountModel`; shared by `SmtpService` and `ImapService` (draft saving)
+- `AddressParser` — splits comma/semicolon-delimited address strings into `MailboxAddress` objects
 
 ### ViewModel State
 
@@ -121,6 +135,8 @@ Not permitted in `.xaml.cs`:
 
 ## Keyboard Shortcuts (MainWindow)
 
+Shortcuts are registered as `CommandDefinition` objects in `MainWindow`'s constructor via `CommandRegistry`. Users can reassign them in Settings → Keyboard Shortcuts; overrides are saved to `hotkeys.json`. The command palette (Ctrl+P) lists all registered commands.
+
 | Key | Action |
 |---|---|
 | Ctrl+0 | Focus account list |
@@ -128,6 +144,7 @@ Not permitted in `.xaml.cs`:
 | Ctrl+2 | Focus message list |
 | Ctrl+3 | Focus reading pane |
 | Ctrl+N | New message |
+| Ctrl+P | Command palette |
 | Ctrl+Y | Folder picker |
 | Delete | Delete selected messages |
 | Escape | Close reading pane |
