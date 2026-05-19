@@ -46,21 +46,11 @@
             <ListBox ItemsSource="{Binding Accounts}"
                      SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
                      AutomationProperties.Name="Account list"
-                     TextSearch.TextPath="AccountLabel"
+                     TextSearch.TextPath="AccountLabelWithDefault"
                      BorderThickness="1">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="AutomationProperties.Name" Value="{Binding AccountLabelWithDefault}"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding AccountLabel}" VerticalAlignment="Center"/>
-                            <TextBlock Text=" (Default)" FontStyle="Italic" Foreground="DarkBlue"
-                                       VerticalAlignment="Center"
-                                       Visibility="{Binding IsDefault, Converter={StaticResource BoolToVisibility}}"/>
-                        </StackPanel>
+                        <TextBlock Text="{Binding AccountLabelWithDefault}" VerticalAlignment="Center"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
