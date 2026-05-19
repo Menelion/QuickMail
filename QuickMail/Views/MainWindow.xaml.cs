@@ -288,6 +288,11 @@ public partial class MainWindow : Window
             execute: OpenFolderPicker));
 
         _registry.Register(new CommandDefinition(
+            id: "view.searchFolders", category: "View", title: "Search Folders…",
+            execute: OpenFolderPicker,
+            defaultKey: Key.F, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
+        _registry.Register(new CommandDefinition(
             id: "view.openViewMenu", category: "View", title: "Open View Menu",
             execute: OpenViewMenu,
             defaultKey: Key.V, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
@@ -455,13 +460,6 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F)
-        {
-            OpenFolderPicker();
-            e.Handled = true;
-            return;
-        }
-
         // ── Registry-based action commands ───────────────────────────────────────
         var cmd = _registry.FindByGesture(key, modifiers);
         if (cmd != null && (cmd.IsAvailable?.Invoke() ?? true))
