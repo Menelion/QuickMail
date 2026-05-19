@@ -76,6 +76,7 @@ public partial class MainWindow : Window
 
     private readonly IContactService _contactService;
     private readonly IConfigService _configService;
+    private readonly ILocalStoreService _localStore;
 
     public MainWindow(
         MainViewModel vm,
@@ -86,7 +87,8 @@ public partial class MainWindow : Window
         IOAuthService oauth,
         ICommandRegistry registry,
         IContactService contactService,
-        IConfigService configService)
+        IConfigService configService,
+        ILocalStoreService localStore)
     {
         _vm = vm;
         _smtp = smtp;
@@ -97,6 +99,7 @@ public partial class MainWindow : Window
         _registry = registry;
         _contactService = contactService;
         _configService = configService;
+        _localStore = localStore;
 
         InitializeComponent();
         DataContext = vm;
@@ -2074,7 +2077,7 @@ public partial class MainWindow : Window
 
     private void OpenAccountManager()
     {
-        var accountVm = new AccountManagerViewModel(_accountService, _credentials, _imap, _oauth);
+        var accountVm = new AccountManagerViewModel(_accountService, _credentials, _imap, _oauth, _localStore, _configService);
         var dialog = new AccountManagerDialog(accountVm) { Owner = this };
         if (dialog.ShowDialog() == true)
             _vm.RefreshAccountList();
@@ -2082,7 +2085,7 @@ public partial class MainWindow : Window
 
     private void OpenAccountManagerForAccount(AccountModel account)
     {
-        var accountVm = new AccountManagerViewModel(_accountService, _credentials, _imap, _oauth);
+        var accountVm = new AccountManagerViewModel(_accountService, _credentials, _imap, _oauth, _localStore, _configService);
         var dialog    = new AccountManagerDialog(accountVm) { Owner = this };
         // Pre-select the account in the manager
         accountVm.SelectedAccount = accountVm.Accounts.FirstOrDefault(a => a.Id == account.Id);

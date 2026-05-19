@@ -22,6 +22,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IAccountService _accountService;
     private readonly ICredentialService _credentials;
     private readonly ILocalStoreService _localStore;
+    private readonly IOAuthService _oauthService;
     private readonly ISyncService _syncService;
     private readonly IConfigService _configService;
 
@@ -228,6 +229,7 @@ public partial class MainViewModel : ObservableObject
         IAccountService accountService,
         ICredentialService credentials,
         ILocalStoreService localStore,
+        IOAuthService oauthService,
         ISyncService syncService,
         IConfigService configService,
         ICommandRegistry commandRegistry)
@@ -236,6 +238,7 @@ public partial class MainViewModel : ObservableObject
         _accountService = accountService;
         _credentials    = credentials;
         _localStore     = localStore;
+        _oauthService   = oauthService;
         _syncService    = syncService;
         _configService  = configService;
 
@@ -1749,7 +1752,7 @@ public partial class MainViewModel : ObservableObject
     public Func<string, string, bool>? ConfirmationRequested { get; set; }
 
     [RelayCommand]
-    private void DeleteAccount(AccountModel? account)
+    private async Task DeleteAccountAsync(AccountModel? account)
     {
         if (account == null) return;
 
@@ -1769,6 +1772,21 @@ public partial class MainViewModel : ObservableObject
             SelectedAccount  = Accounts.FirstOrDefault();
             SelectedFolder   = AllMailFolder;
             Messages.Clear();
+        }
+
+        var config = _configService.Load();
+        if (config.Accounts.Remove(account.Id))
+            _configService.Save(config);
+
+        StatusText = $"Account '{account.AccountLabel}' removed. Cleaning up local data…";
+
+        try   { await _localStore.DeleteAccountDataAsync(account.Id); }
+        catch (Exception ex) { LogService.Log($"DeleteAccount: failed to purge mail.db — {ex.Message}"); }
+
+        if (account.AuthType == AuthType.OAuth2Microsoft)
+        {
+            try   { await _oauthService.SignOutAsync(account); }
+            catch (Exception ex) { LogService.Log($"DeleteAccount: failed MSAL sign-out — {ex.Message}"); }
         }
 
         StatusText = $"Account '{account.AccountLabel}' removed.";
