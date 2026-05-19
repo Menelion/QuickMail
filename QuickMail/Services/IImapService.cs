@@ -23,11 +23,11 @@ public interface IImapService : IDisposable
 
     /// <summary>
     /// Incremental fetch for background sync.
-    /// When sinceUid == 0 (first sync), returns the last 500 messages.
+    /// When sinceUid == 0 (first sync), returns the last <paramref name="initialCount"/> messages.
     /// When sinceUid > 0, returns only messages with UID > sinceUid (IMAP UID range).
     /// </summary>
     Task<List<MailMessageSummary>> GetMessagesSinceAsync(
-        Guid accountId, string folderName, uint sinceUid, CancellationToken ct = default);
+        Guid accountId, string folderName, uint sinceUid, int initialCount, CancellationToken ct = default);
     Task<MailMessageDetail> GetMessageDetailAsync(
         Guid accountId, string folderName, uint uid, CancellationToken ct = default);
 

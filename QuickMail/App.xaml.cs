@@ -30,6 +30,7 @@ public partial class App : Application
             var localStore = new LocalStoreService();
             localStore.Initialize();
 
+            var contactService = new ContactService();
             var syncService = new SyncService(imapService, localStore, configService);
 
             var commandRegistry = new CommandRegistry();
@@ -39,7 +40,9 @@ public partial class App : Application
                 imapService, accountService, credentialService, localStore, syncService, configService, commandRegistry);
             mainVm.LoadAccountList();
 
-            var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry);
+            var mainWindow = new MainWindow(
+                mainVm, smtpService, accountService, credentialService, imapService, oauthService,
+                commandRegistry, contactService, configService);
             mainWindow.Show();
         }
         catch (Exception ex)

@@ -104,7 +104,7 @@ public class ImapService : IImapService
         var client = lease.Client;
         var result = new List<MailFolderModel>();
 
-        // Always put INBOX first — many servers don't return it via GetFoldersAsync
+        // Always put INBOX first - many servers don't return it via GetFoldersAsync
         try
         {
             var inbox = client.Inbox!;
@@ -235,7 +235,7 @@ public class ImapService : IImapService
     }
 
     public async Task<List<MailMessageSummary>> GetMessagesSinceAsync(
-        Guid accountId, string folderName, uint sinceUid, CancellationToken ct = default)
+        Guid accountId, string folderName, uint sinceUid, int initialCount, CancellationToken ct = default)
     {
         using var lease = await RentClientAsync(accountId, ct, ImapLeasePriority.Background);
         var client = lease.Client;
@@ -252,7 +252,8 @@ public class ImapService : IImapService
             if (sinceUid == 0)
             {
                 if (folder.Count == 0) return new List<MailMessageSummary>();
-                var startIndex = Math.Max(0, folder.Count - 500);
+                var count = initialCount > 0 ? initialCount : folder.Count;
+                var startIndex = Math.Max(0, folder.Count - count);
                 summaries = await folder.FetchAsync(startIndex, -1, items, ct);
             }
             else
@@ -404,56 +405,8 @@ public class ImapService : IImapService
         var draftsFolder = FindSpecialFolder(client, SpecialFolder.Drafts)
             ?? throw new InvalidOperationException("No Drafts folder found for this account.");
 
-        // Build the MIME message from compose fields
-        var msg = new MimeMessage();
-        msg.From.Add(new MailboxAddress(account.SenderDisplayName, account.Username));
+        var msg = MimeMessageBuilder.Build(draft, account);
 
-        static void AddAddresses(InternetAddressList list, string raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) return;
-            foreach (var part in raw.Split(';', ',').Select(a => a.Trim()).Where(a => a.Length > 0))
-            {
-                try { list.Add(InternetAddress.Parse(part)); }
-                catch { /* skip unparseable address */ }
-            }
-        }
-
-        AddAddresses(msg.To,  draft.To);
-        AddAddresses(msg.Cc,  draft.Cc);
-        AddAddresses(msg.Bcc, draft.Bcc);
-
-        msg.Subject = draft.Subject;
-
-        if (!string.IsNullOrEmpty(draft.InReplyToMessageId))
-            msg.InReplyTo = draft.InReplyToMessageId;
-
-        var loadedAttachments = draft.Attachments.Where(a => a.IsLoaded).ToList();
-        if (loadedAttachments.Count > 0)
-        {
-            var multipart = new Multipart("mixed");
-            multipart.Add(new TextPart("plain") { Text = draft.Body });
-            foreach (var att in loadedAttachments)
-            {
-                var slash = att.ContentType.IndexOf('/');
-                var mediaType    = slash >= 0 ? att.ContentType[..slash] : "application";
-                var mediaSubtype = slash >= 0 ? att.ContentType[(slash + 1)..] : "octet-stream";
-                var mimePart = new MimePart(mediaType, mediaSubtype)
-                {
-                    Content                  = new MimeContent(new MemoryStream(att.Content!)),
-                    ContentDisposition       = new ContentDisposition(ContentDisposition.Attachment),
-                    ContentTransferEncoding  = ContentEncoding.Base64,
-                    FileName                 = att.FileName,
-                };
-                multipart.Add(mimePart);
-            }
-            msg.Body = multipart;
-        }
-        else
-        {
-            msg.Body = new TextPart("plain") { Text = draft.Body };
-        }
-
-        // Delete the old draft revision before appending the new one
         if (replaceUid.HasValue)
         {
             await draftsFolder.OpenAsync(FolderAccess.ReadWrite, ct);
@@ -465,7 +418,6 @@ public class ImapService : IImapService
             finally { await draftsFolder.CloseAsync(false, ct); }
         }
 
-        // Append the new draft and return its server-assigned UID
         await draftsFolder.OpenAsync(FolderAccess.ReadWrite, ct);
         try
         {
@@ -575,7 +527,6 @@ public class ImapService : IImapService
         }
         finally { await srcFolder.CloseAsync(false, ct); }
 
-        // Recurse into subfolders
         var subfolders = await srcFolder.GetSubfoldersAsync(false, ct);
         foreach (var sub in subfolders)
             await CopyFolderCoreAsync(client, sub.FullName, newFolder.FullName, ct);
@@ -629,8 +580,8 @@ public class ImapService : IImapService
         Guid accountId, string folderName, IList<uint> uids,
         int maxLines, CancellationToken ct = default)
     {
-        var result = new Dictionary<uint, string>();
-        if (uids.Count == 0 || maxLines <= 0) return result;
+        if (uids.Count == 0 || maxLines <= 0)
+            return new Dictionary<uint, string>();
 
         using var lease = await RentClientAsync(accountId, ct, ImapLeasePriority.Background);
         var client = lease.Client;
@@ -638,6 +589,7 @@ public class ImapService : IImapService
         await folder.OpenAsync(FolderAccess.ReadOnly, ct);
         try
         {
+            var result = new Dictionary<uint, string>();
             var mailKitUids = uids.Select(u => new UniqueId(u)).ToList();
             var summaries   = await folder.FetchAsync(
                 mailKitUids,
@@ -667,9 +619,9 @@ public class ImapService : IImapService
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) { LogService.Log($"FetchPreview/{s.UniqueId}", ex); }
             }
+            return (IReadOnlyDictionary<uint, string>)result;
         }
         finally { await folder.CloseAsync(false, ct); }
-        return result;
     }
 
     public async Task<int> PollAsync(Guid accountId, string folderName, CancellationToken ct = default)
@@ -753,7 +705,8 @@ public class ImapService : IImapService
                 ? SecureSocketOptions.SslOnConnect
                 : SecureSocketOptions.StartTlsWhenAvailable;
 
-            LogService.Log($"Connecting to {account.ImapHost}:{account.ImapPort} ssl={account.ImapUseSsl} user={account.Username} auth={account.AuthType}");
+            LogService.Log($"Connecting to {account.ImapHost}:{account.ImapPort} ssl={account.ImapUseSsl} auth={account.AuthType}");
+            LogService.Debug($"  user={account.Username}");
             await client.ConnectAsync(account.ImapHost, account.ImapPort, ssl, ct);
 
             if (account.AuthType == AuthType.OAuth2Microsoft)
@@ -804,6 +757,7 @@ public class ImapService : IImapService
         new()
         {
             Id                    = account.Id,
+            AccountName           = account.AccountName,
             DisplayName           = account.DisplayName,
             Username              = account.Username,
             AuthType              = account.AuthType,

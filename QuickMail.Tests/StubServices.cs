@@ -19,7 +19,7 @@ sealed class StubImapService : IImapService
     public Task<List<MailFolderModel>> GetFoldersAsync(Guid accountId, CancellationToken ct = default) => Task.FromResult(new List<MailFolderModel>());
     public Task<List<MailMessageSummary>> GetMessageSummariesAsync(Guid accountId, string folderName, int maxMessages, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
     public Task<List<MailMessageSummary>> GetMessagesSinceDateAsync(Guid accountId, string folderName, DateTime since, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
-    public Task<List<MailMessageSummary>> GetMessagesSinceAsync(Guid accountId, string folderName, uint sinceUid, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
+    public Task<List<MailMessageSummary>> GetMessagesSinceAsync(Guid accountId, string folderName, uint sinceUid, int initialCount, CancellationToken ct = default) => Task.FromResult(new List<MailMessageSummary>());
     public Task<MailMessageDetail> GetMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
     public Task<MailMessageDetail> PrefetchMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
     public Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.CompletedTask;
@@ -74,6 +74,7 @@ sealed class StubLocalStoreService : ILocalStoreService
     public void Initialize() { }
     public Task UpsertSummariesAsync(IEnumerable<MailMessageSummary> summaries) => Task.CompletedTask;
     public Task<List<MailMessageSummary>> LoadAllSummariesAsync() => Task.FromResult(new List<MailMessageSummary>());
+    public Task<List<MailMessageSummary>> LoadAllSummariesAsync(Guid accountId) => Task.FromResult(new List<MailMessageSummary>());
     public Task<List<MailMessageSummary>> LoadFolderSummariesAsync(Guid accountId, string folderName, int? limit = null) => Task.FromResult(new List<MailMessageSummary>());
     public Task DeleteSummariesAsync(Guid accountId, string folderName, IEnumerable<uint> uniqueIds) => Task.CompletedTask;
     public Task UpdateIsReadAsync(Guid accountId, string folderName, uint uniqueId, bool isRead) => Task.CompletedTask;
@@ -83,6 +84,14 @@ sealed class StubLocalStoreService : ILocalStoreService
     public Task<MailMessageDetail?> LoadDetailAsync(Guid accountId, string folderName, uint uniqueId) => Task.FromResult<MailMessageDetail?>(null);
     public Task<uint> GetMaxUidAsync(Guid accountId, string folderName) => Task.FromResult(0u);
     public Task<HashSet<uint>> GetAllUidsAsync(Guid accountId, string folderName) => Task.FromResult(new HashSet<uint>());
+}
+
+sealed class StubContactService : IContactService
+{
+    public Task UpsertContactAsync(ContactModel contact) => Task.CompletedTask;
+    public Task<List<ContactModel>> SearchContactsAsync(string prefix, CancellationToken ct = default) => Task.FromResult(new List<ContactModel>());
+    public Task<List<ContactModel>> LoadAllContactsAsync() => Task.FromResult(new List<ContactModel>());
+    public Task DeleteContactAsync(int id) => Task.CompletedTask;
 }
 
 sealed class StubSyncService : ISyncService
@@ -96,15 +105,35 @@ sealed class StubSyncService : ISyncService
 
 sealed class StubCommandRegistry : ICommandRegistry
 {
-    public void Register(CommandDefinition command) { }
-    public IReadOnlyList<CommandDefinition> GetAll() => [];
-    public CommandDefinition? FindById(string id) => null;
-    public CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers) => null;
+    private readonly Dictionary<string, CommandDefinition> _commands = [];
+
+    public void Register(CommandDefinition command)
+        => _commands[command.Id] = command;
+
+    public IReadOnlyList<CommandDefinition> GetAll()
+        => _commands.Values.OrderBy(c => c.Category).ThenBy(c => c.Title).ToList();
+
+    public CommandDefinition? FindById(string id)
+        => _commands.TryGetValue(id, out var cmd) ? cmd : null;
+
+    public CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers)
+        => _commands.Values.FirstOrDefault(c => c.DefaultKey == key && c.DefaultModifiers == modifiers);
+
     public void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides) { }
+
+    // Test helpers
+    public void RegisterTestCommand(string id, string category, string title)
+    {
+        Register(new CommandDefinition(id, category, title, () => { }));
+    }
 }
 
 sealed class StubConfigService : IConfigService
 {
-    public ConfigModel Load() => new();
-    public void Save(ConfigModel config) { }
+    private ConfigModel _config = new();
+
+    public ConfigModel Load() => _config;
+
+    public void Save(ConfigModel config)
+        => _config = config;
 }

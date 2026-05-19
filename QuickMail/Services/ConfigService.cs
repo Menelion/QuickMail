@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using QuickMail.Helpers;
 using QuickMail.Models;
 
 namespace QuickMail.Services;
@@ -63,7 +64,7 @@ public class ConfigService : IConfigService
             {
                 var hotkeys = JsonSerializer.Deserialize<List<HotkeyBinding>>(File.ReadAllText(HotkeysFile));
                 if (hotkeys != null)
-                    _cached.CustomHotkeys = hotkeys;
+                    _cached.CustomHotkeys = ValidateAndMigrateHotkeys(hotkeys);
             }
             catch { /* malformed hotkeys.json — ignore and use defaults */ }
         }
@@ -82,6 +83,33 @@ public class ConfigService : IConfigService
             File.WriteAllText(HotkeysFile, JsonSerializer.Serialize(config.CustomHotkeys, JsonOptions), Encoding.UTF8);
         else if (File.Exists(HotkeysFile))
             File.Delete(HotkeysFile);
+    }
+
+    // ── Hotkey helpers ────────────────────────────────────────────────────────────
+
+    private static List<HotkeyBinding> ValidateAndMigrateHotkeys(List<HotkeyBinding> raw)
+    {
+        var result = new List<HotkeyBinding>(raw.Count);
+        var seen   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var h in raw)
+        {
+            // Skip entries with no command id or duplicate command ids
+            if (string.IsNullOrWhiteSpace(h.CommandId) || !seen.Add(h.CommandId))
+                continue;
+
+            // Migrate old integer format: if Gesture is absent but Key int is set, convert it
+            if (string.IsNullOrEmpty(h.Gesture) && h.Key != 0)
+                h.Gesture = GestureHelper.MigrateFromLegacyIntegers(h.Key, h.Modifiers) ?? string.Empty;
+
+            // Skip entries whose gesture string can't be parsed into a valid key combination
+            if (!GestureHelper.TryParse(h.Gesture, out _, out _))
+                continue;
+
+            result.Add(h);
+        }
+
+        return result;
     }
 
     // ── Parser ────────────────────────────────────────────────────────────────────
@@ -159,6 +187,9 @@ public class ConfigService : IConfigService
                         if (int.TryParse(value, out var maxConn))
                             config.MaxImapConnectionsPerAccount = Math.Clamp(maxConn, 1, 15);
                         break;
+                    case "initialsynccount":
+                        if (int.TryParse(value, out var isc)) config.InitialSyncCount = Math.Max(0, isc);
+                        break;
                 }
             }
             else if (section == "account" && acctGuid != Guid.Empty)
@@ -218,6 +249,11 @@ public class ConfigService : IConfigService
         sb.AppendLine("# Maximum simultaneous IMAP connections per account.");
         sb.AppendLine("# Background sync is limited below this value so foreground message opens keep reserved capacity.");
         sb.AppendLine("# Increase only if your provider allows it. Values: 1-15.");
+        sb.AppendLine();
+
+        sb.AppendLine($"InitialSyncCount = {config.InitialSyncCount}");
+        sb.AppendLine("# Number of messages to fetch on the initial sync of a folder.");
+        sb.AppendLine("# Default is 500. Set to 0 to fetch all messages in the folder.");
         sb.AppendLine();
 
         // ── [account:guid] overrides ─────────────────────────────────────────────

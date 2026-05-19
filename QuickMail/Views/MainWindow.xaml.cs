@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Globalization;
@@ -16,6 +17,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using MimeKit;
 using QuickMail.Models;
 using QuickMail.Services;
 using QuickMail.ViewModels;
@@ -102,6 +104,9 @@ public partial class MainWindow : Window
         HtmlRegexTimeout);
     private static readonly char[] AutoLinkTrailingPunct = ['.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\''];
 
+    private readonly IContactService _contactService;
+    private readonly IConfigService _configService;
+
     public MainWindow(
         MainViewModel vm,
         ISmtpService smtp,
@@ -109,7 +114,9 @@ public partial class MainWindow : Window
         ICredentialService credentials,
         IImapService imap,
         IOAuthService oauth,
-        ICommandRegistry registry)
+        ICommandRegistry registry,
+        IContactService contactService,
+        IConfigService configService)
     {
         _vm = vm;
         _smtp = smtp;
@@ -118,6 +125,8 @@ public partial class MainWindow : Window
         _imap = imap;
         _oauth = oauth;
         _registry = registry;
+        _contactService = contactService;
+        _configService = configService;
 
         InitializeComponent();
         DataContext = vm;
@@ -127,6 +136,9 @@ public partial class MainWindow : Window
         vm.OpenAccountSettingsRequested += OpenAccountManagerForAccount;
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
         vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
+        vm.ConfirmationRequested = (message, title) =>
+            MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            == MessageBoxResult.Yes;
 
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
@@ -284,6 +296,17 @@ public partial class MainWindow : Window
             id: "view.focusStatusBar", category: "View", title: "Focus Status Bar",
             execute: FocusStatusBar,
             defaultKey: Key.D9, defaultModifiers: ModifierKeys.Control));
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.grabAddresses", category: "Contacts", title: "Grab Addresses from Message",
+            execute: GrabAddressesFromMessage,
+            defaultKey: Key.G, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => _vm.IsMessageOpen));
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.openAddressBook", category: "Contacts", title: "Address Book",
+            execute: OpenAddressBook,
+            defaultKey: Key.B, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
 
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
@@ -507,6 +530,9 @@ public partial class MainWindow : Window
             _vm.StatusText = "Folders are still loading.";
             return;
         }
+        var acctMailFolders = _vm.Accounts
+            .Where(a => _vm.CachedFolders.ContainsKey(a.Id))
+            .ToDictionary(a => a.Id, a => MainViewModel.CreateAccountMailVirtualFolder(a));
         var picker = new FolderPickerWindow(
             _vm.Accounts,
             _vm.CachedFolders,
@@ -516,7 +542,8 @@ public partial class MainWindow : Window
                 MainViewModel.AllDraftsFolder,  MainViewModel.AllSentFolder,
                 MainViewModel.AllTrashFolder
             },
-            initialFolder: _vm.SelectedFolder) { Owner = this };
+            initialFolder: _vm.SelectedFolder,
+            accountMailFolders: acctMailFolders) { Owner = this };
         if (picker.ShowDialog() == true && picker.SelectedFolder is MailFolderModel folder)
         {
             // Resolve to the live instance from the folder list
@@ -636,37 +663,11 @@ public partial class MainWindow : Window
     // Recursively yields visible (expanded) FolderTreeNode items in depth-first order.
     private static System.Collections.Generic.IEnumerable<FolderTreeNode> GetVisibleTreeNodes(
         System.Collections.Generic.IEnumerable<FolderTreeNode> nodes)
-    {
-        foreach (var node in nodes)
-        {
-            yield return node;
-            if (node.IsExpanded && node.Children.Count > 0)
-                foreach (var child in GetVisibleTreeNodes(node.Children))
-                    yield return child;
-        }
-    }
+        => TreeViewFocusHelper.GetVisibleTreeNodes(nodes);
 
     // Walks the TreeView container hierarchy to find and select the target node.
     private static bool SelectTreeViewNode(System.Windows.Controls.ItemsControl parent, FolderTreeNode target, bool focusNode = true)
-    {
-        foreach (var item in parent.Items)
-        {
-            if (item is not FolderTreeNode node) continue;
-            if (parent.ItemContainerGenerator.ContainerFromItem(item) is not TreeViewItem container) continue;
-
-            if (node == target)
-            {
-                container.IsSelected = true;
-                container.BringIntoView();
-                if (focusNode)
-                    container.Focus();
-                return true;
-            }
-            if (node.IsExpanded && SelectTreeViewNode(container, target, focusNode))
-                return true;
-        }
-        return false;
-    }
+        => TreeViewFocusHelper.SelectTreeViewNode(parent, target, focusNode);
 
     private bool SyncFolderTreeSelection(bool focusNode)
     {
@@ -686,36 +687,10 @@ public partial class MainWindow : Window
     }
 
     private static FolderTreeNode? FindFolderTreeNode(System.Collections.Generic.IEnumerable<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FolderMatches(node.Folder, target))
-                return node;
-
-            var child = FindFolderTreeNode(node.Children, target);
-            if (child != null)
-                return child;
-        }
-
-        return null;
-    }
+        => TreeViewFocusHelper.FindFolderTreeNode(nodes, target);
 
     private static bool FindAndExpandFolderPath(System.Collections.Generic.IEnumerable<FolderTreeNode> nodes, MailFolderModel target)
-    {
-        foreach (var node in nodes)
-        {
-            if (node.Folder != null && FolderMatches(node.Folder, target))
-                return true;
-
-            if (FindAndExpandFolderPath(node.Children, target))
-            {
-                node.IsExpanded = true;
-                return true;
-            }
-        }
-
-        return false;
-    }
+        => TreeViewFocusHelper.FindAndExpandFolderPath(nodes, target);
 
     private static bool FolderMatches(MailFolderModel left, MailFolderModel right) =>
         left.AccountId == right.AccountId &&
@@ -817,33 +792,7 @@ public partial class MainWindow : Window
     }
 
     private static bool TryGetTypeAheadKeyText(KeyEventArgs e, out string text)
-    {
-        text = string.Empty;
-
-        if (Keyboard.Modifiers != ModifierKeys.None)
-            return false;
-
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is >= Key.A and <= Key.Z)
-        {
-            text = key.ToString();
-            return true;
-        }
-
-        if (key is >= Key.D0 and <= Key.D9)
-        {
-            text = ((char)('0' + (key - Key.D0))).ToString();
-            return true;
-        }
-
-        if (key is >= Key.NumPad0 and <= Key.NumPad9)
-        {
-            text = ((char)('0' + (key - Key.NumPad0))).ToString();
-            return true;
-        }
-
-        return false;
-    }
+        => TreeViewFocusHelper.TryGetTypeAheadKeyText(e, out text);
 
     private static string GetTypeAheadText(object? item) => item switch
     {
@@ -2265,7 +2214,7 @@ public partial class MainWindow : Window
     {
         var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap);
         composeVm.Seed(composeModel);
-        var window = new ComposeWindow(composeVm) { Owner = this };
+        var window = new ComposeWindow(composeVm, _contactService) { Owner = this };
         composeVm.CloseRequested += window.Close;
         window.Show();
     }
@@ -2371,6 +2320,87 @@ public partial class MainWindow : Window
             return [_vm.SelectedMessage];
 
         return [];
+    }
+
+    // ── Menu bar handlers ────────────────────────────────────────────────────
+
+    private void MenuAddressBook_Click(object sender, RoutedEventArgs e)
+        => OpenAddressBook();
+
+    private void OpenAddressBook()
+    {
+        var vm  = new AddressBookViewModel(_contactService);
+        var win = new AddressBookWindow(vm) { Owner = this };
+        win.ShowDialog();
+    }
+
+    private void MenuSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = new SettingsViewModel(_configService, _registry);
+        var dialog = new SettingsDialog(vm) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            var cfg = _configService.Load();
+            _vm.ApplySettings(cfg);
+            _registry.ApplyUserOverrides(cfg.CustomHotkeys);
+        }
+    }
+
+    private void MenuGrabAddresses_Click(object sender, RoutedEventArgs e)
+        => GrabAddressesFromMessage();
+
+    private void GrabAddressesFromMessage()
+    {
+        if (_vm.MessageDetail is not { } detail) return;
+
+        var list = new InternetAddressList();
+        AddressParser.AddAddresses(list, detail.From);
+        AddressParser.AddAddresses(list, detail.To);
+        AddressParser.AddAddresses(list, detail.Cc);
+
+        var addresses = list.OfType<MailboxAddress>()
+            .Select(a => (Name: a.Name ?? string.Empty, a.Address))
+            .DistinctBy(x => x.Address, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (addresses.Count == 0) return;
+
+        new GrabAddressesDialog(addresses, _contactService) { Owner = this }.ShowDialog();
+    }
+
+    private void MenuCommandPalette_Click(object sender, RoutedEventArgs e)
+        => OpenCommandPalette();
+
+    private void MenuFolderPicker_Click(object sender, RoutedEventArgs e)
+        => OpenFolderPicker();
+
+    private async void MenuMoveToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var messages = GetSelectedMessages();
+        if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.MoveSelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
+
+        if (_vm.IsConversationsView)
+            LandOnConversationAfterRebuild(0);
+        else if (_vm.IsFromView)
+            LandOnSenderGroupAfterRebuild(0);
+        else if (_vm.IsToView)
+            LandOnToGroupAfterRebuild(0);
+    }
+
+    private async void MenuCopyToFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var messages = GetSelectedMessages();
+        if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
+
+        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
+
+        await _vm.CopySelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
     }
 
     private async void MessageContextMenu_MoveToFolder_Click(object sender, RoutedEventArgs e)

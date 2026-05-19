@@ -1,65 +1,122 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
+
 # QuickMail
 
-WPF desktop email client (.NET 8, C#). Multi-account IMAP/SMTP with unified inbox, keyboard-centric UI.
+WPF desktop email client (.NET 8, C#). Multi-account IMAP/SMTP with unified inbox, keyboard-centric UI, local SQLite cache, and WebView2 reading pane.
 
 ## Build & Run
 
 ```bat
-build.bat          # build
-build.bat run      # build + launch
-build.bat publish  # self-contained win-x64
+build.bat            # debug build
+build.bat release    # release build
+build.bat run        # debug build + launch
+build.bat publish    # self-contained single-file win-x64 -> publish/QuickMail.exe
+build.bat smoke      # build + launch for 6s
 build.bat clean
 ```
 
-Or directly: `dotnet run --project QuickMail`
+Or directly: `dotnet run --project QuickMail`.
 
-## Project Layout
+## Tests
 
+xUnit 2.9.3 with `Xunit.StaFact` for WPF STA-thread tests.
+
+```bat
+dotnet test QuickMail.Tests/QuickMail.Tests.csproj -c Release
 ```
-QuickMail/QuickMail/
-├── App.xaml.cs              # DI composition root — wires all services/VMs
-├── Views/
-│   ├── MainWindow.xaml(.cs) # 3-pane layout; keyboard nav; WebView2 HTML rendering
-│   ├── ComposeWindow.xaml   # New/Reply/Forward dialog
-│   ├── AccountManagerDialog.xaml
-│   └── FolderPickerWindow.xaml  # Destination picker for move/copy/go-to-folder commands
-├── ViewModels/
-│   ├── MainViewModel.cs     # Master state (accounts, folders, messages, selection)
-│   ├── ComposeViewModel.cs  # Compose/reply/forward factories
-│   └── AccountManagerViewModel.cs
-├── Services/
-│   ├── ImapService.cs       # IMAP via MailKit; client pool keyed by account Guid
-│   ├── SmtpService.cs       # Send via MailKit
-│   ├── AccountService.cs    # Persist accounts to %APPDATA%\QuickMail\accounts.json
-│   ├── CredentialService.cs # Windows Credential Manager (no plaintext passwords)
-│   └── LogService.cs
-├── Models/
-│   ├── AccountModel.cs
-│   ├── MailMessageSummary.cs / MailMessageDetail.cs
-│   ├── MailFolderModel.cs
-│   └── ComposeModel.cs
-└── Styles/AccessibleStyles.xaml
-```
+
+Test types in `QuickMail.Tests/`:
+
+- **ViewModelConstructionTests**: VM instantiation with stub services.
+- **XamlParseTests**: XAML loads without `XamlParseException` (STA thread).
+- **LocalStoreServiceTests**: SQLite round-trip tests.
+- **SettingsViewModelTests**: hotkey/settings behavior.
+
+All tests use `StubServices.cs` stub implementations to avoid real network and credential calls.
+
+## Architecture
+
+### Service Layer
+
+**App.xaml.cs** is the manual DI composition root. Services are wired in `OnStartup` in dependency order:
+`AccountService` -> `CredentialService` -> `OAuthService` -> `ConfigService` -> `ImapService` -> `SmtpService` -> `LocalStoreService` -> `SyncService` -> `CommandRegistry` -> `MainViewModel` -> `MainWindow`. Pass `/debug` on startup to enable verbose file logging.
+
+**ImapService** uses MailKit and leases `ImapClient` instances from a bounded per-account pool. Foreground operations (message open, attachment download, mutating user actions) use foreground leases. Background work (sync, UID checks, polling, preview fetches, prefetch) uses background leases capped below the full pool so sync cannot starve interactive work. `MaxImapConnectionsPerAccount` defaults to 6 and is clamped to 1-15.
+
+**LocalStoreService** (SQLite via `Microsoft.Data.Sqlite`) caches messages in `%APPDATA%\QuickMail\mail.db` with WAL journaling. It stores `MessageSummary` rows for list panes and `MessageDetail` rows for body/attachment metadata, and handles column-addition migrations at startup.
+
+**SyncService** runs background IMAP sync. It raises `FolderSynced` and `MessagesRemoved` events; `MainViewModel` subscribes and merges new data into observable collections. UI is populated from the SQLite cache immediately, then background sync fills gaps.
+
+**OAuthService** wraps MSAL (`Microsoft.Identity.Client`) for Microsoft 365 / Outlook OAuth2. Token refresh is handled automatically; passwords for OAuth accounts are not stored in Credential Manager.
+
+### ViewModel State
+
+**MainViewModel** owns application state. Key patterns:
+
+- Cancellation token sources are scoped by activity: connect, folder load, message load, background sync, and prefetch.
+- Version stamps discard stale async results after folder/message/view changes.
+- View modes: Messages, Conversations, From, and To.
+- `OnFolderSynced` and `OnMessagesRemoved` must use key-based lookups, not repeated `Messages.Any()` / `FirstOrDefault()` scans over large All Mail views.
+
+### Virtual Folders
+
+Virtual folders use `FullName` sentinel strings starting with `\x00` to distinguish them from real IMAP folders.
+
+| FullName | Scope |
+|---|---|
+| `\x00AllMail` | Union of all non-excluded folders across all accounts |
+| `\x00AllInboxes` | Inbox only from each account |
+| `\x00AllDrafts` / `\x00AllSent` / `\x00AllTrash` | Global drafts/sent/trash |
+| `\x00AccountMail:{guid}` | All folders for one account |
+
+Trash, Junk, Sent, and Drafts are excluded from `\x00AllMail` via `folder.ExcludeFromAllMail`. When a virtual folder is selected, `MainViewModel` queries multiple real folders and merges results sorted newest-first.
 
 ## Key Conventions
 
-- **MVVM strictly**: views bind to VM properties/commands; no logic in code-behind except UI-only concerns (keyboard shortcuts, WebView2 navigation)
-- **IMAP client pool**: `ImapService` leases one `ImapClient` per active operation from a bounded per-account pool; never run two MailKit commands on the same client concurrently
-- **Foreground IMAP priority**: message detail and attachment downloads use foreground leases; background sync, UID checks, polling, and preview fetches use background leases capped below the full pool
-- **"All Mail" virtual folder**: identified by `FullName == "\x00AllMail"`; aggregates all accounts sorted newest-first
-- **Passwords**: never written to JSON; always round-trip through `CredentialService` (Windows Credential Manager)
-- **HTML sandbox**: WebView2 `NavigateToString` with strict CSP — no scripts, no object/embed, no frames
-- **Heavy HTML rendering**: build reading-pane HTML off the UI thread; large/table-heavy/data-image messages use simplified reader mode before `NavigateToString`
-- **Cancellation**: use separate token sources for connect, folder load, message body load, message mutations, and background sync so unrelated work does not cancel accidentally
-- **Pagination**: messages fetched in batches of 100; "Load More" appends next batch
-- **IMAP concurrency config**: `MaxImapConnectionsPerAccount` in `%APPDATA%\QuickMail\config.ini` defaults to 6 and is clamped to 1-15
-- **Folder shortcuts**: `Ctrl+2` and `Ctrl+Y` focus the main `FolderList` TreeView; do not route those shortcuts to `FolderPickerWindow`
-- **Folder picker**: `FolderPickerWindow` is a flat virtualized searchable list, not a `TreeView`; keep construction cheap for large Gmail label sets
+- **MVVM strictly**: no business logic in code-behind. Code-behind is limited to UI-only concerns such as focus, keyboard routing, dialogs requested by the VM, and WebView2 host behavior.
+- **Passwords**: never written to JSON; always use `CredentialService` (Windows Credential Manager). OAuth accounts bypass password storage.
+- **HTML sandbox**: WebView2 `NavigateToString` uses strict CSP. Scripts, objects, frames, forms, remote images, and active handlers are blocked or stripped.
+- **Heavy HTML rendering**: build reading-pane HTML off the UI thread; large/table-heavy messages use simplified reader mode before `NavigateToString`.
+- **Plain-text links**: render http/https/mailto text as links, and open clicked links in the default browser rather than inside the reading pane.
+- **Folder picker**: `FolderPickerWindow` is a flat virtualized list. It opens with focus on the folder list; `/` or `Ctrl+F` moves focus to search.
+- **Logging**: `LogService` appends to `%APPDATA%\QuickMail\quickmail.log`; `LogService.Debug()` writes only when `/debug` is present. Avoid logging credentials or unnecessary PII.
+- **Inclusive language in documentation and UI text**: Use verbs like "activate", "select", "choose", or "press" instead of "click".
+
+## MVVM Rules
+
+### ViewModels must not touch the View layer
+
+- No `MessageBox`, `Window`, or `System.Windows` UI types in a ViewModel.
+- Confirmation dialogs, alerts, and window navigation must be requested via events/callbacks that the View handles.
+- No direct references to controls in a ViewModel.
+- No `Dispatcher` calls in a ViewModel.
+
+### Code-behind must not duplicate bindings
+
+If a control is already bound two-way to a VM property, do not also set that control's value directly in code-behind. Update the VM and let the binding propagate.
+
+### Code-behind is allowed for UI-only concerns
+
+Permitted in `.xaml.cs`:
+
+- Keyboard shortcut routing.
+- Focus management.
+- WebView2 navigation and CSP setup.
+- Subscribing to VM events and showing dialogs.
+- Visual state transitions with no business logic.
+
+Not permitted in `.xaml.cs`:
+
+- Business logic, data transformation, or validation.
+- Direct service calls for domain work.
+- State decisions that belong in the VM.
 
 ## Keyboard Shortcuts (MainWindow)
 
 | Key | Action |
-|-----|--------|
+|---|---|
 | Ctrl+0 | Focus toolbar |
 | Ctrl+1 | Focus account list |
 | Ctrl+2 / Ctrl+Y | Focus folder tree |
@@ -73,9 +130,10 @@ QuickMail/QuickMail/
 ## Dependencies
 
 | Package | Version | Purpose |
-|---------|---------|---------|
+|---|---|---|
 | MailKit | 4.16.0 | IMAP + SMTP protocol |
 | CommunityToolkit.Mvvm | 8.4.2 | ObservableProperty, RelayCommand |
 | Microsoft.Data.Sqlite | 10.0.7 | Local message cache |
 | Microsoft.Web.WebView2 | 1.0.3912.50 | HTML email rendering |
+| Microsoft.Identity.Client | 4.84.0 | OAuth2 (Microsoft 365) |
 | AdysTech.CredentialManager | 3.1.0 | Windows Credential Manager |

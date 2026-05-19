@@ -80,10 +80,43 @@ public partial class MainViewModel : ObservableObject
         DisplayName = "All Trash"
     };
 
+    // Sentinel prefix for per-account "All Mail" virtual folders, e.g. "\x00AccountMail:{guid}".
+    internal const string AccountMailPrefix = "\x00AccountMail:";
+
+    /// <summary>
+    /// Creates the <see cref="MailFolderModel"/> that represents the "All Mail" virtual
+    /// folder for a specific account.  Used by both the main folder tree and the folder picker.
+    /// </summary>
+    public static MailFolderModel CreateAccountMailVirtualFolder(AccountModel account) => new()
+    {
+        FullName    = $"{AccountMailPrefix}{account.Id}",
+        DisplayName = $"All Mail \u2014 {account.AccountLabel}",
+        AccountId   = account.Id,
+    };
+
+    /// <summary>
+    /// Extracts the account GUID from a per-account "All Mail" sentinel,
+    /// e.g. "\x00AccountMail:f47ac10b-…" → true, id = f47ac10b-….
+    /// </summary>
+    private static bool TryGetAccountIdFromSentinel(string? fullName, out Guid accountId)
+    {
+        if (fullName != null &&
+            fullName.StartsWith(AccountMailPrefix, StringComparison.Ordinal) &&
+            Guid.TryParse(fullName.AsSpan(AccountMailPrefix.Length), out accountId))
+            return true;
+
+        accountId = Guid.Empty;
+        return false;
+    }
+
     private static bool IsVirtualFolder(MailFolderModel? folder)
     {
-        if (folder == null || folder.AccountId != Guid.Empty)
-            return false;
+        if (folder == null) return false;
+
+        // Per-account "All Mail" sentinels have a real AccountId, not Guid.Empty.
+        if (TryGetAccountIdFromSentinel(folder.FullName, out _)) return true;
+
+        if (folder.AccountId != Guid.Empty) return false;
 
         return string.Equals(folder.FullName, AllMailFolder.FullName, StringComparison.Ordinal) ||
                string.Equals(folder.FullName, AllInboxesFolder.FullName, StringComparison.Ordinal) ||
@@ -236,6 +269,28 @@ public partial class MainViewModel : ObservableObject
         Accounts = new ObservableCollection<AccountModel>(_accountService.LoadAccounts());
     }
 
+    internal void ApplySettings(ConfigModel cfg)
+    {
+        ShowMessageStatus = cfg.ShowMessageStatus;
+
+        var newMode = cfg.ViewMode switch
+        {
+            "conversations" => ViewMode.Conversations,
+            "from"          => ViewMode.From,
+            "to"            => ViewMode.To,
+            _               => ViewMode.Messages,
+        };
+        ViewMode = newMode;
+
+        _syncDays = cfg.SyncDays;
+        OnPropertyChanged(nameof(IsSyncDays7));
+        OnPropertyChanged(nameof(IsSyncDays30));
+        OnPropertyChanged(nameof(IsSyncDays180));
+        OnPropertyChanged(nameof(IsSyncDays365));
+        OnPropertyChanged(nameof(IsSyncDaysAll));
+        OnPropertyChanged(nameof(SyncRangeLabel));
+    }
+
     private void RegisterCommands(ICommandRegistry registry)
     {
         registry.Register(new CommandDefinition(
@@ -375,16 +430,33 @@ public partial class MainViewModel : ObservableObject
     // Inserts truly new messages into the live collection in sorted order.
     private void OnFolderSynced(IReadOnlyList<MailMessageSummary> incoming)
     {
-        if (SelectedFolder?.FullName != AllMailFolder.FullName) return;
+        var selected = SelectedFolder;
+        if (selected == null) return;
+
+        IEnumerable<MailMessageSummary> relevant;
+        if (selected.FullName == AllMailFolder.FullName)
+        {
+            // Global "All Mail" - accept messages from every account.
+            relevant = incoming;
+        }
+        else if (TryGetAccountIdFromSentinel(selected.FullName, out var watchedAccountId))
+        {
+            // Per-account "All Mail" - only messages belonging to that account.
+            relevant = incoming.Where(m => m.AccountId == watchedAccountId);
+        }
+        else
+        {
+            return;
+        }
 
         // Hash existing keys once so the dedupe check is O(1) per incoming item
-        // instead of an O(n) Messages.Any() scan per item — that scan would dominate
+        // instead of an O(n) Messages.Any() scan per item - that scan would dominate
         // a sync against a multi-thousand-message All Mail view and freeze the UI thread.
         var seen = new HashSet<(uint, Guid, string)>(Messages.Count);
         foreach (var e in Messages)
             seen.Add((e.UniqueId, e.AccountId, e.FolderName));
 
-        foreach (var msg in incoming.OrderByDescending(m => m.Date))
+        foreach (var msg in relevant.OrderByDescending(m => m.Date))
         {
             if (!seen.Add((msg.UniqueId, msg.AccountId, msg.FolderName)))
                 continue;
@@ -514,7 +586,7 @@ public partial class MainViewModel : ObservableObject
         var saved = SelectedFolder;
         var items = new List<MailFolderModel>
         {
-            AllInboxesFolder, AllMailFolder, AllDraftsFolder, AllSentFolder, AllTrashFolder
+            AllMailFolder, AllInboxesFolder, AllDraftsFolder, AllSentFolder, AllTrashFolder
         };
 
         foreach (var account in Accounts)
@@ -555,8 +627,8 @@ public partial class MainViewModel : ObservableObject
             Label      = "All Mail",
             IsExpanded = true,
         };
-        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllInboxesFolder, Label = AllInboxesFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllMailFolder,    Label = AllMailFolder.DisplayName });
+        allMailGroup.Children.Add(new FolderTreeNode { Folder = AllInboxesFolder, Label = AllInboxesFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllDraftsFolder,  Label = AllDraftsFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllSentFolder,    Label = AllSentFolder.DisplayName });
         allMailGroup.Children.Add(new FolderTreeNode { Folder = AllTrashFolder,   Label = AllTrashFolder.DisplayName });
@@ -567,6 +639,19 @@ public partial class MainViewModel : ObservableObject
             if (_cachedFolders.TryGetValue(account.Id, out var folders) && folders.Count > 0)
             {
                 var accountRoots = FolderTreeBuilder.Build(folders, account);
+
+                // Inject a per-account "All Mail" virtual folder as the first child
+                // of the account header node so users can see all mail for that account.
+                if (accountRoots.Count > 0)
+                {
+                    var accountMailFolder = CreateAccountMailVirtualFolder(account);
+                    accountRoots[0].Children.Insert(0, new FolderTreeNode
+                    {
+                        Folder = accountMailFolder,
+                        Label  = accountMailFolder.DisplayName,
+                    });
+                }
+
                 roots.AddRange(accountRoots);
             }
             else
@@ -1198,7 +1283,8 @@ public partial class MainViewModel : ObservableObject
                 else
                 {
                     // Incremental sync: UID-based is correct (fetch everything newer than last seen).
-                    msgs = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, ct);
+                    var initialCount = _configService.Load().InitialSyncCount;
+                    msgs = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, maxUid, initialCount, ct);
                 }
                 result.AddRange(msgs);
             }
@@ -1219,7 +1305,91 @@ public partial class MainViewModel : ObservableObject
         if (folder.FullName == AllDraftsFolder.FullName)  return FetchVirtualFolderAsync(SpecialFolderKind.Drafts, "All Drafts");
         if (folder.FullName == AllSentFolder.FullName)    return FetchVirtualFolderAsync(SpecialFolderKind.Sent,   "All Sent");
         if (folder.FullName == AllTrashFolder.FullName)   return FetchVirtualFolderAsync(SpecialFolderKind.Trash,  "All Trash");
+        if (TryGetAccountIdFromSentinel(folder.FullName, out var accountId)) return FetchAccountAllMailAsync(accountId);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Loads all cached messages for a single account (Phase 1), then incrementally
+    /// fetches new messages from every non-excluded IMAP folder (Phase 2).
+    /// Mirrors <see cref="FetchAllMailAsync"/> but scoped to one account.
+    /// </summary>
+    private async Task FetchAccountAllMailAsync(Guid accountId)
+    {
+        var account = Accounts.FirstOrDefault(a => a.Id == accountId);
+        if (account == null) return;
+
+        var expectedFolder = SelectedFolder;
+        var loadVersion = Interlocked.Increment(ref _folderLoadVersion);
+        Messages.Clear();
+        StatusText = $"Loading {account.AccountLabel}…";
+        IsBusy = true;
+
+        _folderCts?.Cancel();
+        _folderCts = new CancellationTokenSource();
+        var ct = _folderCts.Token;
+
+        try
+        {
+            // ── Phase 1: show cache immediately ────────────────────────────────────
+            var cached = await _localStore.LoadAllSummariesAsync(accountId);
+            if (!IsCurrentFolderLoad(loadVersion, expectedFolder)) return;
+
+            Messages = new ObservableCollection<MailMessageSummary>(cached);
+            StatusText = cached.Count > 0
+                ? $"{cached.Count} messages (checking for new…)"
+                : "Checking for new messages…";
+            IsBusy = false;
+
+            // ── Phase 2: incremental IMAP update (new messages only, per-folder) ───
+            ct.ThrowIfCancellationRequested();
+            IsBusy = true;
+            var newMessages = await FetchAccountNewMessagesAsync(account, ct);
+            if (!IsCurrentFolderLoad(loadVersion, expectedFolder)) return;
+
+            foreach (var msg in newMessages.OrderByDescending(m => m.Date))
+            {
+                if (!IsCurrentFolderLoad(loadVersion, expectedFolder)) return;
+                if (Messages.Any(e => e.UniqueId   == msg.UniqueId &&
+                                      e.AccountId  == msg.AccountId &&
+                                      e.FolderName == msg.FolderName))
+                    continue;
+                InsertMessageSorted(msg);
+            }
+
+            if (!IsCurrentFolderLoad(loadVersion, expectedFolder)) return;
+
+            if (newMessages.Count > 0)
+                _ = _localStore.UpsertSummariesAsync(newMessages);
+
+            var count = Messages.Count;
+            StatusText = count == 0
+                ? $"No messages in {account.AccountLabel}."
+                : $"{count} messages in {account.AccountLabel}.";
+
+            if (ViewMode == ViewMode.Conversations)
+                ScheduleConversationRebuild();
+            else if (ViewMode == ViewMode.From)
+                ScheduleSenderGroupRebuild();
+            else if (ViewMode == ViewMode.To)
+                ScheduleToGroupRebuild();
+        }
+        catch (OperationCanceledException)
+        {
+            if (loadVersion == _folderLoadVersion)
+                StatusText = $"{account.AccountLabel} load cancelled.";
+        }
+        catch (Exception ex)
+        {
+            if (loadVersion == _folderLoadVersion)
+                StatusText = $"Failed to load {account.AccountLabel}: {ex.Message}";
+            LogService.Log("FetchAccountAllMail", ex);
+        }
+        finally
+        {
+            if (loadVersion == _folderLoadVersion)
+                IsBusy = false;
+        }
     }
 
     private async Task FetchVirtualFolderAsync(SpecialFolderKind kind, string displayName)
@@ -1686,21 +1856,27 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageAccounts() => ManageAccountsRequested?.Invoke();
 
+    [RelayCommand]
+    private void Exit() => Application.Current.Shutdown();
+
     // ── Account context menu commands ─────────────────────────────────────────
 
     public event Action<AccountModel>? OpenAccountSettingsRequested;
+
+    /// <summary>
+    /// Set by the View to show a Yes/No confirmation dialog.
+    /// Parameters: message, title. Returns true when the user confirms.
+    /// </summary>
+    public Func<string, string, bool>? ConfirmationRequested { get; set; }
 
     [RelayCommand]
     private void DeleteAccount(AccountModel? account)
     {
         if (account == null) return;
 
-        var result = MessageBox.Show(
+        if (ConfirmationRequested?.Invoke(
             $"Remove the account '{account.AccountLabel}'? This only removes it from QuickMail — your mail on the server is not affected.",
-            "Remove Account",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            "Remove Account") != true) return;
 
         _credentials.DeletePassword(account.Id);
         Accounts.Remove(account);
@@ -1827,12 +2003,9 @@ public partial class MainViewModel : ObservableObject
     {
         if (node.Folder == null || node.IsHeader) return;
 
-        var result = MessageBox.Show(
+        if (ConfirmationRequested?.Invoke(
             $"Delete the folder '{node.Label}' and move all its messages to Trash?",
-            "Delete Folder",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+            "Delete Folder") != true) return;
 
         StatusText = $"Deleting folder '{node.Label}'…";
         IsBusy     = true;
@@ -2210,7 +2383,13 @@ public partial class MainViewModel : ObservableObject
                         MessageDetail.UniqueId, att.PartSpecifier, cts.Token);
 
                 if (att.Content != null)
-                    await File.WriteAllBytesAsync(Path.Combine(folder, att.FileName), att.Content);
+                {
+                    // Strip directory components from the server-supplied filename to
+                    // prevent path traversal writing outside the chosen save folder.
+                    var safeFileName = Path.GetFileName(att.FileName);
+                    if (string.IsNullOrEmpty(safeFileName)) safeFileName = "attachment";
+                    await File.WriteAllBytesAsync(Path.Combine(folder, safeFileName), att.Content);
+                }
             }
             StatusText = "All attachments saved.";
         }
@@ -2248,20 +2427,22 @@ public partial class MainViewModel : ObservableObject
             IsBusy = false;
         }
 
-        var ext = Path.GetExtension(att.FileName).ToLowerInvariant();
+        // Strip any directory components from the server-supplied filename to prevent
+        // path traversal (e.g. a crafted name like "../../Startup/evil.exe").
+        var safeFileName = Path.GetFileName(att.FileName);
+        if (string.IsNullOrEmpty(safeFileName)) safeFileName = "attachment";
+
+        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
         if (DangerousExtensions.Contains(ext))
         {
-            var result = MessageBox.Show(
-                $"'{att.FileName}' is an executable file type. Opening it could be dangerous. Continue?",
-                "Security Warning",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes) return;
+            if (ConfirmationRequested?.Invoke(
+                $"'{safeFileName}' is an executable file type. Opening it could be dangerous. Continue?",
+                "Security Warning") != true) return;
         }
 
         var tempDir = Path.Combine(Path.GetTempPath(), "QuickMail");
         Directory.CreateDirectory(tempDir);
-        var tempPath = Path.Combine(tempDir, att.FileName);
+        var tempPath = Path.Combine(tempDir, safeFileName);
         await File.WriteAllBytesAsync(tempPath, att.Content!);
         Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
     }

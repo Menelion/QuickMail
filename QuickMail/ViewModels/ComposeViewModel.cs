@@ -317,8 +317,12 @@ public partial class ComposeViewModel : ObservableObject
         var model = CreateReply(detail, accountId);
 
         // Merge original To + Cc, excluding the sender's own address, into the new Cc.
-        var recipients = InternetAddressList.Parse(detail.To ?? string.Empty)
-            .Concat(InternetAddressList.Parse(detail.Cc ?? string.Empty))
+        // Use TryParse so that empty or malformed address strings (e.g. when Cc is absent)
+        // return an empty list rather than throwing MimeKit.ParseException.
+        InternetAddressList.TryParse(detail.To ?? string.Empty, out var toList);
+        InternetAddressList.TryParse(detail.Cc ?? string.Empty, out var ccList);
+        var recipients = (toList ?? [])
+            .Concat(ccList ?? [])
             .OfType<MailboxAddress>()
             .Where(a => !string.Equals(a.Address, ownAddress, StringComparison.OrdinalIgnoreCase))
             .Distinct()

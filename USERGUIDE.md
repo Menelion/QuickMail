@@ -7,11 +7,18 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 ## Contents
 
 - [Layout](#layout)
+- [Menu bar](#menu-bar)
 - [Connecting accounts](#connecting-accounts)
 - [Managing accounts](#managing-accounts)
 - [Reading mail](#reading-mail)
 - [Performance and concurrency](#performance-and-concurrency)
+- [Virtual folders](#virtual-folders)
 - [Conversation view](#conversation-view)
+- [From view (by sender)](#from-view-by-sender)
+- [To view (by recipient)](#to-view-by-recipient)
+- [Address book](#address-book)
+- [Command palette](#command-palette)
+- [Context menus](#context-menus)
 - [Composing messages](#composing-messages)
 - [Drafts](#drafts)
 - [Deleting messages](#deleting-messages)
@@ -34,6 +41,21 @@ QuickMail uses a three-pane layout:
 | **Reading pane** | Right / bottom | The full body of the selected message, rendered as HTML when available |
 
 A toolbar at the top provides buttons for the most common actions.
+
+---
+
+## Menu bar
+
+The menu bar at the top of the window provides access to all major features, organized by task:
+
+| Menu | Contains |
+|------|----------|
+| **File** | New Message, Manage Accounts, Address Book, Exit |
+| **Message** | Reply, Reply All, Forward, Delete, Empty Trash, Move/Copy to Folder, Grab Addresses |
+| **View** | Refresh, View Mode (Messages / Conversations / By Sender / By Recipient), Sync Range (7 Days / 30 Days / 6 Months / 1 Year / All Mail), Go to Folder, Command Palette |
+| **Help** | User Guide |
+
+All menu items show their keyboard shortcuts for quick reference. You can also press **Alt** or **F10** to activate the menu bar if you prefer keyboard-only navigation.
 
 ---
 
@@ -121,11 +143,11 @@ The message list shows the 100 most recent messages by default. Activate **Load 
 
 At the top of the folder list is an **All Mail** entry. Selecting it shows messages from all folders across all your accounts, sorted newest-first. This is a virtual view — no messages are moved or copied.
 
+For more about virtual folders, including the per-account All Mail folders, see [Virtual folders](#virtual-folders) below.
+
 ### Selecting multiple messages
 
 Hold **Shift** and press **Up** or **Down** in the message list to extend your selection. You can then act on all selected messages at once (for example, pressing **Delete** removes them all).
-
----
 
 ## Performance and concurrency
 
@@ -134,6 +156,22 @@ QuickMail uses a small IMAP connection pool for each account. Message opening, b
 By default, QuickMail uses up to **6 simultaneous IMAP connections per account**. Foreground work such as opening a message or downloading an attachment gets reserved capacity; background sync and preview fetching are limited below the full pool. Advanced users can change the limit in `%AppData%\QuickMail\config.ini` with `MaxImapConnectionsPerAccount`; changes take effect after restarting QuickMail.
 
 Some marketing or financial messages contain very large HTML layouts. QuickMail may show those messages in a simplified reader mode so the reading pane remains responsive.
+
+---
+
+## Virtual folders
+
+The top of the folder list contains a group of **virtual folders** that aggregate messages across all your accounts. They are read-only views — no mail is moved or copied.
+
+| Virtual folder | What it shows |
+|----------------|---------------|
+| **All Mail** | Every non-excluded message across all accounts and folders, sorted newest-first |
+| **All Inboxes** | Inbox messages from every account |
+| **All Drafts** | Draft messages from every account |
+| **All Sent** | Sent messages from every account |
+| **All Trash** | Deleted messages from every account |
+
+Each account also has its own **All Mail — {Account Name}** entry directly under that account in the folder tree. Selecting it shows all mail for that account only, without mixing in messages from other accounts. These per-account folders also appear in the **Go to Folder** picker.
 
 ---
 
@@ -153,12 +191,101 @@ When conversation view is on:
 
 ---
 
+## From view (by sender)
+
+From view groups messages by the sender's name and address, so you can see at a glance who has written to you and how many messages you have from each person.
+
+**Toggle From view:**
+- Open the **View** menu and choose **From**, or
+- Press **Ctrl+Shift+V** to cycle through view modes.
+
+When From view is on:
+
+- Each row in the message list represents a sender group rather than a single message.
+- Select the arrow next to a group (or press **Right** arrow) to expand it and read individual messages inside.
+- Press **Delete** on a group to delete all messages from that sender at once.
+
+---
+
+## To view (by recipient)
+
+To view groups messages by the recipient address. This is useful for folders that receive mail sent to several different addresses — for example, a shared mailbox or an alias.
+
+Toggling and navigation work the same way as [From view](#from-view-by-sender). Press **Ctrl+Shift+V** to cycle between Messages, From, To, and Conversations.
+
+---
+
+## Address book
+
+QuickMail includes a built-in address book for storing email addresses and display names. Contacts can be added manually or imported directly from your messages. The address book is stored as a human-readable JSON file in your AppData folder alongside other QuickMail settings.
+
+### Managing the address book
+
+- Open **File → Address Book** (or press `Ctrl+Shift+B`) to view, search, and manage all your saved contacts.
+- Search for a contact by typing in the search field — matches appear for both name and email address.
+- Click on any contact to view its details in the edit fields below.
+- To add a contact manually, type in the **Name** and **Email** fields and press **Enter** or click **Add**.
+- To edit a contact's name, select it in the list, edit the **Name** field, and click **Add** to save the changes.
+- To delete a contact, select it in the list and click **Delete** (or press **Delete**).
+
+### Grab addresses from a message
+
+While reading a message, you can quickly save the sender, recipients, and reply-to addresses to your address book:
+
+- Open **Message → Grab Addresses from Message** (or press `Ctrl+Shift+G`).
+- A dialog appears showing all addresses found in the message (From, To, Cc).
+- The focus starts on the first address in the list so you can immediately interact with the checkboxes.
+- All addresses are checked by default. Use **Space** or **Up/Down** arrows to navigate and toggle selections.
+- Click **Save** to add the selected addresses to your address book.
+
+### Autocomplete in compose
+
+When composing a message, as you type in the **To**, **Cc**, or **Bcc** fields, matching contacts from your address book appear in a dropdown suggestion list:
+
+- Type at least one character to see suggestions.
+- Press **Down arrow** to move into the suggestion list.
+- Use **Up/Down** arrows to select a contact, then press **Enter** or **Tab** to insert it.
+- Press **Escape** to dismiss the suggestions without selecting.
+- Press **Up arrow** on the first item to return focus to the text field.
+
+Contacts are sorted by how recently they were used, so your most-contacted people appear first.
+
+**Address separator:** When inserting an address from the address book, QuickMail detects which separator (comma or semicolon) you've been using in the field and inserts the new address with the same separator. Both formats are supported: `address1, address2` or `address1; address2`.
+
+---
+
+## Command palette
+
+Press **Ctrl+Shift+P** to open the command palette. Type any part of a command name and press **Enter** (or click) to run it — no need to remember every shortcut.
+
+- All actions are searchable, including folder navigation, compose, delete, view switching, and account management.
+- Press **Escape** to close without running a command. Focus returns to where it was before.
+
+---
+
+## Context menus
+
+Right-click (or press **Shift+F10**) anywhere in the message list, folder tree, sender groups, or conversation groups to open a context menu with relevant actions.
+
+Common actions available through context menus:
+
+- Reply, Reply All, Forward
+- Delete
+- Mark as Read / Mark as Unread
+- Move to Folder
+
+---
+
 ## Composing messages
 
 ### New message
 
 - Press `Ctrl+N`, or activate **New** in the toolbar.
 - The compose window opens. If you have more than one account, the **From** field lets you choose which account to send from.
+
+### Spell check
+
+The message body has spell checking enabled. Misspelled words are underlined as you type. Right-click a word (or press **Shift+F10**) for suggested corrections.
 
 ### Reply, Reply All, and Forward
 
@@ -290,10 +417,15 @@ A security warning is shown before opening executable file types.
 | Ctrl+Shift+R | Reply All |
 | Ctrl+F | Forward |
 | Delete | Delete selected message(s) |
+| Ctrl+Shift+V | Cycle view mode (Messages / From / To / Conversations) |
 | Ctrl+Shift+C | Toggle conversation view |
+| Ctrl+Shift+P | Open command palette |
 | Ctrl+M | Load more messages |
 | Ctrl+Shift+E | Empty Trash |
+| Ctrl+Shift+B | Open Address Book |
+| Ctrl+Shift+G | Grab addresses from open message |
 | Shift+Up / Shift+Down | Extend message selection |
+| Shift+F10 | Open context menu for focused item |
 | Escape | Close reading pane |
 
 ### Compose window
@@ -319,6 +451,7 @@ QuickMail keeps all its files under `%AppData%\QuickMail\` (typically `C:\Users\
 | File / folder | Contents |
 |---------------|----------|
 | `accounts.json` | Account configuration — server addresses, ports, display names. No passwords. |
+| `contacts.json` | Address book contacts — display names and email addresses (human-readable JSON) |
 | `config.ini` | Optional settings file — see [Configuration file](#configuration-file) below. |
 | `mail.db` | Local message cache (SQLite database) |
 | `msal.cache` | Encrypted OAuth2 token cache (Microsoft accounts only) |
@@ -339,6 +472,8 @@ Lines starting with `#` are comments and are ignored. The file uses a simple `ke
 | `PreviewLines` | `0`–`5` | `3` | Number of body-preview lines shown under each subject in the message list. Set to `0` to hide previews entirely. |
 | `ShowMessageStatus` | `true` / `false` | `true` | Show or hide the read/unread status indicator column in the message list. |
 | `ConversationView` | `true` / `false` | `false` | Start with conversation threading on. |
+| `SyncDays` | integer >= `0` | `30` | How many days back to look for messages when syncing. Set to `0` to fetch all messages (may be slow on large mailboxes). |
+| `InitialSyncCount` | integer >= `0` | `500` | Maximum number of messages fetched per folder on the very first sync of a newly connected account. |
 | `MaxImapConnectionsPerAccount` | `1`–`15` | `6` | Maximum simultaneous IMAP connections QuickMail may open for each account. Background work is capped below this value so opening messages keeps reserved capacity. Higher values can make large accounts more responsive, but only raise this if your mail provider allows it. |
 
 ### `[account:<guid>]` overrides

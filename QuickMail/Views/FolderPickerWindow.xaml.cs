@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Threading;
 using QuickMail.Models;
 
 namespace QuickMail.Views;
@@ -28,7 +29,8 @@ public partial class FolderPickerWindow : Window
         IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders,
         IEnumerable<MailFolderModel>? virtualFolders = null,
         string title = "Go to Folder",
-        MailFolderModel? initialFolder = null)
+        MailFolderModel? initialFolder = null,
+        IReadOnlyDictionary<Guid, MailFolderModel>? accountMailFolders = null)
     {
         _initialFolder = initialFolder;
 
@@ -38,13 +40,23 @@ public partial class FolderPickerWindow : Window
         if (virtualFolders != null)
         {
             foreach (var vf in virtualFolders)
-                _items.Add(new FolderPickerItem(vf, null, vf.DisplayName, "All Mail"));
+                _items.Add(new FolderPickerItem(vf, null, vf.DisplayName, vf.DisplayName));
         }
 
         foreach (var account in accounts)
         {
             if (!cachedFolders.TryGetValue(account.Id, out var folders) || folders.Count == 0)
                 continue;
+
+            if (accountMailFolders != null &&
+                accountMailFolders.TryGetValue(account.Id, out var accountMailFolder))
+            {
+                _items.Add(new FolderPickerItem(
+                    accountMailFolder,
+                    account,
+                    accountMailFolder.DisplayName,
+                    $"{account.DisplayName} - {accountMailFolder.DisplayName}"));
+            }
 
             foreach (var folder in folders
                          .Where(f => !f.IsHeader)
@@ -68,9 +80,10 @@ public partial class FolderPickerWindow : Window
 
         Loaded += (_, _) =>
         {
-            SearchBox.Focus();
             if (!TrySelectInitialFolder())
                 SelectFirstVisibleItem();
+
+            Dispatcher.InvokeAsync(FocusSelectedFolder, DispatcherPriority.Input);
         };
     }
 
@@ -118,13 +131,19 @@ public partial class FolderPickerWindow : Window
                 break;
             case Key.Down:
                 e.Handled = true;
-                FolderListBox.Focus();
-                if (FolderListBox.SelectedIndex < 0)
-                    SelectFirstVisibleItem();
+                FocusSelectedFolder();
                 break;
             case Key.Escape:
                 e.Handled = true;
-                DialogResult = false;
+                if (!string.IsNullOrEmpty(SearchBox.Text))
+                {
+                    SearchBox.Clear();
+                    FocusSelectedFolder();
+                }
+                else
+                {
+                    DialogResult = false;
+                }
                 break;
         }
     }
@@ -135,7 +154,28 @@ public partial class FolderPickerWindow : Window
         {
             e.Handled = true;
             Commit();
+            return;
         }
+
+        if (IsSearchGesture(e))
+        {
+            e.Handled = true;
+            BeginSearch();
+        }
+    }
+
+    private static bool IsSearchGesture(KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        return (key == Key.Oem2 || key == Key.Divide) && Keyboard.Modifiers == ModifierKeys.None
+            || key == Key.F && Keyboard.Modifiers == ModifierKeys.Control;
+    }
+
+    private void BeginSearch()
+    {
+        SearchBox.Clear();
+        SearchBox.Focus();
+        Keyboard.Focus(SearchBox);
     }
 
     private void FolderListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e) => Commit();
@@ -148,6 +188,17 @@ public partial class FolderPickerWindow : Window
         FolderListBox.SelectedItem = first;
         if (first != null)
             FolderListBox.ScrollIntoView(first);
+    }
+
+    private void FocusSelectedFolder()
+    {
+        if (FolderListBox.SelectedIndex < 0)
+            SelectFirstVisibleItem();
+
+        if (FolderListBox.SelectedItem is { } item)
+            FolderListBox.ScrollIntoView(item);
+
+        FolderListBox.Focus();
     }
 
     private bool TrySelectInitialFolder()
