@@ -10,12 +10,14 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 - [Menu bar](#menu-bar)
 - [Connecting accounts](#connecting-accounts)
 - [Managing accounts](#managing-accounts)
+- [Settings](#settings)
 - [Reading mail](#reading-mail)
 - [Performance and concurrency](#performance-and-concurrency)
 - [Virtual folders](#virtual-folders)
 - [Conversation view](#conversation-view)
 - [From view (by sender)](#from-view-by-sender)
 - [To view (by recipient)](#to-view-by-recipient)
+- [Filtering messages](#filtering-messages)
 - [Address book](#address-book)
 - [Command palette](#command-palette)
 - [Context menus](#context-menus)
@@ -50,9 +52,9 @@ The menu bar at the top of the window provides access to all major features, org
 
 | Menu | Contains |
 |------|----------|
-| **File** | New Message, Manage Accounts, Address Book, Exit |
+| **File** | New Message, Manage Accounts, Address Book, Settings (`Ctrl+,`), Exit |
 | **Message** | Reply, Reply All, Forward, Delete, Empty Trash, Move/Copy to Folder, Grab Addresses |
-| **View** | Refresh, View Mode (Messages / Conversations / By Sender / By Recipient), Sync Range (7 Days / 30 Days / 6 Months / 1 Year / All Mail), Go to Folder, Search Folders, Command Palette |
+| **View** | Refresh, View Mode (Messages / Conversations / By Sender / By Recipient), Filter (All / Unread / Read / With Attachments / Replied / Forwarded), Sync Range (7 Days / 30 Days / 6 Months / 1 Year / All Mail), Go to Folder, Search Folders, Command Palette |
 | **Help** | User Guide |
 
 All menu items show their keyboard shortcuts for quick reference. You can also press **Alt** or **F10** to activate the menu bar if you prefer keyboard-only navigation.
@@ -105,8 +107,36 @@ Your Microsoft password is never seen or stored by QuickMail — only an encrypt
 
 - Open **Accounts** from the toolbar to see all configured accounts.
 - Select an account in the list to edit its settings.
+- The default account is marked with **— default** in the account list.
 - Activate **Remove Account** to delete an account. You will be asked to confirm before anything is removed.
 - Changes take effect after you activate **Save** and close the dialog.
+
+---
+
+## Settings
+
+Open **File → Settings** (or press `Ctrl+,`) to change application-wide preferences and keyboard shortcuts.
+
+### General tab
+
+| Setting | What it controls |
+|---------|------------------|
+| **View Mode** | Default message grouping when the app starts (Messages, Conversations, By Sender, By Recipient) |
+| **Sync Days** | How many days back to fetch messages on sync. `0` means all mail. |
+| **Preview Lines** | Number of body-preview lines shown under each subject in the message list (0–5). |
+| **Show Message Status** | Whether the read/unread/replied/forwarded status indicator appears in the message list. |
+| **Initial Sync Count** | Maximum messages fetched per folder on the first sync of a newly connected account. |
+
+### Keyboard Shortcuts tab
+
+Assign custom key bindings to any registered command:
+
+1. Select a command from the list.
+2. Activate **Set…** to open the key-capture dialog, then press any `Ctrl`, `Shift`, or `Alt` combination.
+3. If the combination is already in use, a conflict dialog identifies the clash so you can choose another key or cancel.
+4. Activate **Restore** to remove a custom binding and return to the command's default.
+
+Custom bindings are saved to `hotkeys.json` in your AppData folder and apply immediately without restarting.
 
 ---
 
@@ -216,6 +246,32 @@ When From view is on:
 To view groups messages by the recipient address. This is useful for folders that receive mail sent to several different addresses — for example, a shared mailbox or an alias.
 
 Toggling and navigation work the same way as [From view](#from-view-by-sender). Press **Ctrl+Shift+V** to cycle between Messages, From, To, and Conversations.
+
+---
+
+## Filtering messages
+
+The **View → Filter** submenu (and the command palette) let you narrow the message list to a specific subset without navigating away from the current folder.
+
+| Filter | Shows |
+|--------|-------|
+| **Show All** | All messages (no filter active) |
+| **Unread** | Messages that have not been read, replied to, or forwarded |
+| **Read** | Messages that have been marked as read |
+| **With Attachments** | Messages that have at least one attachment |
+| **Replied** | Messages you have replied to |
+| **Forwarded** | Messages you have forwarded |
+
+**Applying a filter:**
+- Open **View → Filter** and choose an option, or
+- Open the command palette (`Ctrl+Shift+P`) and type the filter name (e.g. "unread").
+
+**Clearing a filter:**
+- Open **View → Filter → Show All**, or run **Show All Messages** from the command palette.
+
+The active filter is shown in the window title bar. Navigating to a different folder automatically clears the filter.
+
+Filter commands can be assigned custom keyboard shortcuts in **File → Settings → Keyboard Shortcuts**.
 
 ---
 
@@ -425,6 +481,7 @@ A security warning is shown before opening executable file types.
 | Ctrl+Shift+C | Toggle conversation view |
 | Ctrl+Shift+F | Search folders |
 | Ctrl+Shift+P | Open command palette |
+| Ctrl+, | Open Settings |
 | Ctrl+M | Load more messages |
 | Ctrl+Shift+E | Empty Trash |
 | Ctrl+Shift+B | Open Address Book |
