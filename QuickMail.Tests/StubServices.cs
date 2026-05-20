@@ -33,6 +33,7 @@ sealed class StubImapService : IImapService
     public Task<int> PollAsync(Guid accountId, string folderName, CancellationToken ct = default) => Task.FromResult(0);
     public Task<string?> FindDraftsFolderNameAsync(Guid accountId, CancellationToken ct = default) => Task.FromResult<string?>(null);
     public Task<uint> AppendDraftAsync(Guid accountId, ComposeModel draft, uint? replaceUid, CancellationToken ct = default) => Task.FromResult(0u);
+    public Task AppendToSentAsync(Guid accountId, ComposeModel sent, CancellationToken ct = default) => Task.CompletedTask;
     public Task<byte[]> DownloadAttachmentAsync(Guid accountId, string folderName, uint uid, string partSpecifier, CancellationToken ct = default) => Task.FromResult(Array.Empty<byte>());
     public Task CopyMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default) => Task.CompletedTask;
     public Task MoveMessagesAsync(Guid accountId, string folderName, IList<uint> uids, string destinationFolder, CancellationToken ct = default) => Task.CompletedTask;
@@ -95,6 +96,12 @@ sealed class StubContactService : IContactService
     public Task DeleteContactAsync(int id) => Task.CompletedTask;
 }
 
+sealed class StubViewService : IViewService
+{
+    public List<SavedView> Load() => [];
+    public void Save(List<SavedView> views) { }
+}
+
 sealed class StubSyncService : ISyncService
 {
 #pragma warning disable CS0067 // events required by interface but never raised in stubs
@@ -120,6 +127,7 @@ sealed class StubCommandRegistry : ICommandRegistry
     public CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers)
         => _commands.Values.FirstOrDefault(c => c.DefaultKey == key && c.DefaultModifiers == modifiers);
 
+    public void Unregister(string id) => _commands.Remove(id);
     public void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides) { }
 
     // Test helpers

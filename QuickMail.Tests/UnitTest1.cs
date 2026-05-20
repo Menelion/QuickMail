@@ -37,7 +37,7 @@ public class ViewModelConstructionTests
     public void MainViewModel_ConstructsWithoutException()
     {
         var (imap, accounts, creds, store, sync, config, registry, _) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry);
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
         Assert.NotNull(vm);
     }
 
@@ -45,7 +45,7 @@ public class ViewModelConstructionTests
     public void MainViewModel_LoadAccountList_DoesNotThrow()
     {
         var (imap, accounts, creds, store, sync, config, registry, _) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry);
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
         vm.LoadAccountList(); // must not throw
     }
 
@@ -115,10 +115,10 @@ public class XamlParseTests
     {
         EnsureApplication();
         var (imap, accounts, creds, store, sync, config, registry, contacts) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry);
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
         // Constructing MainWindow triggers InitializeComponent() which is the real XAML parse.
         var window = new MainWindow(vm, new StubSmtpService(), accounts, creds, imap,
-            new StubOAuthService(), registry, contacts, config, store);
+            new StubOAuthService(), registry, contacts, config, store, new StubViewService());
         Assert.NotNull(window);
         window.Close();
     }
