@@ -108,9 +108,9 @@
                          AutomationProperties.LabeledBy="{Binding ElementName=LblSmtpPort}"
                          TabIndex="8"/>
 
-                <CheckBox Content="Use SSL / _STARTTLS"
+                <CheckBox Content="Implicit _SSL on connect (port 465; uncheck for STARTTLS on port 587)"
                           IsChecked="{Binding SmtpUseSsl}"
-                          AutomationProperties.Name="SMTP use SSL or STARTTLS"
+                          AutomationProperties.Name="SMTP implicit SSL on connect, port 465. Uncheck to use STARTTLS on port 587."
                           Margin="0,6" TabIndex="9"/>
 
                 <CheckBox Content="Accept invalid certi_ficates"

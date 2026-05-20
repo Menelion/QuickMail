@@ -742,9 +742,10 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            await _imap.ConnectAsync(account, password, cts.Token);
-            var folderList = await _imap.GetFoldersAsync(account.Id, cts.Token);
+            using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await _imap.ConnectAsync(account, password, connectCts.Token);
+            using var folderCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            var folderList = await _imap.GetFoldersAsync(account.Id, folderCts.Token);
             return (account.Id, folderList);
         }
         catch (OperationCanceledException)

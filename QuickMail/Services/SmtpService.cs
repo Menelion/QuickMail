@@ -28,22 +28,31 @@ public class SmtpService : ISmtpService
             ? SecureSocketOptions.SslOnConnect
             : SecureSocketOptions.StartTlsWhenAvailable;
 
-        await client.ConnectAsync(account.SmtpHost, account.SmtpPort, ssl, ct);
-        LogService.Log($"SmtpService: connected to {account.SmtpHost}:{account.SmtpPort}");
+        try
+        {
+            LogService.Log($"SmtpService: connecting to {account.SmtpHost}:{account.SmtpPort} ssl={ssl}");
+            await client.ConnectAsync(account.SmtpHost, account.SmtpPort, ssl, ct);
+            LogService.Log($"SmtpService: connected to {account.SmtpHost}:{account.SmtpPort}");
 
-        if (account.AuthType == AuthType.OAuth2Microsoft)
-        {
-            var token = await _oauth.GetAccessTokenAsync(account, ct);
-            LogService.Debug($"SmtpService: authenticating via XOAUTH2");
-            await client.AuthenticateAsync(new SaslMechanismOAuth2(account.Username, token), ct);
+            if (account.AuthType == AuthType.OAuth2Microsoft)
+            {
+                LogService.Debug($"SmtpService: authenticating via XOAUTH2");
+                var token = await _oauth.GetAccessTokenAsync(account, ct);
+                await client.AuthenticateAsync(new SaslMechanismOAuth2(account.Username, token), ct);
+            }
+            else
+            {
+                await client.AuthenticateAsync(account.Username, password!, ct);
+            }
+            LogService.Log($"SmtpService: authenticated, sending.");
+            await client.SendAsync(message, ct);
+            LogService.Log($"SmtpService: send complete");
+            await client.DisconnectAsync(true, ct);
         }
-        else
+        catch (Exception ex)
         {
-            await client.AuthenticateAsync(account.Username, password!, ct);
+            LogService.Log($"SmtpService: send failed ({ex.GetType().Name})", ex);
+            throw;
         }
-        LogService.Debug($"SmtpService: authenticated, sending.");
-        await client.SendAsync(message, ct);
-        LogService.Log($"SmtpService: send complete");
-        await client.DisconnectAsync(true, ct);
     }
 }
