@@ -102,6 +102,12 @@ Trash, Junk, Sent, and Drafts are excluded from `\x00AllMail` via `folder.Exclud
 - **Logging**: `LogService` appends to `%APPDATA%\QuickMail\quickmail.log`; `LogService.Debug()` writes only when `/debug` is present. Avoid logging credentials or unnecessary PII.
 - **Inclusive language in documentation and UI text**: Use verbs like "activate", "select", "choose", or "press" instead of "click".
 - **Screen reader references**: Do not name a specific screen reader product (NVDA, JAWS, VoiceOver, Narrator, etc.) in documentation, release notes, commit messages, or UI text unless the content is specific to that product. Use the generic term "screen readers" instead.
+- **Programmatic screen reader announcements**: All custom announcements must go through `AccessibilityHelper.Announce()`. Never call `RaiseNotificationEvent` directly. Every call must pass a `category` argument — choose the most specific one:
+  - `AnnouncementCategory.Hint` — instructional text the user will already know after initial familiarization (e.g. "Press Escape to return to the list"). Users can silence these in Settings.
+  - `AnnouncementCategory.Status` — background progress the user didn't explicitly trigger (e.g. sync counts, connection state). Users can silence these in Settings.
+  - `AnnouncementCategory.Result` — direct outcome of a user action (e.g. "3 messages found", "Moved to Archive"). This is the default parameter value.
+  - Use `force: true` only for feedback about the announcement system itself (the toggle confirmation), so it is always heard regardless of settings.
+  - Do not bake instructional text into `AutomationProperties.Name` on controls. Keep the name a short identifying label ("Search messages", not "Search messages. Press Tab to move to results."). If the instruction is worth surfacing, deliver it as a `Hint` announce at the moment the control is focused or activated.
 
 ## MVVM Rules — Enforced
 
