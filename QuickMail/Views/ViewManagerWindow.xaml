@@ -52,10 +52,10 @@
         </Border>
 
         <!-- ── Two-panel main area ─────────────────────────────────────────── -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" MinWidth="150"/>
-                <ColumnDefinition Width="8"/>
+                <ColumnDefinition x:Name="ListColumn"     Width="210" MinWidth="150"/>
+                <ColumnDefinition x:Name="SplitterColumn" Width="8"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -169,10 +169,20 @@
             </ScrollViewer>
         </Grid>
 
-        <!-- ── Bottom close button ─────────────────────────────────────────── -->
+        <!-- ── Bottom buttons ──────────────────────────────────────────────── -->
         <StackPanel Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="_Close"
+            <!-- Visible only in create mode (opened via Save View…) -->
+            <Button x:Name="SaveViewAndCloseButton"
+                    Content="Save _View"
+                    IsEnabled="{Binding CanSave}"
+                    MinWidth="90" Margin="0,0,8,0"
+                    Visibility="Collapsed"
+                    Click="SaveViewAndCloseButton_Click"
+                    AutomationProperties.Name="Save view and close"/>
+            <!-- Close in manage mode; Cancel in create mode (content set in code-behind) -->
+            <Button x:Name="CloseButton"
+                    Content="_Close"
                     IsCancel="True"
                     MinWidth="80"
                     Click="CloseButton_Click"

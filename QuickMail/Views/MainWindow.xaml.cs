@@ -148,7 +148,8 @@ public partial class MainWindow : Window
         vm.AnnouncementRequested += (_, args) =>
             AccessibilityHelper.Announce(this, args.Text, interrupt: true, category: args.Category);
         vm.SearchRequested += (_, _) => OpenSearch();
-        vm.ManageViewsRequested += (_, _) => OpenViewManager();
+        vm.SaveViewRequested    += (_, _) => OpenViewManager(createMode: true);
+        vm.ManageViewsRequested += (_, _) => OpenViewManager(createMode: false);
         vm.SavedViewsChanged    += (_, _) => RebuildViewsMenu();
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
@@ -2900,7 +2901,7 @@ public partial class MainWindow : Window
 
     // ── View Manager ──────────────────────────────────────────────────────────────
 
-    private void OpenViewManager()
+    private void OpenViewManager(bool createMode = false)
     {
         var vmVm = new ViewManagerViewModel(
             viewService:    _viewService,
@@ -2915,7 +2916,7 @@ public partial class MainWindow : Window
 
         vmVm.ViewsChanged += (_, _) => _vm.UpdateSavedViews();
 
-        var dialog = new ViewManagerWindow(vmVm) { Owner = this };
+        var dialog = new ViewManagerWindow(vmVm, createMode) { Owner = this };
         dialog.ShowDialog();
     }
 

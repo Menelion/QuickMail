@@ -175,7 +175,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Raised when the view list changes so the Views menu can be rebuilt.</summary>
     public event EventHandler? SavedViewsChanged;
 
-    /// <summary>Raised to ask MainWindow to open the View Manager dialog.</summary>
+    /// <summary>Raised to ask MainWindow to open the View Manager dialog to create a new view from the current state.</summary>
+    public event EventHandler? SaveViewRequested;
+
+    /// <summary>Raised to ask MainWindow to open the View Manager dialog in manage mode.</summary>
     public event EventHandler? ManageViewsRequested;
 
     // ── Account / folder tree ─────────────────────────────────────────────────────
@@ -473,7 +476,7 @@ public partial class MainViewModel : ObservableObject
     // ── View application ──────────────────────────────────────────────────────────
 
     [RelayCommand]
-    private void SaveView() => ManageViewsRequested?.Invoke(this, EventArgs.Empty);
+    private void SaveView() => SaveViewRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void ManageViews() => ManageViewsRequested?.Invoke(this, EventArgs.Empty);
