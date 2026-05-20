@@ -559,11 +559,25 @@ public partial class MainViewModel : ObservableObject
         }
 
         // Hash existing keys once so the dedupe check is O(1) per incoming item
-        // instead of an O(n) Messages.Any() scan per item - that scan would dominate
-        // a sync against a multi-thousand-message All Mail view and freeze the UI thread.
-        var seen = new HashSet<(uint, Guid, string)>(Messages.Count);
-        foreach (var e in Messages)
+        // instead of an O(n) scan per item — that would dominate a multi-thousand-message
+        // All Mail view and freeze the UI thread. Use _rawMessages (not Messages) as the
+        // canonical set so filtered-out messages still prevent duplicates.
+        var seen = new HashSet<(uint, Guid, string)>(_rawMessages.Count);
+        foreach (var e in _rawMessages)
             seen.Add((e.UniqueId, e.AccountId, e.FolderName));
+
+        // Collect truly new messages; add them to _rawMessages immediately so the
+        // search pool stays in sync with what the list will eventually show.
+        var toInsert = new List<MailMessageSummary>();
+        foreach (var msg in relevant.OrderByDescending(m => m.Date))
+        {
+            if (!seen.Add((msg.UniqueId, msg.AccountId, msg.FolderName)))
+                continue;
+            _rawMessages.Add(msg);
+            if (!MatchesFilter(msg)) continue;
+            if (!string.IsNullOrWhiteSpace(SearchText) && !MatchesSearch(msg)) continue;
+            toInsert.Add(msg);
+        }
 
         // Batch all inserts into a single CollectionChanged(Reset) notification.
         // Without batching, each InsertMessageSorted fires CollectionChanged(Add) which
@@ -573,13 +587,8 @@ public partial class MainViewModel : ObservableObject
         // A single Reset notification lets WPF re-bind once and screen readers see only
         // one structural change for the whole batch.
         Messages.BeginBatch();
-        foreach (var msg in relevant.OrderByDescending(m => m.Date))
-        {
-            if (!seen.Add((msg.UniqueId, msg.AccountId, msg.FolderName)))
-                continue;
-            if (!MatchesFilter(msg)) continue;
+        foreach (var msg in toInsert)
             InsertMessageSorted(msg);
-        }
         Messages.EndBatch();
 
         if (ViewMode == ViewMode.Conversations)
@@ -596,6 +605,12 @@ public partial class MainViewModel : ObservableObject
         var byKey = new Dictionary<(uint, Guid, string), MailMessageSummary>(Messages.Count);
         foreach (var e in Messages)
             byKey[(e.UniqueId, e.AccountId, e.FolderName)] = e;
+
+        // Build a key set for fast _rawMessages removal.
+        var removedKeys = new HashSet<(uint, Guid, string)>(removed.Count);
+        foreach (var msg in removed)
+            removedKeys.Add((msg.UniqueId, msg.AccountId, msg.FolderName));
+        _rawMessages.RemoveAll(m => removedKeys.Contains((m.UniqueId, m.AccountId, m.FolderName)));
 
         bool removedOpen = false;
         foreach (var msg in removed)
