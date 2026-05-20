@@ -79,13 +79,6 @@ public partial class MainWindow : Window
     private object? _typeAheadScope;
     private int _messageBodyRenderVersion;
 
-    // Debounces SelectionChanged announces so rapid arrow-key bursts only emit
-    // one UIA notification per landing. Otherwise a burst can flood NVDA's event
-    // pipeline and synchronously block the WPF dispatcher (entire process stalls).
-    private DispatcherTimer? _announceTimer;
-    private string? _pendingAnnounceText;
-    private static readonly TimeSpan AnnounceDebounce = TimeSpan.FromMilliseconds(50);
-
     // Debounces StatusText announcements so rapid per-folder sync updates ("5 messages",
     // "12 messages", …) coalesce into a single final reading by the screen reader.
     private DispatcherTimer? _statusAnnounceTimer;
@@ -149,7 +142,8 @@ public partial class MainWindow : Window
         vm.ManageAccountsRequested += OpenAccountManager;
         vm.OpenAccountSettingsRequested += OpenAccountManagerForAccount;
         vm.MessageListFocusRequested += ReturnFocusToMessageList;
-        vm.AnnouncementRequested += (_, text) => AccessibilityHelper.Announce(this, text, interrupt: true);
+        vm.AnnouncementRequested += (_, args) =>
+            AccessibilityHelper.Announce(this, args.Text, interrupt: true, category: args.Category);
         vm.SearchRequested += (_, _) => OpenSearch();
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
@@ -285,31 +279,6 @@ public partial class MainWindow : Window
         SenderGroupTree.LostKeyboardFocus  += (_, e) => LogService.Debug($"[FOCUS] LostFocus SenderTree to={e.NewFocus?.GetType().Name ?? "null"}");
     }
 
-    // Debounced UIA notification for rapid selection bursts. Each call resets the timer;
-    // the announce only fires after AnnounceDebounce of quiet, so a held arrow ends with
-    // exactly one notification on the final item.
-    private void QueueSelectionAnnounce(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return;
-        _pendingAnnounceText = text;
-
-        if (_announceTimer == null)
-        {
-            _announceTimer = new DispatcherTimer { Interval = AnnounceDebounce };
-            _announceTimer.Tick += (_, _) =>
-            {
-                _announceTimer!.Stop();
-                var pending = _pendingAnnounceText;
-                _pendingAnnounceText = null;
-                if (!string.IsNullOrEmpty(pending))
-                    AccessibilityHelper.Announce(this, pending, interrupt: true);
-            };
-        }
-
-        _announceTimer.Stop();
-        _announceTimer.Start();
-    }
-
     // Debounced UIA notification for rapid status-text changes during sync. Multiple
     // per-folder updates ("5 messages", "12 messages", …) are coalesced so the screen
     // reader hears only the final count once sync settles.
@@ -327,7 +296,7 @@ public partial class MainWindow : Window
                 var pending = _pendingStatusText;
                 _pendingStatusText = null;
                 if (!string.IsNullOrEmpty(pending))
-                    AccessibilityHelper.Announce(this, pending);
+                    AccessibilityHelper.Announce(this, pending, category: AnnouncementCategory.Status);
             };
         }
 
@@ -349,7 +318,7 @@ public partial class MainWindow : Window
                 var pending = _pendingSearchAnnounceText;
                 _pendingSearchAnnounceText = null;
                 if (!string.IsNullOrEmpty(pending))
-                    AccessibilityHelper.Announce(this, pending, interrupt: false);
+                    AccessibilityHelper.Announce(this, pending, interrupt: false, category: AnnouncementCategory.Result);
             };
         }
 
@@ -363,7 +332,7 @@ public partial class MainWindow : Window
         Dispatcher.InvokeAsync(() =>
         {
             SearchBox.Focus();
-            AccessibilityHelper.Announce(this, "Search box. Type to filter messages.", interrupt: true);
+            AccessibilityHelper.Announce(this, "Search box. Type to filter messages.", interrupt: true, category: AnnouncementCategory.Hint);
         }, DispatcherPriority.Input);
     }
 
@@ -375,7 +344,7 @@ public partial class MainWindow : Window
             _vm.ClearSearchCommand.Execute(null);
             ReturnFocusToMessageList();
             var word = count == 1 ? "message" : "messages";
-            AccessibilityHelper.Announce(this, $"Search cleared. {count} {word}.", interrupt: true);
+            AccessibilityHelper.Announce(this, $"Search cleared. {count} {word}.", interrupt: true, category: AnnouncementCategory.Result);
             e.Handled = true;
         }
         else if (e.Key == Key.Down || (e.Key == Key.Tab && Keyboard.Modifiers == ModifierKeys.None))
@@ -434,6 +403,10 @@ public partial class MainWindow : Window
             id: "contacts.openAddressBook", category: "Contacts", title: "Address Book",
             execute: OpenAddressBook,
             defaultKey: Key.B, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
+        _registry.Register(new CommandDefinition(
+            id: "settings.toggleCustomAnnouncements", category: "Settings", title: "Toggle Custom Announcements",
+            execute: ToggleCustomAnnouncements));
 
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
@@ -1299,7 +1272,8 @@ public partial class MainWindow : Window
         {
             if (!_vm.IsMessageOpen) return;
             FocusMessageBodyHost();
-            AccessibilityHelper.Announce(this, focusLabel, interrupt: true);
+            AccessibilityHelper.Announce(this, focusLabel, interrupt: true, category: AnnouncementCategory.Result);
+            AccessibilityHelper.Announce(this, "Press Escape to return to message list.", interrupt: false, category: AnnouncementCategory.Hint);
         }, DispatcherPriority.Input);
     }
 
@@ -1630,7 +1604,16 @@ public partial class MainWindow : Window
     private void FocusStatusBar()
     {
         StatusTextBox.Focus();
-        AccessibilityHelper.Announce(this, $"Status bar: {_vm.StatusText}");
+        AccessibilityHelper.Announce(this, $"Status bar: {_vm.StatusText}", category: AnnouncementCategory.Result);
+    }
+
+    private void ToggleCustomAnnouncements()
+    {
+        var cfg = _configService.Load();
+        cfg.CustomAnnouncements = !cfg.CustomAnnouncements;
+        _configService.Save(cfg);
+        var msg = cfg.CustomAnnouncements ? "Custom announcements on." : "Custom announcements off.";
+        AccessibilityHelper.Announce(this, msg, interrupt: true, category: AnnouncementCategory.Result, force: true);
     }
 
     // ── F6 pane-cycling helpers ──────────────────────────────────────────────

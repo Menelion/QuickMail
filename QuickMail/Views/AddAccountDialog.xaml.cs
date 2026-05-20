@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using QuickMail.Models;
 using QuickMail.ViewModels;
 
 namespace QuickMail.Views;
@@ -16,7 +17,7 @@ public partial class AddAccountDialog : Window
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(vm.StatusText) && !string.IsNullOrEmpty(vm.StatusText))
-                AccessibilityHelper.Announce(this, vm.StatusText);
+                AccessibilityHelper.Announce(this, vm.StatusText, category: AnnouncementCategory.Status);
         };
     }
 

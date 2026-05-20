@@ -119,6 +119,34 @@
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
+
+                        <!-- Screen Reader Announcements Group -->
+                        <GroupBox Header="Screen Reader _Announcements" Padding="10" Margin="0,10,0,0"
+                                  AutomationProperties.Name="Screen reader announcement settings">
+                            <StackPanel>
+                                <CheckBox Content="Enable custom _announcements"
+                                          IsChecked="{Binding CustomAnnouncements, Mode=TwoWay}"
+                                          FontWeight="SemiBold"
+                                          AutomationProperties.Name="Enable all custom screen reader announcements from QuickMail"/>
+                                <TextBlock Text="When off, only native control announcements are spoken."
+                                           Foreground="DimGray" FontSize="11" Margin="0,2,0,8"/>
+
+                                <CheckBox Content="Announce _hints and instructions"
+                                          IsChecked="{Binding AnnounceHints, Mode=TwoWay}"
+                                          Margin="16,0,0,0"
+                                          AutomationProperties.Name="Announce instructional hints such as how to use the search box"/>
+
+                                <CheckBox Content="Announce loading and sync _status"
+                                          IsChecked="{Binding AnnounceStatus, Mode=TwoWay}"
+                                          Margin="16,4,0,0"
+                                          AutomationProperties.Name="Announce background loading and sync progress"/>
+
+                                <CheckBox Content="Announce action _results"
+                                          IsChecked="{Binding AnnounceResults, Mode=TwoWay}"
+                                          Margin="16,4,0,0"
+                                          AutomationProperties.Name="Announce outcomes such as search result counts and move confirmations"/>
+                            </StackPanel>
+                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -500,7 +500,7 @@ public partial class MainViewModel : ObservableObject
 
             var count = Messages.Count;
             StatusText = $"{count} messages.";
-            Announce($"{count} {(count == 1 ? "message" : "messages")} loaded.");
+            Announce($"{count} {(count == 1 ? "message" : "messages")} loaded.", AnnouncementCategory.Status);
         }
         catch (OperationCanceledException) { /* sync cancelled — normal */ }
         catch (Exception ex)
@@ -522,7 +522,7 @@ public partial class MainViewModel : ObservableObject
             {
                 await Task.Delay(10_000, ct);
                 var count = Messages.Count;
-                Announce($"{count} {(count == 1 ? "message" : "messages")} loaded so far.");
+                Announce($"{count} {(count == 1 ? "message" : "messages")} loaded so far.", AnnouncementCategory.Status);
             }
         }
         catch (OperationCanceledException) { }
@@ -1813,12 +1813,12 @@ public partial class MainViewModel : ObservableObject
     public event Action<ComposeModel>? ComposeRequested;
     public event Action? ManageAccountsRequested;
     public event Action? MessageListFocusRequested;
-    public event EventHandler<string>? AnnouncementRequested;
+    public event EventHandler<(string Text, AnnouncementCategory Category)>? AnnouncementRequested;
 
-    private void Announce(string text)
+    private void Announce(string text, AnnouncementCategory category = AnnouncementCategory.Result)
     {
         if (!string.IsNullOrEmpty(text))
-            AnnouncementRequested?.Invoke(this, text);
+            AnnouncementRequested?.Invoke(this, (text, category));
     }
 
     [RelayCommand]

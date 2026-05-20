@@ -28,6 +28,18 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private int _initialSyncCount;
 
+    [ObservableProperty]
+    private bool _customAnnouncements;
+
+    [ObservableProperty]
+    private bool _announceHints;
+
+    [ObservableProperty]
+    private bool _announceStatus;
+
+    [ObservableProperty]
+    private bool _announceResults;
+
     public ObservableCollection<HotkeyRowViewModel> HotkeyRows { get; } = [];
 
     [ObservableProperty]
@@ -43,6 +55,10 @@ public partial class SettingsViewModel : ObservableObject
         ViewMode = cfg.ViewMode;
         SyncDays = cfg.SyncDays;
         InitialSyncCount = cfg.InitialSyncCount;
+        CustomAnnouncements = cfg.CustomAnnouncements;
+        AnnounceHints       = cfg.AnnounceHints;
+        AnnounceStatus      = cfg.AnnounceStatus;
+        AnnounceResults     = cfg.AnnounceResults;
 
         foreach (var cmd in registry.GetAll())
         {
@@ -67,6 +83,10 @@ public partial class SettingsViewModel : ObservableObject
         cfg.ViewMode = ViewMode;
         cfg.SyncDays = SyncDays;
         cfg.InitialSyncCount = InitialSyncCount;
+        cfg.CustomAnnouncements = CustomAnnouncements;
+        cfg.AnnounceHints       = AnnounceHints;
+        cfg.AnnounceStatus      = AnnounceStatus;
+        cfg.AnnounceResults     = AnnounceResults;
 
         cfg.CustomHotkeys = HotkeyRows
             .Where(r => r.HasCustomBinding)

@@ -184,6 +184,7 @@ Every user-facing keyboard shortcut **must** be registered in `CommandRegistry` 
 | Ctrl+Shift+G | `contacts.grabAddresses` | Grab Addresses from Message |
 | Ctrl+Shift+B | `contacts.openAddressBook` | Address Book |
 | F1 | `help.userGuide` | Open User Guide |
+| *(unassigned)* | `settings.toggleCustomAnnouncements` | Toggle Custom Announcements |
 
 
 ## Dependencies

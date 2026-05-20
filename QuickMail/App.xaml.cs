@@ -33,6 +33,8 @@ public partial class App : Application
             var contactService = new ContactService();
             var syncService = new SyncService(imapService, localStore, configService);
 
+            Views.AccessibilityHelper.Configure(configService.Load());
+
             var commandRegistry = new CommandRegistry();
             commandRegistry.ApplyUserOverrides(configService.Load().CustomHotkeys);
 

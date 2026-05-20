@@ -545,7 +545,7 @@
 
                 <ListBox Grid.Row="1"
                          x:Name="AccountList"
-                         AutomationProperties.Name="Email accounts. Arrow keys to navigate, Enter to connect."
+                         AutomationProperties.Name="Email accounts"
                          ItemsSource="{Binding Accounts}"
                          SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
                          DisplayMemberPath="AccountLabel"
@@ -576,7 +576,7 @@
                 <!-- True TreeView so screen readers announce level, expanded/collapsed state correctly. -->
                 <TreeView Grid.Row="3"
                           x:Name="FolderList"
-                          AutomationProperties.Name="Folders. Arrow keys to navigate and expand, Enter to load messages."
+                          AutomationProperties.Name="Folder list"
                           ItemsSource="{Binding FolderTree}"
                           BorderThickness="0,0,1,0"
                           TabIndex="2"
@@ -709,7 +709,7 @@
                         </StackPanel>
                         <!-- WebView2: real browser, proper arrow-key caret nav, screen-reader virtual cursor -->
                         <wv2:WebView2 x:Name="MessageBody"
-                                      AutomationProperties.Name="Message body. Press Escape to return to message list."
+                                      AutomationProperties.Name="Message body"
                                       KeyboardNavigation.IsTabStop="True"
                                       GotKeyboardFocus="MessageBody_GotKeyboardFocus"
                                       MinHeight="80"/>
@@ -735,7 +735,7 @@
                             <Button DockPanel.Dock="Right"
                                     Content="Clear"
                                     Command="{Binding ClearSearchCommand}"
-                                    AutomationProperties.Name="Clear search (Escape)"
+                                    AutomationProperties.Name="Clear search"
                                     ToolTip="Clear search (Escape)"
                                     IsTabStop="True"/>
                             <TextBlock DockPanel.Dock="Right"
@@ -756,7 +756,7 @@
                             </TextBlock>
                             <TextBox x:Name="SearchBox"
                                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     AutomationProperties.Name="Search messages. Tab or Down Arrow to move to results. Escape to clear."
+                                     AutomationProperties.Name="Search messages"
                                      ToolTip="Search by sender, subject, or preview. Escape to clear."
                                      PreviewKeyDown="SearchBox_PreviewKeyDown"/>
                         </DockPanel>

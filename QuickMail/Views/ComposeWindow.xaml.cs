@@ -29,7 +29,7 @@ public partial class ComposeWindow : Window
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(vm.StatusText) && !string.IsNullOrEmpty(vm.StatusText))
-                AccessibilityHelper.Announce(this, vm.StatusText);
+                AccessibilityHelper.Announce(this, vm.StatusText, category: AnnouncementCategory.Status);
         };
 
         foreach (var box in new[] { ToBox, CcBox, BccBox })
@@ -66,7 +66,8 @@ public partial class ComposeWindow : Window
             AutoCompletePopup.IsOpen          = true;
 
             AccessibilityHelper.Announce(this,
-                results.Count == 1 ? "1 suggestion" : $"{results.Count} suggestions");
+                results.Count == 1 ? "1 suggestion" : $"{results.Count} suggestions",
+                category: AnnouncementCategory.Result);
         }
         catch (OperationCanceledException)
         {

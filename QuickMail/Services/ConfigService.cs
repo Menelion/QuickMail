@@ -83,7 +83,16 @@ public class ConfigService : IConfigService
             File.WriteAllText(HotkeysFile, JsonSerializer.Serialize(config.CustomHotkeys, JsonOptions), Encoding.UTF8);
         else if (File.Exists(HotkeysFile))
             File.Delete(HotkeysFile);
+
+        Views.AccessibilityHelper.Configure(config);
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private static bool ParseBool(string v) =>
+        v.Equals("on",   StringComparison.OrdinalIgnoreCase)
+        || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+        || v == "1";
 
     // ── Hotkey helpers ────────────────────────────────────────────────────────────
 
@@ -167,9 +176,7 @@ public class ConfigService : IConfigService
                         if (int.TryParse(value, out var pl)) config.PreviewLines = Math.Max(0, pl);
                         break;
                     case "showmessagestatus":
-                        config.ShowMessageStatus = value.Equals("on", StringComparison.OrdinalIgnoreCase)
-                            || value.Equals("true", StringComparison.OrdinalIgnoreCase)
-                            || value == "1";
+                        config.ShowMessageStatus = ParseBool(value);
                         break;
                     case "viewmode":
                         config.ViewMode = value.ToLowerInvariant() switch
@@ -190,6 +197,10 @@ public class ConfigService : IConfigService
                     case "initialsynccount":
                         if (int.TryParse(value, out var isc)) config.InitialSyncCount = Math.Max(0, isc);
                         break;
+                    case "customannouncements":  config.CustomAnnouncements = ParseBool(value); break;
+                    case "announcehints":        config.AnnounceHints        = ParseBool(value); break;
+                    case "announcestatus":       config.AnnounceStatus       = ParseBool(value); break;
+                    case "announceresults":      config.AnnounceResults      = ParseBool(value); break;
                 }
             }
             else if (section == "account" && acctGuid != Guid.Empty)
@@ -254,6 +265,26 @@ public class ConfigService : IConfigService
         sb.AppendLine($"InitialSyncCount = {config.InitialSyncCount}");
         sb.AppendLine("# Number of messages to fetch on the initial sync of a folder.");
         sb.AppendLine("# Default is 500. Set to 0 to fetch all messages in the folder.");
+        sb.AppendLine();
+
+        sb.AppendLine($"CustomAnnouncements = {(config.CustomAnnouncements ? "on" : "off")}");
+        sb.AppendLine("# Master switch for all custom screen reader announcements from QuickMail.");
+        sb.AppendLine("# When off, only native control announcements (focus, selection) are spoken.");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AnnounceHints = {(config.AnnounceHints ? "on" : "off")}");
+        sb.AppendLine("# Announce instructional hints, e.g. how to use the search box.");
+        sb.AppendLine("# Turn off once you are familiar with the interface. Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AnnounceStatus = {(config.AnnounceStatus ? "on" : "off")}");
+        sb.AppendLine("# Announce background loading and sync progress updates. Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AnnounceResults = {(config.AnnounceResults ? "on" : "off")}");
+        sb.AppendLine("# Announce action outcomes such as search result counts and move confirmations.");
+        sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 
         // ── [account:guid] overrides ─────────────────────────────────────────────

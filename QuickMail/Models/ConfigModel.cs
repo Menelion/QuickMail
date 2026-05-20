@@ -35,6 +35,20 @@ public class ConfigModel
     /// </summary>
     public int InitialSyncCount { get; set; } = 500;
 
+    // ── Screen reader announcement settings ──────────────────────────────────────
+
+    /// <summary>Master switch for all custom screen reader announcements from QuickMail code.</summary>
+    public bool CustomAnnouncements { get; set; } = true;
+
+    /// <summary>Announce instructional hints (e.g. how to use the search box).</summary>
+    public bool AnnounceHints { get; set; } = true;
+
+    /// <summary>Announce background loading and sync progress.</summary>
+    public bool AnnounceStatus { get; set; } = true;
+
+    /// <summary>Announce action results (search counts, move/delete confirmations).</summary>
+    public bool AnnounceResults { get; set; } = true;
+
     // ── Custom hotkey overrides ──────────────────────────────────────────────────
 
     /// <summary>User-defined keyboard shortcut overrides, stored in hotkeys.json.</summary>
