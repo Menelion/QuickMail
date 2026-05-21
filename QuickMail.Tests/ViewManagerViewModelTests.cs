@@ -327,14 +327,14 @@ public class ViewManagerWindowTests
     }
 
     [StaFact]
-    public void SelectedViewActionsPanel_CollapsedWhenNoViewSelected()
+    public void ReadOnlyActionsPanel_CollapsedWhenNoViewSelected()
     {
         EnsureApplication();
         var vm     = MakeVm();
         var window = new ViewManagerWindow(vm);
         FlushBindings();
 
-        var panel = (StackPanel)window.FindName("SelectedViewActionsPanel");
+        var panel = (StackPanel)window.FindName("ReadOnlyActionsPanel");
         Assert.Equal(Visibility.Collapsed, panel.Visibility);
 
         window.Close();
@@ -362,7 +362,7 @@ public class ViewManagerWindowTests
     }
 
     [StaFact]
-    public void SelectedViewActionsPanel_VisibleWhenViewSelected()
+    public void ReadOnlyActionsPanel_VisibleWhenViewSelected()
     {
         EnsureApplication();
         var view   = new SavedView { Name = "Work" };
@@ -370,7 +370,7 @@ public class ViewManagerWindowTests
         var window = new ViewManagerWindow(vm);
         FlushBindings();
 
-        var panel = (StackPanel)window.FindName("SelectedViewActionsPanel");
+        var panel = (StackPanel)window.FindName("ReadOnlyActionsPanel");
         Assert.Equal(Visibility.Visible, panel.Visibility);
 
         window.Close();
@@ -388,7 +388,7 @@ public class ViewManagerWindowTests
         FlushBindings();
 
         var createBtn    = (Button)window.FindName("CreateNewViewButton");
-        var actionsPanel = (StackPanel)window.FindName("SelectedViewActionsPanel");
+        var actionsPanel = (StackPanel)window.FindName("ReadOnlyActionsPanel");
 
         // Initial: nothing selected
         Assert.Equal(Visibility.Visible,   createBtn.Visibility);

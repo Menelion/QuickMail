@@ -122,7 +122,8 @@
                              Visibility="{Binding ShowReadOnly, Converter={StaticResource BoolToVis}}"/>
 
                     <!-- Edit + Delete action buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0"
+                    <StackPanel x:Name="ReadOnlyActionsPanel"
+                                Orientation="Horizontal" Margin="0,14,0,0"
                                 Visibility="{Binding ShowReadOnly, Converter={StaticResource BoolToVis}}">
                         <Button Content="_Edit"
                                 Command="{Binding StartEditCommand}"
