@@ -2918,6 +2918,12 @@ public partial class MainWindow : Window
 
         var dialog = new ViewManagerWindow(vmVm, createMode) { Owner = this };
         dialog.ShowDialog();
+
+        // Sync the main VM after the dialog is fully closed.  This is the safe point to
+        // do UI-touching work (menu rebuild, folder-tree sync).  It also handles the cancel
+        // path in create mode, where CancelCreate() skips firing ViewsChanged to avoid
+        // re-entrant updates during OnClosing.
+        _vm.UpdateSavedViews();
     }
 
     private void RebuildViewsMenu()

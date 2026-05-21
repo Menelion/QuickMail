@@ -256,6 +256,29 @@ public partial class ViewManagerViewModel : ObservableObject
         ViewsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Removes the auto-created phantom view when the Save View dialog is dismissed
+    /// without saving (Escape, ✕, Cancel).
+    /// <para>
+    /// Unlike <see cref="Delete"/>, this method deliberately does <b>not</b> fire
+    /// <see cref="ViewsChanged"/>.  Firing it from inside <c>OnClosing</c> causes
+    /// a re-entrant UI update on the parent window (menu rebuild, folder-tree sync)
+    /// while the dialog's message loop is still unwinding, which results in a COM
+    /// apartment violation and an application crash.  The caller
+    /// (<c>OpenViewManager</c>) calls <c>UpdateSavedViews()</c> on the main VM after
+    /// <c>ShowDialog()</c> returns, which is the safe point to do that work.
+    /// </para>
+    /// </summary>
+    internal void CancelCreate()
+    {
+        if (SelectedView == null) return;
+        var view = SelectedView;        // capture before collection change can null it
+        SavedViews.Remove(view);
+        RemoveViewHotkey(view.Id);
+        Persist();
+        // Do NOT fire ViewsChanged here.
+    }
+
     [RelayCommand]
     private void RequestSetHotkey() => SetHotkeyRequested?.Invoke(this, EventArgs.Empty);
 

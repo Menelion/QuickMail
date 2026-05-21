@@ -66,12 +66,16 @@ public partial class ViewManagerWindow : Window
     /// <summary>
     /// If the user dismisses the dialog in create mode without saving (Escape, ✕, Cancel),
     /// remove the view that was auto-created so we don't leave a half-named phantom entry.
+    /// Uses <see cref="ViewManagerViewModel.CancelCreate"/> rather than DeleteCommand so
+    /// no ViewsChanged event fires mid-close — that would trigger re-entrant UI updates
+    /// on the parent window (menu rebuild, folder-tree sync) while the dialog's message
+    /// loop is still unwinding, producing a COM apartment violation and crashing the app.
     /// </summary>
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
         if (_createMode && !_savedInCreateMode && _vm.SelectedView != null)
-            _vm.DeleteCommand.Execute(null);
+            _vm.CancelCreate();
     }
 
     // ── Folder conflict prompt ────────────────────────────────────────────────────
