@@ -276,8 +276,10 @@ public partial class ViewManagerViewModel : ObservableObject
     private void Delete()
     {
         if (SelectedView == null) return;
-        SavedViews.Remove(SelectedView);
-        RemoveViewHotkey(SelectedView.Id);
+        var view = SelectedView;        // capture before Remove() fires CollectionChanged,
+                                        // which nulls SelectedView via the ListBox binding
+        SavedViews.Remove(view);
+        RemoveViewHotkey(view.Id);
         SelectedView  = null;
         EditName      = string.Empty;
         EditHotkey    = string.Empty;
