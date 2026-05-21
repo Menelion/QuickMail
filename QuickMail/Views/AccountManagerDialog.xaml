@@ -17,7 +17,6 @@
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="180" MinWidth="120"/>
-            <ColumnDefinition Width="10"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -66,13 +65,8 @@
             </ListBox>
         </DockPanel>
 
-        <!-- Splitter -->
-        <GridSplitter Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
-                      Width="10" HorizontalAlignment="Stretch"
-                      AutomationProperties.Name="Resize account list"/>
-
         <!-- Edit form -->
-        <ScrollViewer Grid.Column="2" Grid.Row="0" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Column="1" Grid.Row="0" Margin="10,0,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel IsEnabled="{Binding IsEditing}">
 
                 <TextBlock Text="Account Settings" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8"/>
@@ -178,7 +172,7 @@
         </ScrollViewer>
 
         <!-- Bottom buttons -->
-        <DockPanel Grid.Column="2" Grid.Row="1" Margin="0,8,0,0">
+        <DockPanel Grid.Column="1" Grid.Row="1" Margin="10,8,0,0">
             <Button DockPanel.Dock="Right"
                     Content="_Close"
                     Click="CloseButton_Click"
