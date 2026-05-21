@@ -2404,7 +2404,7 @@ public partial class MainWindow : Window
         if (_vm.CachedFolders.Count == 0) return;
 
         var targetIdx = _vm.SenderGroups.IndexOf(group);
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(group.Messages, "Move to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
@@ -2416,7 +2416,7 @@ public partial class MainWindow : Window
         if (SenderGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
         if (_vm.CachedFolders.Count == 0) return;
 
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(group.Messages, "Copy to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.CopySelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
@@ -2593,7 +2593,7 @@ public partial class MainWindow : Window
         if (_vm.CachedFolders.Count == 0) return;
 
         var targetIdx = _vm.ToGroups.IndexOf(group);
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(group.Messages, "Move to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
@@ -2605,7 +2605,7 @@ public partial class MainWindow : Window
         if (ToGroupTree.SelectedItem is not SenderGroup group || group.Messages.Count == 0) return;
         if (_vm.CachedFolders.Count == 0) return;
 
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(group.Messages, "Copy to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.CopySelectedMessagesToFolderAsync(group.Messages, picker.SelectedFolder);
@@ -2783,7 +2783,7 @@ public partial class MainWindow : Window
         var messages = GetSelectedMessages();
         if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
 
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(messages, "Move to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
@@ -2801,7 +2801,7 @@ public partial class MainWindow : Window
         var messages = GetSelectedMessages();
         if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
 
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Copy to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(messages, "Copy to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.CopySelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
@@ -2812,7 +2812,7 @@ public partial class MainWindow : Window
         var messages = GetSelectedMessages();
         if (messages.Count == 0 || _vm.CachedFolders.Count == 0) return;
 
-        var picker = new FolderPickerWindow(_vm.Accounts, _vm.CachedFolders, title: "Move to Folder") { Owner = this };
+        var picker = BuildMessageFolderPicker(messages, "Move to Folder");
         if (picker.ShowDialog() != true || picker.SelectedFolder == null) return;
 
         await _vm.MoveSelectedMessagesToFolderAsync(messages, picker.SelectedFolder);
@@ -2928,6 +2928,24 @@ public partial class MainWindow : Window
         // while the dialog's message loop is still running — a re-entrant COM
         // apartment violation that crashes the app (STATUS_CALLBACK_RETURNED_THREAD_APT_CHANGED).
         _vm.UpdateSavedViews();
+    }
+
+    /// <summary>
+    /// Creates a <see cref="FolderPickerWindow"/> scoped to only the accounts that own
+    /// the given messages.  This prevents the user from selecting a destination folder
+    /// from a different IMAP account — the server-side MOVE command is connection-scoped
+    /// and cannot reach folders on a different account, which would produce a
+    /// "folder not found" error from the IMAP server.
+    /// </summary>
+    private FolderPickerWindow BuildMessageFolderPicker(
+        IEnumerable<MailMessageSummary> messages, string title)
+    {
+        var ids      = messages.Select(m => m.AccountId).ToHashSet();
+        var accounts = _vm.Accounts.Where(a => ids.Contains(a.Id));
+        var folders  = _vm.CachedFolders
+                          .Where(kv => ids.Contains(kv.Key))
+                          .ToDictionary(kv => kv.Key, kv => kv.Value);
+        return new FolderPickerWindow(accounts, folders, title: title) { Owner = this };
     }
 
     private void RebuildViewsMenu()
