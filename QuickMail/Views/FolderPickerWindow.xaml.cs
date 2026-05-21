@@ -55,7 +55,7 @@ public partial class FolderPickerWindow : Window
                     accountMailFolder,
                     account,
                     accountMailFolder.DisplayName,
-                    $"{account.DisplayName} - {accountMailFolder.DisplayName}"));
+                    $"{account.AccountLabel} - {accountMailFolder.DisplayName}"));
             }
 
             foreach (var folder in folders
@@ -70,7 +70,7 @@ public partial class FolderPickerWindow : Window
                     folder,
                     account,
                     folderPath,
-                    $"{account.DisplayName} - {folderPath}"));
+                    $"{account.AccountLabel} - {folderPath}"));
             }
         }
 
@@ -240,7 +240,7 @@ public partial class FolderPickerWindow : Window
             Account = account;
             FolderPath = folderPath;
             DisplayName = displayName;
-            AccountName = account?.DisplayName ?? string.Empty;
+            AccountName = account?.AccountLabel ?? string.Empty;
             SearchText = $"{DisplayName} {Folder.DisplayName} {Folder.FullName} {AccountName}";
         }
 
