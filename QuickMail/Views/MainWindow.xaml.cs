@@ -112,6 +112,7 @@ public partial class MainWindow : Window
     private readonly IConfigService _configService;
     private readonly ILocalStoreService _localStore;
     private readonly IViewService _viewService;
+    private readonly IRuleService _ruleService;
 
     public MainWindow(
         MainViewModel vm,
@@ -124,7 +125,8 @@ public partial class MainWindow : Window
         IContactService contactService,
         IConfigService configService,
         ILocalStoreService localStore,
-        IViewService viewService)
+        IViewService viewService,
+        IRuleService ruleService)
     {
         _vm = vm;
         _smtp = smtp;
@@ -137,6 +139,7 @@ public partial class MainWindow : Window
         _configService = configService;
         _localStore = localStore;
         _viewService = viewService;
+        _ruleService = ruleService;
 
         InitializeComponent();
         DataContext = vm;
@@ -159,6 +162,19 @@ public partial class MainWindow : Window
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
+        vm.RulesManagerRequested += (_, _) => OpenRulesManager();
+        vm.CreateRuleFromMessageRequested += (_, template) => OpenRulesManager(template);
+
+        // Wire rules status bar item to open Rules Manager on click/Enter/Space
+        RulesStatusItem.MouseLeftButtonDown += (_, _) => OpenRulesManager();
+        RulesStatusItem.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter || e.Key == Key.Space)
+            {
+                OpenRulesManager();
+                e.Handled = true;
+            }
+        };
 
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
@@ -2938,6 +2954,23 @@ public partial class MainWindow : Window
         // Apply View was pressed: activate the view now that the dialog loop is dead.
         if (vmVm.ViewRequestedToApply is { } viewToApply)
             _vm.SelectViewCommand.Execute(viewToApply.Id.ToString());
+    }
+
+    private void OpenRulesManager(MailRule? template = null)
+    {
+        var accounts = _vm.Accounts.ToList();
+        var selectedMessages = _vm.Messages.ToList();
+
+        var rulesVm = new RulesManagerViewModel(
+            _ruleService, _imap, accounts,
+            prefillTemplate: template,
+            selectedMessagesForTest: selectedMessages);
+
+        var dialog = new RulesManagerWindow(rulesVm, accounts, _vm.CachedFolders) { Owner = this };
+        dialog.ShowDialog();
+
+        // Refresh the rules status text after the dialog closes
+        _vm.UpdateRulesStatusText();
     }
 
     /// <summary>

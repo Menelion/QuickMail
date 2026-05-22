@@ -28,6 +28,7 @@ public partial class MainViewModel : ObservableObject
     private readonly IConfigService _configService;
     private readonly IViewService _viewService;
     private readonly ICommandRegistry _commandRegistry;
+    private readonly IRuleService _ruleService;
 
     // Separate CTS per operation type so they can't cancel each other accidentally
     private CancellationTokenSource? _connectCts;
@@ -337,6 +338,9 @@ public partial class MainViewModel : ObservableObject
     private string _statusText = "Ready";
 
     [ObservableProperty]
+    private string _rulesStatusText = string.Empty;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -389,7 +393,8 @@ public partial class MainViewModel : ObservableObject
         ISyncService syncService,
         IConfigService configService,
         ICommandRegistry commandRegistry,
-        IViewService viewService)
+        IViewService viewService,
+        IRuleService ruleService)
     {
         _imap            = imap;
         _accountService  = accountService;
@@ -400,6 +405,7 @@ public partial class MainViewModel : ObservableObject
         _configService   = configService;
         _commandRegistry = commandRegistry;
         _viewService     = viewService;
+        _ruleService     = ruleService;
 
         var cfg = _configService.Load();
         _showMessageStatus = cfg.ShowMessageStatus;
@@ -423,10 +429,12 @@ public partial class MainViewModel : ObservableObject
 
         _syncService.FolderSynced    += OnFolderSynced;
         _syncService.MessagesRemoved += OnMessagesRemoved;
+        _syncService.RulesApplied    += OnRulesApplied;
 
         // Load saved views and register their commands before the UI is shown.
         LoadSavedViews();
         RegisterCommands(commandRegistry);
+        UpdateRulesStatusText();
     }
 
     public void LoadAccountList()
@@ -880,6 +888,17 @@ public partial class MainViewModel : ObservableObject
             id: "view.sortCountAsc", category: "View", title: "Sort: Fewest Messages",
             execute: () => SetSortCommand.Execute("countAsc"),
             isAvailable: () => IsCountSortAvailable));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.rules", category: "Mail", title: "Manage Rules",
+            execute: () => OpenRulesManagerCommand.Execute(null),
+            defaultKey: Key.L, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
+        registry.Register(new CommandDefinition(
+            id: "mail.createRuleFromMessage", category: "Mail", title: "Create Rule from Message",
+            execute: () => CreateRuleFromMessageCommand.Execute(null),
+            defaultKey: Key.T, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => HasSelectedMessage));
     }
 
     // ── Startup ──────────────────────────────────────────────────────────────────
@@ -1087,6 +1106,37 @@ public partial class MainViewModel : ObservableObject
             StatusText = $"{Messages.Count} messages";
 
         RebuildActiveGroupView();
+    }
+
+    private int _lastRulesMatchCount;
+    private DateTime _lastRulesRunTime;
+
+    private void OnRulesApplied(int matchCount)
+    {
+        _lastRulesMatchCount = matchCount;
+        _lastRulesRunTime = DateTime.Now;
+        UpdateRulesStatusText();
+    }
+
+    public void UpdateRulesStatusText()
+    {
+        var rules = _ruleService.LoadRules();
+        int active = rules.Count(r => r.IsEnabled);
+        int disabled = rules.Count(r => !r.IsEnabled);
+
+        if (active == 0)
+        {
+            RulesStatusText = "No active rules";
+            return;
+        }
+
+        var timeStr = _lastRulesRunTime == default
+            ? "not yet run"
+            : _lastRulesRunTime.ToString("h:mm tt");
+
+        RulesStatusText = _lastRulesMatchCount > 0
+            ? $"Rules: {active} active, {disabled} disabled — Last run: {_lastRulesMatchCount} matched ({timeStr})"
+            : $"Rules: {active} active, {disabled} disabled — Last run: {timeStr}";
     }
 
     // Stores raw messages and applies all active filters.
@@ -2409,6 +2459,8 @@ public partial class MainViewModel : ObservableObject
     public event Action? ManageAccountsRequested;
     public event Action? MessageListFocusRequested;
     public event EventHandler<(string Text, AnnouncementCategory Category)>? AnnouncementRequested;
+    public event EventHandler? RulesManagerRequested;
+    public event EventHandler<MailRule>? CreateRuleFromMessageRequested;
 
     private void Announce(string text, AnnouncementCategory category = AnnouncementCategory.Result)
     {
@@ -2530,6 +2582,29 @@ public partial class MainViewModel : ObservableObject
                       ?? Accounts.FirstOrDefault();
         if (account == null) return;
         ComposeRequested?.Invoke(new ComposeModel { AccountId = account.Id });
+    }
+
+    [RelayCommand]
+    private void OpenRulesManager()
+    {
+        RulesManagerRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void CreateRuleFromMessage()
+    {
+        var source = SelectedMessage;
+        if (source == null) return;
+
+        var template = new MailRule
+        {
+            Name = $"Rule for {source.From}",
+            FromContains = source.From,
+            SubjectContains = string.IsNullOrWhiteSpace(source.Subject) ? null : source.Subject,
+            AccountId = source.AccountId,
+        };
+
+        CreateRuleFromMessageRequested?.Invoke(this, template);
     }
 
     /// <summary>True when the currently selected folder is a Drafts folder.</summary>

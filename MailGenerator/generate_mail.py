@@ -479,6 +479,10 @@ Examples:
         help="Attachment mode: -1 = random 30%% of messages (default), "
              "0 = none, 1 = every message gets 1-2 attachments",
     )
+    parser.add_argument(
+        "--today", action="store_true",
+        help="Give all messages today's date (useful for testing mail rules)",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -512,11 +516,15 @@ Examples:
         subject = prefix + base_subject
 
         # Spread dates, with a bias toward recent
-        days_ago = random.randint(0, date_spread)
-        # Square the fraction to bias toward recent
-        days_ago = int(date_spread * (random.random() ** 1.5))
-        date = now - timedelta(days=days_ago, hours=random.randint(0, 23),
-                               minutes=random.randint(0, 59))
+        if args.today:
+            # All messages get today's date with random times for variety
+            date = now.replace(hour=random.randint(0, 23),
+                               minute=random.randint(0, 59),
+                               second=random.randint(0, 59))
+        else:
+            days_ago = int(date_spread * (random.random() ** 1.5))
+            date = now - timedelta(days=days_ago, hours=random.randint(0, 23),
+                                   minutes=random.randint(0, 59))
 
         # HTML vs plain
         if args.html_only:

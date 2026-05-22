@@ -180,6 +180,10 @@
             <MenuItem Header="_Delete"
                       AutomationProperties.Name="Delete"
                       Command="{Binding DeleteMessageCommand}"/>
+            <Separator/>
+            <MenuItem Header="Create _Rule from Message…"
+                      AutomationProperties.Name="Create Rule from Message"
+                      Command="{Binding CreateRuleFromMessageCommand}"/>
         </ContextMenu>
 
         <!-- Folder context menu — MUST live in Window.Resources, not inside a Style.Setter.Value.
@@ -274,6 +278,11 @@
                           IsEnabled="{Binding IsMessageOpen}"
                           Click="MenuGrabAddresses_Click"
                           InputGestureText="Ctrl+Shift+G"/>
+                <Separator/>
+                <MenuItem Header="_Rules…"
+                          Command="{Binding OpenRulesManagerCommand}"
+                          InputGestureText="Ctrl+Shift+L"
+                          AutomationProperties.Name="Manage Rules. Ctrl+Shift+L"/>
             </MenuItem>
 
             <!-- View -->
@@ -1289,6 +1298,19 @@
                          IsTabStop="False"
                          Focusable="True"
                          AutomationProperties.Name="Status"/>
+            </StatusBarItem>
+
+            <StatusBarItem x:Name="RulesStatusItem"
+                           HorizontalAlignment="Right"
+                           Focusable="False"
+                           IsTabStop="False"
+                           AutomationProperties.Name="{Binding RulesStatusText}">
+                <TextBox Style="{StaticResource StatusTextBoxStyle}"
+                         Text="{Binding RulesStatusText, Mode=OneWay}"
+                         IsTabStop="False"
+                         Focusable="True"
+                         Cursor="Hand"
+                         AutomationProperties.Name="{Binding RulesStatusText}"/>
             </StatusBarItem>
 
             <StatusBarItem x:Name="StatusProgressItem"

@@ -103,11 +103,28 @@ sealed class StubViewService : IViewService
     public void Save(List<SavedView> views) { }
 }
 
+sealed class StubRuleService : IRuleService
+{
+    public List<MailRule> LoadedRules { get; set; } = [];
+    public int ApplyRulesReturnValue { get; set; } = 0;
+
+    public List<MailRule> LoadRules() => LoadedRules;
+    public void SaveRules(List<MailRule> rules) => LoadedRules = rules;
+
+    public Task<int> ApplyRulesAsync(
+        List<MailMessageSummary> incoming, Guid accountId, CancellationToken ct)
+        => Task.FromResult(ApplyRulesReturnValue);
+
+    public List<MailMessageSummary> TestRule(MailRule rule, IEnumerable<MailMessageSummary> messages)
+        => messages.ToList(); // Stub matches everything
+}
+
 sealed class StubSyncService : ISyncService
 {
 #pragma warning disable CS0067 // events required by interface but never raised in stubs
     public event Action<IReadOnlyList<MailMessageSummary>>? FolderSynced;
     public event Action<IReadOnlyList<MailMessageSummary>>? MessagesRemoved;
+    public event Action<int>? RulesApplied;
 #pragma warning restore CS0067
     public Task SyncAllAccountsAsync(IEnumerable<AccountModel> accounts, IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders, CancellationToken ct) => Task.CompletedTask;
 }

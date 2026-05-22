@@ -65,7 +65,7 @@ public class MessageFilterTests
         return new MainViewModel(
             new StubImapService(), new StubAccountService(), new StubCredentialService(),
             store, new StubOAuthService(), new StubSyncService(), new StubConfigService(),
-            new StubCommandRegistry(), new StubViewService());
+            new StubCommandRegistry(), new StubViewService(), new StubRuleService());
     }
 
     private static async Task<MainViewModel> LoadedVm(IEnumerable<MailMessageSummary> messages)
