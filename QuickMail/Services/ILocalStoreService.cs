@@ -17,6 +17,12 @@ public interface ILocalStoreService
     Task DeleteAccountDataAsync(Guid accountId);
     Task UpdateIsReadAsync(Guid accountId, string folderName, uint uniqueId, bool isRead);
     Task UpdatePreviewAsync(Guid accountId, string folderName, uint uniqueId, string preview);
+
+    /// <summary>
+    /// Batch-update preview text for many messages in one transaction. Used by SyncService
+    /// after fetching previews so a folder of N messages doesn't issue N round-trips.
+    /// </summary>
+    Task UpdatePreviewsBatchAsync(Guid accountId, string folderName, IEnumerable<(uint UniqueId, string Preview)> updates);
     Task<bool> HasSummariesMissingRecipientsAsync();
 
     Task UpsertDetailAsync(MailMessageDetail detail);

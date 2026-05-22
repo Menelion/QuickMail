@@ -257,6 +257,33 @@ public class LocalStoreService : ILocalStoreService
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task UpdatePreviewsBatchAsync(
+        Guid accountId, string folderName, IEnumerable<(uint UniqueId, string Preview)> updates)
+    {
+        var list = updates as IList<(uint, string)> ?? updates.ToList();
+        if (list.Count == 0) return;
+
+        await using var conn = await OpenAsync();
+        await using var tx   = await conn.BeginTransactionAsync();
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE MessageSummary SET preview_text=$preview " +
+            "WHERE unique_id=$uid AND account_id=$aid AND folder_name=$fn;";
+        var pPrev = cmd.Parameters.Add("$preview", SqliteType.Text);
+        var pUid  = cmd.Parameters.Add("$uid",     SqliteType.Integer);
+        cmd.Parameters.AddWithValue("$aid", accountId.ToString());
+        cmd.Parameters.AddWithValue("$fn",  folderName);
+
+        foreach (var (uid, preview) in list)
+        {
+            pPrev.Value = preview;
+            pUid.Value  = (long)uid;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await tx.CommitAsync();
+    }
+
     public async Task UpsertDetailAsync(MailMessageDetail d)
     {
         var attJson = d.Attachments.Count > 0

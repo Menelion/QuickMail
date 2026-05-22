@@ -33,6 +33,7 @@ public class MessageFilterTests
         public Task DeleteAccountDataAsync(Guid accountId) => Task.CompletedTask;
         public Task UpdateIsReadAsync(Guid accountId, string folderName, uint uniqueId, bool isRead) => Task.CompletedTask;
         public Task UpdatePreviewAsync(Guid accountId, string folderName, uint uniqueId, string preview) => Task.CompletedTask;
+        public Task UpdatePreviewsBatchAsync(Guid accountId, string folderName, IEnumerable<(uint UniqueId, string Preview)> updates) => Task.CompletedTask;
         public Task<bool> HasSummariesMissingRecipientsAsync() => Task.FromResult(false);
         public Task UpsertDetailAsync(MailMessageDetail detail) => Task.CompletedTask;
         public Task<MailMessageDetail?> LoadDetailAsync(Guid accountId, string folderName, uint uniqueId) => Task.FromResult<MailMessageDetail?>(null);

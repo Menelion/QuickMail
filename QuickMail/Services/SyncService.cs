@@ -162,13 +162,27 @@ public class SyncService : ISyncService
             var previews = await _imap.FetchPreviewsAsync(
                 account.Id, folder.FullName, uids, previewLines, ct);
 
+            // Match each summary in 'incoming' to its preview, building both the
+            // UI-apply list and the persistence list in one pass.
+            var updates = new List<(uint UniqueId, string Preview)>(previews.Count);
+            var uiApply = new List<(MailMessageSummary Summary, string Preview)>(previews.Count);
             foreach (var s in incoming)
             {
                 if (!previews.TryGetValue(s.UniqueId, out var p)) continue;
-
-                await Application.Current.Dispatcher.InvokeAsync(() => s.Preview = p);
-                await _store.UpdatePreviewAsync(s.AccountId, s.FolderName, s.UniqueId, p);
+                uiApply.Add((s, p));
+                updates.Add((s.UniqueId, p));
             }
+            if (uiApply.Count == 0) return;
+
+            // One dispatcher hop for the whole batch instead of N — N dispatcher
+            // invocations during a fast sync flood the UI thread with continuations.
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                foreach (var (s, p) in uiApply) s.Preview = p;
+            });
+
+            // One transaction for the whole batch instead of N opens/commits.
+            await _store.UpdatePreviewsBatchAsync(account.Id, folder.FullName, updates);
         }
         catch (OperationCanceledException) { /* sync cancelled — normal */ }
         catch (Exception ex)
