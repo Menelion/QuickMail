@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System.Windows;
 using QuickMail.Services;
 using QuickMail.ViewModels;
@@ -17,6 +18,13 @@ public partial class App : Application
             LogService.DebugMode = true;
             LogService.Log("Debug mode enabled.");
         }
+
+        // Install global exception handlers BEFORE anything else so an exception
+        // in startup wiring or any background task is captured in the log instead
+        // of disappearing with the process. (review §1.2)
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         try
         {
@@ -55,5 +63,47 @@ public partial class App : Application
                 LogService.Log("Startup", cur);
             throw;
         }
+    }
+
+    private static void OnDispatcherUnhandledException(
+        object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        for (var cur = e.Exception; cur != null; cur = cur.InnerException)
+            LogService.Log("Dispatcher", cur);
+
+        // Keep the process alive so the user isn't left staring at a vanished window.
+        // The log captures the cause; the next user action will either succeed or
+        // fault again, by which point we want it diagnosed rather than swallowed.
+        try
+        {
+            MessageBox.Show(
+                $"An unexpected error occurred and was logged.\n\n{e.Exception.GetType().Name}: {e.Exception.Message}",
+                "QuickMail",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        catch { /* MessageBox itself can fail in extreme cases — swallow. */ }
+
+        e.Handled = true;
+    }
+
+    private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        // Non-recoverable: the runtime is tearing down. Just log every frame we can.
+        if (e.ExceptionObject is Exception ex)
+            for (var cur = ex; cur != null; cur = cur.InnerException)
+                LogService.Log("AppDomain", cur);
+        else
+            LogService.Log($"AppDomain: non-Exception unhandled object: {e.ExceptionObject}");
+    }
+
+    private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        for (var cur = e.Exception as Exception; cur != null; cur = cur.InnerException)
+            LogService.Log("UnobservedTask", cur);
+
+        // Mark as observed so the GC finaliser doesn't crash the process on .NET <4.5
+        // semantics or on a future hardening change.
+        e.SetObserved();
     }
 }
