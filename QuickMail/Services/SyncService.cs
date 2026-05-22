@@ -114,14 +114,35 @@ public class SyncService : ISyncService
             // Apply mail rules before notifying the UI so the user sees
             // the post-rule state (moved, flagged, etc.) immediately.
             int matchedCount = 0;
+            List<MailMessageSummary> removedMessages = [];
             try
             {
-                matchedCount = await _rules.ApplyRulesAsync(incoming, account.Id, ct);
+                (matchedCount, removedMessages) = await _rules.ApplyRulesAsync(incoming, account.Id, ct);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 LogService.Log($"Rules execution failed for {account.AccountLabel}", ex);
+            }
+
+            // Delete rule-moved/deleted messages from the local store so they
+            // don't reappear on the next cache load.
+            if (removedMessages.Count > 0)
+            {
+                var byFolder = removedMessages.GroupBy(m => (m.AccountId, m.FolderName));
+                foreach (var group in byFolder)
+                {
+                    try
+                    {
+                        await _store.DeleteSummariesAsync(
+                            group.Key.AccountId, group.Key.FolderName,
+                            group.Select(m => m.UniqueId));
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.Log($"Rule cleanup: failed to delete {group.Count()} summaries from {group.Key.FolderName}", ex);
+                    }
+                }
             }
 
             // Show messages immediately — don't wait for body preview fetches.
@@ -130,6 +151,8 @@ public class SyncService : ISyncService
                 FolderSynced?.Invoke(incoming);
                 if (matchedCount > 0)
                     RulesApplied?.Invoke(matchedCount);
+                if (removedMessages.Count > 0)
+                    MessagesRemoved?.Invoke(removedMessages);
             });
         }
 

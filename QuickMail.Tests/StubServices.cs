@@ -107,13 +107,14 @@ sealed class StubRuleService : IRuleService
 {
     public List<MailRule> LoadedRules { get; set; } = [];
     public int ApplyRulesReturnValue { get; set; } = 0;
+    public List<MailMessageSummary> ApplyRulesRemovedMessages { get; set; } = [];
 
     public List<MailRule> LoadRules() => LoadedRules;
     public void SaveRules(List<MailRule> rules) => LoadedRules = rules;
 
-    public Task<int> ApplyRulesAsync(
+    public Task<(int MatchedCount, List<MailMessageSummary> RemovedMessages)> ApplyRulesAsync(
         List<MailMessageSummary> incoming, Guid accountId, CancellationToken ct)
-        => Task.FromResult(ApplyRulesReturnValue);
+        => Task.FromResult((ApplyRulesReturnValue, ApplyRulesRemovedMessages));
 
     public List<MailMessageSummary> TestRule(MailRule rule, IEnumerable<MailMessageSummary> messages)
         => messages.ToList(); // Stub matches everything

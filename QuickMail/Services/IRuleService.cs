@@ -18,9 +18,10 @@ public interface IRuleService
     /// Apply enabled rules to a batch of incoming messages for a specific account.
     /// Rules are evaluated in list order. Each rule is tested against every message;
     /// matching messages have the rule's action executed.
-    /// Returns the number of messages that matched at least one rule.
+    /// Returns the number of messages that matched at least one rule, and the list
+    /// of messages that were moved or deleted (removed from the incoming list).
     /// </summary>
-    Task<int> ApplyRulesAsync(
+    Task<(int MatchedCount, List<MailMessageSummary> RemovedMessages)> ApplyRulesAsync(
         List<MailMessageSummary> incoming,
         Guid accountId,
         CancellationToken ct);

@@ -70,16 +70,17 @@ public class RuleService : IRuleService
 
     // ── Rule Execution ──────────────────────────────────────────────────────
 
-    public async Task<int> ApplyRulesAsync(
+    public async Task<(int MatchedCount, List<MailMessageSummary> RemovedMessages)> ApplyRulesAsync(
         List<MailMessageSummary> incoming,
         Guid accountId,
         CancellationToken ct)
     {
         var rules = LoadRules();
         var enabledRules = rules.Where(r => r.IsEnabled).ToList();
-        if (enabledRules.Count == 0) return 0;
+        if (enabledRules.Count == 0) return (0, []);
 
         int matchedCount = 0;
+        var removedMessages = new List<MailMessageSummary>();
 
         foreach (var rule in enabledRules)
         {
@@ -106,6 +107,7 @@ public class RuleService : IRuleService
                     foreach (var m in matched)
                         matchedKeys.Add((m.UniqueId, m.AccountId, m.FolderName));
                     incoming.RemoveAll(m => matchedKeys.Contains((m.UniqueId, m.AccountId, m.FolderName)));
+                    removedMessages.AddRange(matched);
                 }
             }
             catch (OperationCanceledException) { throw; }
@@ -115,7 +117,7 @@ public class RuleService : IRuleService
             }
         }
 
-        return matchedCount;
+        return (matchedCount, removedMessages);
     }
 
     public List<MailMessageSummary> TestRule(MailRule rule, IEnumerable<MailMessageSummary> messages)
