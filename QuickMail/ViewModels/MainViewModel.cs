@@ -1020,10 +1020,11 @@ public partial class MainViewModel : ObservableObject
         // focused item's UIA position, causing screen readers to re-announce it every time.
         // A single Reset notification lets WPF re-bind once and screen readers see only
         // one structural change for the whole batch.
-        Messages.BeginBatch();
-        foreach (var msg in toInsert)
-            InsertMessageSorted(msg);
-        Messages.EndBatch();
+        using (Messages.BeginBatchScope())
+        {
+            foreach (var msg in toInsert)
+                InsertMessageSorted(msg);
+        }
 
         if (ViewMode == ViewMode.Conversations)
             ScheduleConversationRebuild();
