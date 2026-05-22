@@ -311,6 +311,19 @@ public class LocalStoreServiceTests
     }
 
     [Fact]
+    public void Initialize_IsIdempotent()
+    {
+        // §2.5: data migrations are gated on PRAGMA user_version, so calling
+        // Initialize() multiple times must be safe and have no further effect.
+        var tempDir = Path.Combine(Path.GetTempPath(), $"QuickMailTests-{Guid.NewGuid():N}");
+        var store   = new LocalStoreService(tempDir);
+        store.Initialize();
+        store.Initialize();
+        store.Initialize();
+        // No exception, no schema breakage.
+    }
+
+    [Fact]
     public async Task DeleteSummariesAsync_EmptyInput_NoOp()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"QuickMailTests-{Guid.NewGuid():N}");

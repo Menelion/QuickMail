@@ -67,19 +67,56 @@ public class LocalStoreService : ILocalStoreService
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN has_attachments INTEGER NOT NULL DEFAULT 0;");
         RunMigration(conn, "ALTER TABLE MessageDetail ADD COLUMN attachments_json TEXT DEFAULT NULL;");
 
-        using var backfillCmd = conn.CreateCommand();
-        backfillCmd.CommandText = """
-            UPDATE MessageSummary
-            SET to_addr = COALESCE((
-                SELECT d.to_addr
-                FROM MessageDetail d
-                WHERE d.unique_id = MessageSummary.unique_id
-                  AND d.account_id = MessageSummary.account_id
-                  AND d.folder_name = MessageSummary.folder_name
-            ), to_addr)
-            WHERE to_addr = '';
-            """;
-        backfillCmd.ExecuteNonQuery();
+        RunDataMigrations(conn);
+    }
+
+    // SQLite's PRAGMA user_version stores a single integer per database. We use it as a
+    // gate so data migrations run exactly once instead of on every startup — the to_addr
+    // backfill in particular used to scan the whole MessageSummary table every launch.
+    //
+    // Migration numbering:
+    //   0 → 1   to_addr backfill from MessageDetail
+    // Add new migrations as: if (version < 2) { ...; SetUserVersion(conn, 2); }
+    private const int CurrentSchemaVersion = 1;
+
+    private static void RunDataMigrations(SqliteConnection conn)
+    {
+        var version = GetUserVersion(conn);
+        if (version >= CurrentSchemaVersion) return;
+
+        if (version < 1)
+        {
+            using var backfillCmd = conn.CreateCommand();
+            backfillCmd.CommandText = """
+                UPDATE MessageSummary
+                SET to_addr = COALESCE((
+                    SELECT d.to_addr
+                    FROM MessageDetail d
+                    WHERE d.unique_id = MessageSummary.unique_id
+                      AND d.account_id = MessageSummary.account_id
+                      AND d.folder_name = MessageSummary.folder_name
+                ), to_addr)
+                WHERE to_addr = '';
+                """;
+            backfillCmd.ExecuteNonQuery();
+        }
+
+        SetUserVersion(conn, CurrentSchemaVersion);
+    }
+
+    private static int GetUserVersion(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "PRAGMA user_version;";
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    private static void SetUserVersion(SqliteConnection conn, int version)
+    {
+        using var cmd = conn.CreateCommand();
+        // PRAGMA does not accept bound parameters; format the integer directly (safe — int).
+        cmd.CommandText = $"PRAGMA user_version = {version};";
+        cmd.ExecuteNonQuery();
     }
 
     private static void RunMigration(SqliteConnection conn, string sql)
