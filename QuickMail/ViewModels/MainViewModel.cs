@@ -691,12 +691,7 @@ public partial class MainViewModel : ObservableObject
                 ? $"No messages in {view.Name}."
                 : $"{count} messages in {view.Name}.";
 
-            if (ViewMode == ViewMode.Conversations)
-                ScheduleConversationRebuild();
-            else if (ViewMode == ViewMode.From)
-                ScheduleSenderGroupRebuild();
-            else if (ViewMode == ViewMode.To)
-                ScheduleToGroupRebuild();
+            RebuildActiveGroupView();
 
             StartPrefetchTopOfFolder();
         }
@@ -1026,12 +1021,7 @@ public partial class MainViewModel : ObservableObject
                 InsertMessageSorted(msg);
         }
 
-        if (ViewMode == ViewMode.Conversations)
-            ScheduleConversationRebuild();
-        else if (ViewMode == ViewMode.From)
-            ScheduleSenderGroupRebuild();
-        else if (ViewMode == ViewMode.To)
-            ScheduleToGroupRebuild();
+        RebuildActiveGroupView();
     }
     private void OnMessagesRemoved(IReadOnlyList<MailMessageSummary> removed)
     {
@@ -1068,12 +1058,7 @@ public partial class MainViewModel : ObservableObject
         if (removed.Count > 0)
             StatusText = $"{Messages.Count} messages";
 
-        if (ViewMode == ViewMode.Conversations)
-            ScheduleConversationRebuild();
-        else if (ViewMode == ViewMode.From)
-            ScheduleSenderGroupRebuild();
-        else if (ViewMode == ViewMode.To)
-            ScheduleToGroupRebuild();
+        RebuildActiveGroupView();
     }
 
     // Stores raw messages and applies all active filters.
@@ -1381,12 +1366,8 @@ public partial class MainViewModel : ObservableObject
 
         if (ViewMode == ViewMode.Messages)
             ApplyFiltersAndSearch();
-        else if (ViewMode == ViewMode.Conversations)
-            ScheduleConversationRebuild();
-        else if (ViewMode == ViewMode.From)
-            ScheduleSenderGroupRebuild();
-        else if (ViewMode == ViewMode.To)
-            ScheduleToGroupRebuild();
+        else
+            RebuildActiveGroupView();
     }
 
     partial void OnViewModeChanged(ViewMode value)
@@ -1430,12 +1411,24 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Called by MVVM Toolkit whenever the Messages property is replaced.</summary>
     partial void OnMessagesChanged(BatchObservableCollection<MailMessageSummary> value)
     {
-        if (ViewMode == ViewMode.Conversations)
-            ScheduleConversationRebuild();
-        else if (ViewMode == ViewMode.From)
-            ScheduleSenderGroupRebuild();
-        else if (ViewMode == ViewMode.To)
-            ScheduleToGroupRebuild();
+        RebuildActiveGroupView();
+    }
+
+    /// <summary>
+    /// Triggers a rebuild of whichever grouped view is currently active (Conversations,
+    /// From, or To). Does nothing in flat Messages mode.  All sites that mutate the
+    /// underlying Messages collection should call this rather than open-coding the
+    /// three-branch switch — that pattern had grown to a dozen copies and at least one
+    /// had drifted (missing the To branch, so moving messages didn't refresh the To view).
+    /// </summary>
+    private void RebuildActiveGroupView()
+    {
+        switch (ViewMode)
+        {
+            case ViewMode.Conversations: ScheduleConversationRebuild(); break;
+            case ViewMode.From:          ScheduleSenderGroupRebuild();  break;
+            case ViewMode.To:            ScheduleToGroupRebuild();      break;
+        }
     }
 
     /// <summary>
@@ -1962,12 +1955,7 @@ public partial class MainViewModel : ObservableObject
                     ? "No messages across connected accounts."
                     : $"{totalCount} messages across all accounts.";
 
-                if (ViewMode == ViewMode.Conversations)
-                    ScheduleConversationRebuild();
-                else if (ViewMode == ViewMode.From)
-                    ScheduleSenderGroupRebuild();
-                else if (ViewMode == ViewMode.To)
-                    ScheduleToGroupRebuild();
+                RebuildActiveGroupView();
                 return;
             }
 
@@ -2001,12 +1989,7 @@ public partial class MainViewModel : ObservableObject
                 ? "No messages across connected accounts."
                 : $"{count} messages across all accounts.";
 
-            if (ViewMode == ViewMode.Conversations)
-                ScheduleConversationRebuild();
-            else if (ViewMode == ViewMode.From)
-                ScheduleSenderGroupRebuild();
-            else if (ViewMode == ViewMode.To)
-                ScheduleToGroupRebuild();
+            RebuildActiveGroupView();
 
             StartPrefetchTopOfFolder();
         }
@@ -2181,12 +2164,7 @@ public partial class MainViewModel : ObservableObject
                 ? $"No messages in {account.AccountLabel}."
                 : $"{count} messages in {account.AccountLabel}.";
 
-            if (ViewMode == ViewMode.Conversations)
-                ScheduleConversationRebuild();
-            else if (ViewMode == ViewMode.From)
-                ScheduleSenderGroupRebuild();
-            else if (ViewMode == ViewMode.To)
-                ScheduleToGroupRebuild();
+            RebuildActiveGroupView();
         }
         catch (OperationCanceledException)
         {
@@ -2325,12 +2303,7 @@ public partial class MainViewModel : ObservableObject
             if (Messages.Remove(msg)) removed++;
         }
 
-        if (ViewMode == ViewMode.Conversations)
-            ScheduleConversationRebuild();
-        else if (ViewMode == ViewMode.From)
-            ScheduleSenderGroupRebuild();
-        else if (ViewMode == ViewMode.To)
-            ScheduleToGroupRebuild();
+        RebuildActiveGroupView();
 
         if (ViewMode == ViewMode.Messages && Messages.Count > 0)
         {
@@ -2886,10 +2859,8 @@ public partial class MainViewModel : ObservableObject
             foreach (var msg in messages)
                 Messages.Remove(msg);
 
-            if (ViewMode == ViewMode.Conversations)
-                ScheduleConversationRebuild();
-            else if (ViewMode == ViewMode.From)
-                ScheduleSenderGroupRebuild();
+            // Was missing the To-view branch before §2.1; helper covers all three.
+            RebuildActiveGroupView();
 
             StatusText = $"{messages.Count} {(messages.Count == 1 ? "message" : "messages")} moved to {destination.DisplayName}.";
             Announce(StatusText);
