@@ -50,6 +50,13 @@ public class ViewModelConstructionTests
     }
 
     [Fact]
+    public void RulesManagerViewModel_ConstructsWithoutException()
+    {
+        var vm = new RulesManagerViewModel(new StubRuleService(), accounts: []);
+        Assert.NotNull(vm);
+    }
+
+    [Fact]
     public void ComposeViewModel_ConstructsWithoutException()
     {
         var (imap, accounts, creds, _, _, _, _, _) = MakeServices();
@@ -176,6 +183,16 @@ public class XamlParseTests
     {
         EnsureApplication();
         var window = new NewFolderDialog();
+        Assert.NotNull(window);
+        window.Close();
+    }
+
+    [StaFact]
+    public void RulesManagerWindow_XamlParsesWithoutException()
+    {
+        EnsureApplication();
+        var vm = new RulesManagerViewModel(new StubRuleService(), accounts: []);
+        var window = new RulesManagerWindow(vm, accounts: [], cachedFolders: new System.Collections.Generic.Dictionary<Guid, System.Collections.Generic.List<QuickMail.Models.MailFolderModel>>());
         Assert.NotNull(window);
         window.Close();
     }

@@ -12,7 +12,6 @@ namespace QuickMail.ViewModels;
 public partial class RulesManagerViewModel : ObservableObject
 {
     private readonly IRuleService _ruleService;
-    private readonly IImapService _imap;
     private readonly IEnumerable<AccountModel> _accounts;
     private readonly IEnumerable<MailMessageSummary>? _selectedMessagesForTest;
 
@@ -34,13 +33,11 @@ public partial class RulesManagerViewModel : ObservableObject
 
     public RulesManagerViewModel(
         IRuleService ruleService,
-        IImapService imap,
         IEnumerable<AccountModel> accounts,
         MailRule? prefillTemplate = null,
         IEnumerable<MailMessageSummary>? selectedMessagesForTest = null)
     {
         _ruleService = ruleService;
-        _imap = imap;
         _accounts = accounts;
         _selectedMessagesForTest = selectedMessagesForTest;
 

@@ -14,7 +14,6 @@ public class RuleService : IRuleService
     private readonly string _filePath;
     private readonly IImapService _imap;
     private readonly ILocalStoreService _store;
-    private readonly SemaphoreSlim _loadLock = new(1, 1);
     private List<MailRule> _cache = [];
     private bool _loaded;
 
@@ -80,7 +79,7 @@ public class RuleService : IRuleService
         LogService.Debug($"ApplyRulesAsync: {enabledRules.Count} enabled rules, {incoming.Count} incoming messages for account {accountId}");
         if (enabledRules.Count == 0) return (0, []);
 
-        int matchedCount = 0;
+        var affectedKeys = new HashSet<(uint Uid, Guid AccountId, string FolderName)>();
         var removedMessages = new List<MailMessageSummary>();
 
         foreach (var rule in enabledRules)
@@ -103,7 +102,8 @@ public class RuleService : IRuleService
             }
             if (matched.Count == 0) continue;
 
-            matchedCount += matched.Count;
+            foreach (var m in matched)
+                affectedKeys.Add((m.UniqueId, m.AccountId, m.FolderName));
 
             try
             {
@@ -127,7 +127,7 @@ public class RuleService : IRuleService
             }
         }
 
-        return (matchedCount, removedMessages);
+        return (affectedKeys.Count, removedMessages);
     }
 
     public List<MailMessageSummary> TestRule(MailRule rule, IEnumerable<MailMessageSummary> messages)

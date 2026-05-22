@@ -182,7 +182,8 @@
                       Command="{Binding DeleteMessageCommand}"/>
             <Separator/>
             <MenuItem Header="Create _Rule from Message…"
-                      AutomationProperties.Name="Create Rule from Message"
+                      InputGestureText="Ctrl+Shift+T"
+                      AutomationProperties.Name="Create Rule from Message. Ctrl+Shift+T"
                       Command="{Binding CreateRuleFromMessageCommand}"/>
         </ContextMenu>
 

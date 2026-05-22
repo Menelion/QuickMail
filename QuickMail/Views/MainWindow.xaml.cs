@@ -2962,7 +2962,7 @@ public partial class MainWindow : Window
         var selectedMessages = _vm.Messages.ToList();
 
         var rulesVm = new RulesManagerViewModel(
-            _ruleService, _imap, accounts,
+            _ruleService, accounts,
             prefillTemplate: template,
             selectedMessagesForTest: selectedMessages);
 
