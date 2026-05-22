@@ -13,16 +13,19 @@ public class SyncService : ISyncService
     private readonly IImapService _imap;
     private readonly ILocalStoreService _store;
     private readonly IConfigService _config;
+    private readonly IRuleService _rules;
 
-    public SyncService(IImapService imap, ILocalStoreService store, IConfigService config)
+    public SyncService(IImapService imap, ILocalStoreService store, IConfigService config, IRuleService rules)
     {
         _imap   = imap;
         _store  = store;
         _config = config;
+        _rules  = rules;
     }
 
     public event Action<IReadOnlyList<MailMessageSummary>>? FolderSynced;
     public event Action<IReadOnlyList<MailMessageSummary>>? MessagesRemoved;
+    public event Action<int>? RulesApplied;
 
     public async Task SyncAllAccountsAsync(
         IEnumerable<AccountModel> accounts,
@@ -108,9 +111,51 @@ public class SyncService : ISyncService
         {
             await _store.UpsertSummariesAsync(incoming);
 
+            // Apply mail rules before notifying the UI so the user sees
+            // the post-rule state (moved, flagged, etc.) immediately.
+            int matchedCount = 0;
+            List<MailMessageSummary> removedMessages = [];
+            try
+            {
+                LogService.Debug($"SyncFolderAsync: applying rules for {account.AccountLabel}/{folder.FullName}, {incoming.Count} incoming");
+                (matchedCount, removedMessages) = await _rules.ApplyRulesAsync(incoming, account.Id, ct);
+                LogService.Debug($"SyncFolderAsync: rules done — {matchedCount} matched, {removedMessages.Count} removed, {incoming.Count} remaining in incoming");
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                LogService.Log($"Rules execution failed for {account.AccountLabel}", ex);
+            }
+
+            // Delete rule-moved/deleted messages from the local store so they
+            // don't reappear on the next cache load.
+            if (removedMessages.Count > 0)
+            {
+                var byFolder = removedMessages.GroupBy(m => (m.AccountId, m.FolderName));
+                foreach (var group in byFolder)
+                {
+                    try
+                    {
+                        await _store.DeleteSummariesAsync(
+                            group.Key.AccountId, group.Key.FolderName,
+                            group.Select(m => m.UniqueId));
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.Log($"Rule cleanup: failed to delete {group.Count()} summaries from {group.Key.FolderName}", ex);
+                    }
+                }
+            }
+
             // Show messages immediately — don't wait for body preview fetches.
-            await Application.Current.Dispatcher.InvokeAsync(
-                () => FolderSynced?.Invoke(incoming));
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                FolderSynced?.Invoke(incoming);
+                if (matchedCount > 0)
+                    RulesApplied?.Invoke(matchedCount);
+                if (removedMessages.Count > 0)
+                    MessagesRemoved?.Invoke(removedMessages);
+            });
         }
 
         // ── Remote deletions ─────────────────────────────────────────────────────

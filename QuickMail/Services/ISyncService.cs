@@ -20,6 +20,12 @@ public interface ISyncService
     /// </summary>
     event Action<IReadOnlyList<MailMessageSummary>>? MessagesRemoved;
 
+    /// <summary>
+    /// Fired on the UI thread after rules have been applied to incoming messages.
+    /// The int is the number of messages matched by rules.
+    /// </summary>
+    event Action<int>? RulesApplied;
+
     Task SyncAllAccountsAsync(
         IEnumerable<AccountModel> accounts,
         IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders,

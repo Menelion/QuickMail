@@ -37,7 +37,7 @@ public class ViewModelConstructionTests
     public void MainViewModel_ConstructsWithoutException()
     {
         var (imap, accounts, creds, store, sync, config, registry, _) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService(), new StubRuleService());
         Assert.NotNull(vm);
     }
 
@@ -45,8 +45,15 @@ public class ViewModelConstructionTests
     public void MainViewModel_LoadAccountList_DoesNotThrow()
     {
         var (imap, accounts, creds, store, sync, config, registry, _) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService(), new StubRuleService());
         vm.LoadAccountList(); // must not throw
+    }
+
+    [Fact]
+    public void RulesManagerViewModel_ConstructsWithoutException()
+    {
+        var vm = new RulesManagerViewModel(new StubRuleService(), accounts: []);
+        Assert.NotNull(vm);
     }
 
     [Fact]
@@ -118,10 +125,10 @@ public class XamlParseTests
     {
         EnsureApplication();
         var (imap, accounts, creds, store, sync, config, registry, contacts) = MakeServices();
-        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService());
+        var vm = new MainViewModel(imap, accounts, creds, store, new StubOAuthService(), sync, config, registry, new StubViewService(), new StubRuleService());
         // Constructing MainWindow triggers InitializeComponent() which is the real XAML parse.
         var window = new MainWindow(vm, new StubSmtpService(), accounts, creds, imap,
-            new StubOAuthService(), registry, contacts, config, store, new StubViewService());
+            new StubOAuthService(), registry, contacts, config, store, new StubViewService(), new StubRuleService());
         Assert.NotNull(window);
         window.Close();
     }
@@ -176,6 +183,16 @@ public class XamlParseTests
     {
         EnsureApplication();
         var window = new NewFolderDialog();
+        Assert.NotNull(window);
+        window.Close();
+    }
+
+    [StaFact]
+    public void RulesManagerWindow_XamlParsesWithoutException()
+    {
+        EnsureApplication();
+        var vm = new RulesManagerViewModel(new StubRuleService(), accounts: []);
+        var window = new RulesManagerWindow(vm, accounts: [], cachedFolders: new System.Collections.Generic.Dictionary<Guid, System.Collections.Generic.List<QuickMail.Models.MailFolderModel>>());
         Assert.NotNull(window);
         window.Close();
     }

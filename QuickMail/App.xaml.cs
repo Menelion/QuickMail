@@ -72,7 +72,8 @@ public partial class App : Application
             localStore.Initialize();
 
             var contactService = new ContactService(profile);
-            var syncService = new SyncService(imapService, localStore, configService);
+            var ruleService = new RuleService(imapService, localStore, profile.ProfileDir);
+            var syncService = new SyncService(imapService, localStore, configService, ruleService);
 
             Views.AccessibilityHelper.Configure(configService.Load());
 
@@ -82,10 +83,10 @@ public partial class App : Application
             var viewService = new ViewService(profile);
 
             var mainVm = new MainViewModel(
-                imapService, accountService, credentialService, localStore, oauthService, syncService, configService, commandRegistry, viewService);
+                imapService, accountService, credentialService, localStore, oauthService, syncService, configService, commandRegistry, viewService, ruleService);
             mainVm.LoadAccountList();
 
-            var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry, contactService, configService, localStore, viewService);
+            var mainWindow = new MainWindow(mainVm, smtpService, accountService, credentialService, imapService, oauthService, commandRegistry, contactService, configService, localStore, viewService, ruleService);
             mainWindow.Show();
         }
         catch (Exception ex)

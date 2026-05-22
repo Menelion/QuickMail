@@ -19,6 +19,7 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 - [To view (by recipient)](#to-view-by-recipient)
 - [Filtering messages](#filtering-messages)
 - [Sorting messages](#sorting-messages)
+- [Mail rules](#mail-rules)
 - [Saved views](#saved-views)
 - [Address book](#address-book)
 - [Command palette](#command-palette)
@@ -299,6 +300,65 @@ The **View → Sort** submenu controls the order in which messages or groups are
 
 **Clearing a sort:**
 - Open **View → Sort → Newest First** to return to the default.
+
+---
+
+## Mail rules
+
+Mail rules let you define automatic actions that run on incoming messages as they arrive during background sync. For example, you can automatically move newsletters to a folder, mark messages from your manager as unread, or delete spam.
+
+Rules run **locally on your machine** — no data is sent to any server for rule processing. They fire during the normal sync cycle, so messages are acted on within seconds of arrival.
+
+### Opening the Rules Manager
+
+- Open **Message → Rules…** from the menu bar, or
+- Press **Ctrl+Shift+L**, or
+- Open the command palette (`Ctrl+Shift+P`) and type "Manage Rules".
+
+The Rules Manager shows your rule list on the left and the editor for the selected rule on the right.
+
+### Creating a rule
+
+1. In the Rules Manager, activate **New Rule**.
+2. Enter a **Rule Name**.
+3. Choose which **Account** the rule applies to ("All accounts" or a specific one).
+4. Check the condition fields you want to use (**From**, **To**, **Subject**, **Body**) and enter the text to match. All checked conditions must match for the rule to fire.
+5. Optionally check **Has attachments** to only match messages with attachments.
+6. Choose an **Action**:
+   - **Mark as read** — marks matching messages as read
+   - **Mark as unread** — marks matching messages as unread
+   - **Move to folder** — moves matching messages to a folder you choose
+   - **Delete** — moves matching messages to Trash
+7. If you chose **Move to folder**, activate **Choose Folder…** to pick the destination folder from your folder tree.
+8. Activate **Save**.
+
+### Creating a rule from a message
+
+You can quickly create a rule based on a message you're looking at:
+
+1. Select a message in the message list.
+2. Right-click (or press **Shift+F10**) and choose **Create Rule from Message…**, or press **Ctrl+Shift+T**.
+3. The Rules Manager opens with the sender and subject pre-filled. Choose an action and save.
+
+### Testing a rule
+
+Before saving, you can test a rule against the messages currently shown in your message list:
+
+1. Select the rule in the Rules Manager.
+2. Activate **Test Rule**.
+3. The status bar shows how many messages would match — for example, "Rule would match 3 of 50 selected messages."
+
+### Enabling and disabling rules
+
+Uncheck the **Enabled** checkbox on any rule to temporarily disable it. Disabled rules are skipped during sync but kept in your rule list for later use.
+
+### Deleting a rule
+
+Select a rule in the list and activate **Delete**, or press the **Delete** key. You'll be asked to confirm before the rule is removed.
+
+### Rules status bar
+
+The status bar shows a summary of your rules — how many are active, how many are disabled, and when they last ran. Select the rules status text in the status bar to open the Rules Manager.
 
 ---
 
@@ -620,6 +680,8 @@ A security warning is shown before opening executable file types.
 | Ctrl+Shift+R | Reply All |
 | Ctrl+F | Forward |
 | Delete | Delete selected message(s) |
+| Ctrl+Shift+L | Manage Rules |
+| Ctrl+Shift+T | Create Rule from Message |
 | Ctrl+Shift+V | Cycle view mode (Messages / From / To / Conversations) |
 | Ctrl+Shift+C | Toggle conversation view |
 | Ctrl+Shift+F | Search folders |
@@ -657,6 +719,7 @@ QuickMail keeps all its files under `%AppData%\QuickMail\` (typically `C:\Users\
 |---------------|----------|
 | `accounts.json` | Account configuration — server addresses, ports, display names. No passwords. |
 | `contacts.json` | Address book contacts — display names and email addresses (human-readable JSON) |
+| `rules.json` | Mail rules — conditions and actions for automatic message processing |
 | `config.ini` | Optional settings file — see [Configuration file](#configuration-file) below. |
 | `mail.db` | Local message cache (SQLite database) |
 | `msal.cache` | Encrypted OAuth2 token cache (Microsoft accounts only) |

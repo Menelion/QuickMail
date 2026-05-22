@@ -295,7 +295,8 @@ public class SavedViewsMainViewModelTests
                new StubSyncService(),
                new StubConfigService(),
                new StubCommandRegistry(),
-               new FakeViewService(views));
+               new FakeViewService(views),
+               new StubRuleService());
 
     // VirtualFolderKey stored without the nul prefix; sentinel is \x00 + key.
     private static SavedView MakeVirtualView(
@@ -837,7 +838,8 @@ public class SavedViewsMainViewModelTests
                new StubSyncService(),
                new StubConfigService(),
                new StubCommandRegistry(),
-               new FakeViewService(views));
+               new FakeViewService(views),
+               new StubRuleService());
 
     [Fact]
     public async Task ApplyView_WithDayLimit_FiltersOldMessagesFromMessagesCollection()
