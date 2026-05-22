@@ -26,6 +26,11 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
+        // Sweep stale temp attachments (review §3.2). %TEMP%\QuickMail accumulated every
+        // attachment ever opened — gigabytes over a year of use. Each attachment now
+        // lives in its own Guid subfolder; delete subfolders older than 24h.
+        _ = Task.Run(CleanupStaleTempAttachments);
+
         try
         {
             var accountService    = new AccountService();
@@ -95,6 +100,51 @@ public partial class App : Application
                 LogService.Log("AppDomain", cur);
         else
             LogService.Log($"AppDomain: non-Exception unhandled object: {e.ExceptionObject}");
+    }
+
+    private static void CleanupStaleTempAttachments()
+    {
+        try
+        {
+            var tempRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "QuickMail");
+            if (!System.IO.Directory.Exists(tempRoot)) return;
+
+            var cutoff = DateTime.UtcNow.AddHours(-24);
+
+            // Each attachment lives under a Guid subdir.  An external process might still
+            // hold the file open from a previous session; let those failures slide.
+            foreach (var dir in System.IO.Directory.EnumerateDirectories(tempRoot))
+            {
+                try
+                {
+                    if (System.IO.Directory.GetLastWriteTimeUtc(dir) < cutoff)
+                        System.IO.Directory.Delete(dir, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    LogService.Debug($"Temp-cleanup: could not delete {dir}: {ex.Message}");
+                }
+            }
+
+            // Sweep loose files at the root (older code wrote attachments directly there
+            // without a Guid subfolder — clean those up too).
+            foreach (var file in System.IO.Directory.EnumerateFiles(tempRoot))
+            {
+                try
+                {
+                    if (System.IO.File.GetLastWriteTimeUtc(file) < cutoff)
+                        System.IO.File.Delete(file);
+                }
+                catch (Exception ex)
+                {
+                    LogService.Debug($"Temp-cleanup: could not delete {file}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("CleanupStaleTempAttachments", ex);
+        }
     }
 
     private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
