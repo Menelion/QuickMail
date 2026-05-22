@@ -203,24 +203,13 @@
                     <!-- Target folder (visible only for MoveToFolder) -->
                     <TextBlock Text="Target folder"
                                Visibility="{Binding IsMoveToFolderSelected, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}"/>
-                    <Grid Visibility="{Binding IsMoveToFolderSelected, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0"
-                                 Text="{Binding SelectedRule.TargetFolder, Mode=OneWay}"
-                                 Style="{StaticResource RuleTextBox}"
-                                 IsReadOnly="True"
-                                 IsTabStop="False"
-                                 AutomationProperties.Name="Target folder"/>
-                        <Button Grid.Column="1"
-                                Content="Choose Folder…"
-                                Command="{Binding PickFolderCommand}"
-                                Width="110" Height="26" Margin="6,2,0,8"
-                                IsTabStop="True"
-                                AutomationProperties.Name="Choose target folder"/>
-                    </Grid>
+                    <Button Content="{Binding SelectedRule.TargetFolder, TargetNullValue=Choose Folder…, FallbackValue=Choose Folder…}"
+                            Command="{Binding PickFolderCommand}"
+                            Width="140" Height="26" Margin="0,2,0,8"
+                            HorizontalAlignment="Left"
+                            Visibility="{Binding IsMoveToFolderSelected, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}"
+                            IsTabStop="True"
+                            AutomationProperties.Name="Choose target folder"/>
                     <TextBlock Text="{Binding FolderError}" Foreground="Red"
                                KeyboardNavigation.IsTabStop="False"
                                AutomationProperties.LiveSetting="Assertive">
