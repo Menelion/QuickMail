@@ -27,21 +27,29 @@ public class ContactService : IContactService
     public async Task UpsertContactAsync(ContactModel contact)
     {
         await EnsureLoadedAsync();
-        var existing = _cache.FirstOrDefault(c => c.EmailAddress.Equals(contact.EmailAddress, StringComparison.OrdinalIgnoreCase));
-        if (existing != null)
+        await _loadLock.WaitAsync();
+        try
         {
-            // Update: preserve non-empty display name if new one is empty
-            if (!string.IsNullOrWhiteSpace(contact.DisplayName))
-                existing.DisplayName = contact.DisplayName;
-            existing.LastUsedTicks = contact.LastUsedTicks;
+            var existing = _cache.FirstOrDefault(c => c.EmailAddress.Equals(contact.EmailAddress, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                // Update: preserve non-empty display name if new one is empty
+                if (!string.IsNullOrWhiteSpace(contact.DisplayName))
+                    existing.DisplayName = contact.DisplayName;
+                existing.LastUsedTicks = contact.LastUsedTicks;
+            }
+            else
+            {
+                // New contact: assign an ID (max + 1)
+                contact.Id = _cache.Count > 0 ? _cache.Max(c => c.Id) + 1 : 1;
+                _cache.Add(contact);
+            }
+            await SaveAsyncLocked();
         }
-        else
+        finally
         {
-            // New contact: assign an ID (max + 1)
-            contact.Id = _cache.Count > 0 ? _cache.Max(c => c.Id) + 1 : 1;
-            _cache.Add(contact);
+            _loadLock.Release();
         }
-        await SaveAsync();
     }
 
     public async Task<List<ContactModel>> SearchContactsAsync(string prefix, CancellationToken ct = default)
@@ -49,27 +57,51 @@ public class ContactService : IContactService
         await EnsureLoadedAsync();
         ct.ThrowIfCancellationRequested();
         var q = prefix.Trim();
-        return string.IsNullOrEmpty(q)
-            ? _cache.OrderByDescending(c => c.LastUsedTicks).ToList()
-            : _cache.Where(c =>
-                c.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                c.EmailAddress.Contains(q, StringComparison.OrdinalIgnoreCase))
-              .OrderByDescending(c => c.LastUsedTicks)
-              .Take(10)
-              .ToList();
+        await _loadLock.WaitAsync(ct);
+        try
+        {
+            return string.IsNullOrEmpty(q)
+                ? _cache.OrderByDescending(c => c.LastUsedTicks).ToList()
+                : _cache.Where(c =>
+                    c.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    c.EmailAddress.Contains(q, StringComparison.OrdinalIgnoreCase))
+                  .OrderByDescending(c => c.LastUsedTicks)
+                  .Take(10)
+                  .ToList();
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
     public async Task<List<ContactModel>> LoadAllContactsAsync()
     {
         await EnsureLoadedAsync();
-        return _cache.OrderBy(c => c.DisplayName).ThenBy(c => c.EmailAddress).ToList();
+        await _loadLock.WaitAsync();
+        try
+        {
+            return _cache.OrderBy(c => c.DisplayName).ThenBy(c => c.EmailAddress).ToList();
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
     public async Task DeleteContactAsync(int id)
     {
         await EnsureLoadedAsync();
-        _cache.RemoveAll(c => c.Id == id);
-        await SaveAsync();
+        await _loadLock.WaitAsync();
+        try
+        {
+            _cache.RemoveAll(c => c.Id == id);
+            await SaveAsyncLocked();
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 
     private async Task EnsureLoadedAsync()
@@ -100,7 +132,12 @@ public class ContactService : IContactService
         }
     }
 
-    private async Task SaveAsync()
+    /// <summary>
+    /// Caller must already hold <see cref="_loadLock"/>. Without that gate, two concurrent
+    /// upserts could each compute the same max(Id)+1 and produce duplicate IDs, and the
+    /// temp-file rename could race.
+    /// </summary>
+    private async Task SaveAsyncLocked()
     {
         var json = JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = true });
         // Write to temp file first, then rename for atomicity
