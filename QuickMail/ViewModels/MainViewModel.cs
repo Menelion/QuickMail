@@ -1135,6 +1135,12 @@ public partial class MainViewModel : ObservableObject
                 InsertMessageSorted(msg);
         }
 
+        if (toInsert.Count > 0)
+        {
+            var n = Messages.Count;
+            StatusText = n == 0 ? "No messages" : $"{n} {(n == 1 ? "message" : "messages")}";
+        }
+
         RebuildActiveGroupView();
     }
     // Called on a ThreadPool thread by the IDLE watcher when new mail lands in an inbox.
@@ -1269,9 +1275,15 @@ public partial class MainViewModel : ObservableObject
         };
         Messages = new BatchObservableCollection<MailMessageSummary>(result);
 
+        // Keep the status bar count in sync with whatever is currently visible.
+        // Folder-load methods set a more descriptive status text immediately after
+        // calling SetMessages, so this value is overwritten during loads and only
+        // "sticks" for user-triggered changes (filter, search, sort).
+        var n = Messages.Count;
+        StatusText = n == 0 ? "No messages" : $"{n} {(n == 1 ? "message" : "messages")}";
+
         if (IsSearchActive && !string.IsNullOrWhiteSpace(SearchText))
         {
-            var n = Messages.Count;
             SearchAnnouncement = n == 0
                 ? "No messages found"
                 : $"{n} {(n == 1 ? "message" : "messages")} found";
