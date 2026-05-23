@@ -36,7 +36,7 @@
                                               SelectedValue="{Binding PreviewLines, Mode=TwoWay}"
                                               SelectedValuePath="Tag"
                                               AutomationProperties.LabeledBy="{Binding ElementName=PreviewLinesLabel}">
-                                        <ComboBoxItem Tag="0" Content="Disabled"/>
+                                        <ComboBoxItem Tag="0" Content="Off"/>
                                         <ComboBoxItem Tag="1" Content="1 line"/>
                                         <ComboBoxItem Tag="2" Content="2 lines"/>
                                         <ComboBoxItem Tag="3" Content="3 lines"/>
