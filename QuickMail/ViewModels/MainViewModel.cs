@@ -1400,68 +1400,64 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Sets IsConnected, TotalUnread, and TotalMessages on <paramref name="account"/> from the
-    /// just-fetched folder list.  Counts are summed across all folders.
+    /// Sets IsConnected and TotalUnread on <paramref name="account"/> from the
+    /// just-fetched folder list.  TotalUnread is summed across all folders.
     /// Pass <c>null</c> on connection failure to mark as disconnected.
     /// </summary>
     private static void ApplyAccountStatus(AccountModel account, List<MailFolderModel>? folders)
     {
         if (folders == null)
         {
-            account.IsConnected   = false;
-            account.TotalUnread   = 0;
-            account.TotalMessages = 0;
+            account.IsConnected = false;
+            account.TotalUnread = 0;
             return;
         }
 
-        account.IsConnected   = true;
-        account.TotalUnread   = folders.Sum(f => f.UnreadCount);
-        account.TotalMessages = folders.Sum(f => f.MessageCount);
+        account.IsConnected = true;
+        account.TotalUnread = folders.Sum(f => f.UnreadCount);
     }
 
     /// <summary>
-    /// Decrements TotalMessages and TotalUnread on the relevant accounts for each message
-    /// in <paramref name="removed"/>. Covers all folders, not just inbox.
+    /// Decrements TotalUnread on the relevant accounts for each unread message
+    /// in <paramref name="removed"/>. Covers all folders.
     /// Must be called on the UI thread.
     /// </summary>
     private void UpdateAccountCountsAfterRemoval(IEnumerable<MailMessageSummary> removed)
     {
-        var decrements = new Dictionary<Guid, (int Total, int Unread)>();
+        var decrements = new Dictionary<Guid, int>();
         foreach (var msg in removed)
         {
-            decrements.TryGetValue(msg.AccountId, out var cur);
-            decrements[msg.AccountId] = (cur.Total + 1, cur.Unread + (msg.IsRead ? 0 : 1));
+            if (msg.IsRead) continue;
+            decrements[msg.AccountId] = decrements.GetValueOrDefault(msg.AccountId) + 1;
         }
 
-        foreach (var (id, (total, unread)) in decrements)
+        foreach (var (id, unread) in decrements)
         {
             var account = Accounts.FirstOrDefault(a => a.Id == id);
-            if (account == null) continue;
-            account.TotalMessages = Math.Max(0, account.TotalMessages - total);
-            account.TotalUnread   = Math.Max(0, account.TotalUnread   - unread);
+            if (account != null)
+                account.TotalUnread = Math.Max(0, account.TotalUnread - unread);
         }
     }
 
     /// <summary>
-    /// Increments TotalMessages and TotalUnread on the relevant accounts for each message
-    /// in <paramref name="inserted"/>. Covers all folders, not just inbox.
+    /// Increments TotalUnread on the relevant accounts for each unread message
+    /// in <paramref name="inserted"/>. Covers all folders.
     /// Must be called on the UI thread.
     /// </summary>
     private void UpdateAccountCountsAfterInsert(IEnumerable<MailMessageSummary> inserted)
     {
-        var increments = new Dictionary<Guid, (int Total, int Unread)>();
+        var increments = new Dictionary<Guid, int>();
         foreach (var msg in inserted)
         {
-            increments.TryGetValue(msg.AccountId, out var cur);
-            increments[msg.AccountId] = (cur.Total + 1, cur.Unread + (msg.IsRead ? 0 : 1));
+            if (msg.IsRead) continue;
+            increments[msg.AccountId] = increments.GetValueOrDefault(msg.AccountId) + 1;
         }
 
-        foreach (var (id, (total, unread)) in increments)
+        foreach (var (id, unread) in increments)
         {
             var account = Accounts.FirstOrDefault(a => a.Id == id);
-            if (account == null) continue;
-            account.TotalMessages += total;
-            account.TotalUnread   += unread;
+            if (account != null)
+                account.TotalUnread += unread;
         }
     }
 
@@ -3000,28 +2996,14 @@ public partial class MainViewModel : ObservableObject
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             int totalDeleted = 0;
-            var deletedPerAccount = new Dictionary<Guid, int>();
             foreach (var account in accountsToEmpty)
-            {
-                var n = await _imap.EmptyTrashAsync(account.Id, cts.Token);
-                totalDeleted += n;
-                if (n > 0)
-                    deletedPerAccount[account.Id] = n;
-            }
+                totalDeleted += await _imap.EmptyTrashAsync(account.Id, cts.Token);
 
             var msg = totalDeleted == 1 ? "1 message deleted from trash." : $"{totalDeleted} messages deleted from trash.";
             StatusText = msg;
             Announce(msg);
             trashEmptied = true;
             LogService.Debug($"EmptyTrash: deleted {totalDeleted} messages");
-
-            // Update account totals immediately — no server round-trip needed.
-            foreach (var (id, deleted) in deletedPerAccount)
-            {
-                var acct = Accounts.FirstOrDefault(a => a.Id == id);
-                if (acct != null)
-                    acct.TotalMessages = Math.Max(0, acct.TotalMessages - deleted);
-            }
         }
         catch (OperationCanceledException)
         {

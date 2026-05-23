@@ -37,17 +37,12 @@ public partial class AccountModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
     private bool _isConnected;
 
+    /// <summary>Total unread messages across all folders for this account.</summary>
     [ObservableProperty]
     [property: JsonIgnore]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
     private int _totalUnread;
-
-    [ObservableProperty]
-    [property: JsonIgnore]
-    [NotifyPropertyChangedFor(nameof(StatusLabel))]
-    [NotifyPropertyChangedFor(nameof(AccessibleName))]
-    private int _totalMessages;
 
     // ── Computed labels ───────────────────────────────────────────────────────────
 
@@ -57,8 +52,8 @@ public partial class AccountModel : ObservableObject
 
     /// <summary>
     /// Short status line shown below the account name in the account list, and as a tooltip.
-    /// Counts cover all folders, not just inbox.
-    /// Examples: "Disconnected", "Connected", "Connected — 5 unread, 44 total"
+    /// TotalUnread covers all folders.
+    /// Examples: "Disconnected", "Connected", "Connected — 1,630 unread"
     /// </summary>
     [JsonIgnore]
     public string StatusLabel
@@ -66,18 +61,17 @@ public partial class AccountModel : ObservableObject
         get
         {
             if (!IsConnected) return "Disconnected";
-            if (TotalMessages == 0) return "Connected";
             return TotalUnread > 0
-                ? $"Connected — {TotalUnread} unread, {TotalMessages} total"
-                : $"Connected — {TotalMessages} total";
+                ? $"Connected — {TotalUnread:N0} unread"
+                : "Connected";
         }
     }
 
     /// <summary>
-    /// Full accessible name for screen readers: account label + connection status + message counts.
-    /// Counts cover all folders. Placed in AutomationProperties.Name on the list item container
-    /// so it is announced on focus without requiring the user to hover.
-    /// Examples: "Idea Place, disconnected", "Kelly, connected, 5 unread, 44 total"
+    /// Full accessible name for screen readers: account label + connection status + unread count.
+    /// TotalUnread covers all folders. Placed in AutomationProperties.Name on the list item
+    /// container so it is announced on focus without requiring the user to hover.
+    /// Examples: "Idea Place, disconnected", "Kelly, connected", "Kelly, connected, 1630 unread"
     /// </summary>
     [JsonIgnore]
     public string AccessibleName
@@ -85,10 +79,9 @@ public partial class AccountModel : ObservableObject
         get
         {
             if (!IsConnected) return $"{AccountLabel}, disconnected";
-            if (TotalMessages == 0) return $"{AccountLabel}, connected";
             return TotalUnread > 0
-                ? $"{AccountLabel}, connected, {TotalUnread} unread, {TotalMessages} total"
-                : $"{AccountLabel}, connected, {TotalMessages} total";
+                ? $"{AccountLabel}, connected, {TotalUnread} unread"
+                : $"{AccountLabel}, connected";
         }
     }
 
