@@ -25,6 +25,13 @@ public sealed class FolderTreeNode : INotifyPropertyChanged
     public string AutomationName =>
         Folder is { UnreadCount: > 0 } ? $"{Label}, {Folder.UnreadCount} unread" : Label;
 
+    /// <summary>
+    /// Visual unread badge shown next to the folder label, e.g. "(5)".
+    /// Empty string for folders with no unread messages and for header/group nodes.
+    /// </summary>
+    public string UnreadDisplay =>
+        Folder is { UnreadCount: > 0 } ? $"({Folder.UnreadCount})" : string.Empty;
+
     private bool _isExpanded;
 
     /// <summary>

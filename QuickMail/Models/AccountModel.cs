@@ -41,13 +41,13 @@ public partial class AccountModel : ObservableObject
     [property: JsonIgnore]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
-    private int _inboxUnread;
+    private int _totalUnread;
 
     [ObservableProperty]
     [property: JsonIgnore]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     [NotifyPropertyChangedFor(nameof(AccessibleName))]
-    private int _inboxTotal;
+    private int _totalMessages;
 
     // ── Computed labels ───────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ public partial class AccountModel : ObservableObject
 
     /// <summary>
     /// Short status line shown below the account name in the account list, and as a tooltip.
+    /// Counts cover all folders, not just inbox.
     /// Examples: "Disconnected", "Connected", "Connected — 5 unread, 44 total"
     /// </summary>
     [JsonIgnore]
@@ -65,17 +66,17 @@ public partial class AccountModel : ObservableObject
         get
         {
             if (!IsConnected) return "Disconnected";
-            if (InboxTotal == 0) return "Connected";
-            return InboxUnread > 0
-                ? $"Connected — {InboxUnread} unread, {InboxTotal} total"
-                : $"Connected — {InboxTotal} total";
+            if (TotalMessages == 0) return "Connected";
+            return TotalUnread > 0
+                ? $"Connected — {TotalUnread} unread, {TotalMessages} total"
+                : $"Connected — {TotalMessages} total";
         }
     }
 
     /// <summary>
-    /// Full accessible name for screen readers: account label + connection status + inbox counts.
-    /// Placed in AutomationProperties.Name on the list item container so it is announced on focus
-    /// without requiring the user to hover.
+    /// Full accessible name for screen readers: account label + connection status + message counts.
+    /// Counts cover all folders. Placed in AutomationProperties.Name on the list item container
+    /// so it is announced on focus without requiring the user to hover.
     /// Examples: "Idea Place, disconnected", "Kelly, connected, 5 unread, 44 total"
     /// </summary>
     [JsonIgnore]
@@ -84,10 +85,10 @@ public partial class AccountModel : ObservableObject
         get
         {
             if (!IsConnected) return $"{AccountLabel}, disconnected";
-            if (InboxTotal == 0) return $"{AccountLabel}, connected";
-            return InboxUnread > 0
-                ? $"{AccountLabel}, connected, {InboxUnread} unread, {InboxTotal} total"
-                : $"{AccountLabel}, connected, {InboxTotal} total";
+            if (TotalMessages == 0) return $"{AccountLabel}, connected";
+            return TotalUnread > 0
+                ? $"{AccountLabel}, connected, {TotalUnread} unread, {TotalMessages} total"
+                : $"{AccountLabel}, connected, {TotalMessages} total";
         }
     }
 
