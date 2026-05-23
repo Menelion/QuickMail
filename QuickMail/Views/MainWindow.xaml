@@ -627,9 +627,15 @@
 
                     <ListBox.ItemTemplate>
                         <DataTemplate>
+                            <!-- AutomationProperties.Name="" on both TextBlocks suppresses them from the
+                                 accessibility tree; the full detail is already in the container's
+                                 AutomationProperties.Name (AccessibleName) so screen readers don't
+                                 repeat "connected" twice by reading the StatusLabel TextBlock separately. -->
                             <StackPanel>
-                                <TextBlock Text="{Binding AccountLabel}"/>
+                                <TextBlock Text="{Binding AccountLabel}"
+                                           AutomationProperties.Name=""/>
                                 <TextBlock Text="{Binding StatusLabel}"
+                                           AutomationProperties.Name=""
                                            Foreground="DimGray"
                                            FontSize="11"
                                            Margin="0,1,0,0"/>

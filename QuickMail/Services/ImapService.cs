@@ -112,11 +112,14 @@ public class ImapService : IImapService
         var client = lease.Client;
         var result = new List<MailFolderModel>();
 
-        // Always put INBOX first - many servers don't return it via GetFoldersAsync
+        // Use IMAP STATUS for all folders — faster than EXAMINE (no select/deselect
+        // round-trips) and gives accurate UNSEEN counts that EXAMINE often omits.
+
+        // Always put INBOX first — many servers don't return it via GetFoldersAsync.
         try
         {
             var inbox = client.Inbox!;
-            await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
+            await inbox.StatusAsync(StatusItems.Count | StatusItems.Unread, ct);
             LogService.Log($"INBOX: FullName={inbox.FullName} Count={inbox.Count} Unread={inbox.Unread}");
             result.Add(new MailFolderModel
             {
@@ -127,7 +130,6 @@ public class ImapService : IImapService
                 AccountId    = accountId,
                 Kind         = SpecialFolderKind.Inbox
             });
-            await inbox.CloseAsync(false, ct);
         }
         catch (Exception ex) { LogService.Log("GetFolders/Inbox", ex); }
 
@@ -142,27 +144,22 @@ public class ImapService : IImapService
 
             try
             {
-                await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+                await folder.StatusAsync(StatusItems.Count | StatusItems.Unread, ct);
                 LogService.Log($"  Folder: {folder.FullName} Count={folder.Count} Unread={folder.Unread}");
-                var unread   = folder.Unread;
-                var count    = folder.Count;
-                var excluded = IsExcludedFromAllMail(folder.Attributes);
-                var kind     = GetSpecialFolderKind(folder.Attributes);
-                await folder.CloseAsync(false, ct);
                 result.Add(new MailFolderModel
                 {
                     FullName           = folder.FullName,
                     DisplayName        = folder.Name,
-                    UnreadCount        = unread,
-                    MessageCount       = count,
+                    UnreadCount        = folder.Unread,
+                    MessageCount       = folder.Count,
                     AccountId          = accountId,
-                    ExcludeFromAllMail = excluded,
-                    Kind               = kind
+                    ExcludeFromAllMail = IsExcludedFromAllMail(folder.Attributes),
+                    Kind               = GetSpecialFolderKind(folder.Attributes)
                 });
             }
             catch (Exception ex)
             {
-                LogService.Log($"  Cannot open folder {folder.FullName}: {ex.Message}");
+                LogService.Log($"  Cannot get status for folder {folder.FullName}: {ex.Message}");
                 result.Add(new MailFolderModel
                 {
                     FullName           = folder.FullName,
