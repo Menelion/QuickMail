@@ -228,6 +228,7 @@ public class IdleNewMailTests
     sealed class SpySyncService : ISyncService
     {
         public readonly TaskCompletionSource<(AccountModel Account, MailFolderModel Folder)> SyncOneFolderCalled = new();
+        public readonly TaskCompletionSource<(AccountModel Account, MailFolderModel Folder)> SyncOneFolderOnlineCalled = new();
 
 #pragma warning disable CS0067
         public event Action<IReadOnlyList<MailMessageSummary>>? FolderSynced;
@@ -242,6 +243,12 @@ public class IdleNewMailTests
         public Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
         {
             SyncOneFolderCalled.TrySetResult((account, folder));
+            return Task.CompletedTask;
+        }
+
+        public Task SyncOneFolderOnlineAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
+        {
+            SyncOneFolderOnlineCalled.TrySetResult((account, folder));
             return Task.CompletedTask;
         }
     }
@@ -280,7 +287,7 @@ public class IdleNewMailTests
     }
 
     [Fact]
-    public async Task NewMailDetected_OnlineMode_DoesNotSync()
+    public async Task NewMailDetected_OnlineMode_CallsSyncOneFolderOnline()
     {
         var accountId = Guid.NewGuid();
         var imap = new FireableImapService(accountId);
@@ -303,9 +310,10 @@ public class IdleNewMailTests
 
         imap.FireNewMail();
 
-        // In online mode the handler returns immediately without calling sync.
-        // Wait briefly then assert the TCS was not set.
-        await Task.Delay(200);
+        // In online mode the handler must call SyncOneFolderOnlineAsync (not SyncOneFolderAsync).
+        var result = await sync.SyncOneFolderOnlineCalled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(accountId, result.Account.Id);
+        Assert.Equal(SpecialFolderKind.Inbox, result.Folder.Kind);
         Assert.False(sync.SyncOneFolderCalled.Task.IsCompleted);
     }
 }

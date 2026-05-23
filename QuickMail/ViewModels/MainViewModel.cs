@@ -966,8 +966,7 @@ public partial class MainViewModel : ObservableObject
         await ConnectAllAccountsAsync();
         if (_cachedFolders.Count == 0) return;
 
-        if (!OnlineMode)
-            _imap.StartIdleWatchers(Accounts.ToList(), ct);
+        _imap.StartIdleWatchers(Accounts.ToList(), ct);
 
         if (SelectedFolder?.FullName == AllMailFolder.FullName && ViewMode == ViewMode.To)
         {
@@ -1124,9 +1123,6 @@ public partial class MainViewModel : ObservableObject
     // Runs a targeted sync for that account's INBOX so the message appears in the list.
     private void OnInboxNewMailDetected(Guid accountId)
     {
-        if (OnlineMode) return;
-
-        // Find the account and its INBOX folder model.
         var account = Accounts.FirstOrDefault(a => a.Id == accountId);
         if (account is null) return;
 
@@ -1142,7 +1138,10 @@ public partial class MainViewModel : ObservableObject
         {
             try
             {
-                await _syncService.SyncOneFolderAsync(account, inbox, CancellationToken.None);
+                if (OnlineMode)
+                    await _syncService.SyncOneFolderOnlineAsync(account, inbox, CancellationToken.None);
+                else
+                    await _syncService.SyncOneFolderAsync(account, inbox, CancellationToken.None);
             }
             catch (Exception ex)
             {

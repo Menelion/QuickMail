@@ -138,6 +138,7 @@ sealed class StubSyncService : ISyncService
 #pragma warning restore CS0067
     public Task SyncAllAccountsAsync(IEnumerable<AccountModel> accounts, IReadOnlyDictionary<Guid, List<MailFolderModel>> cachedFolders, CancellationToken ct) => Task.CompletedTask;
     public Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct) => Task.CompletedTask;
+    public Task SyncOneFolderOnlineAsync(AccountModel account, MailFolderModel folder, CancellationToken ct) => Task.CompletedTask;
 }
 
 sealed class StubCommandRegistry : ICommandRegistry

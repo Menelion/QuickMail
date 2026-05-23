@@ -91,6 +91,17 @@ public class SyncService : ISyncService
     public Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
         => SyncFolderAsync(account, folder, ct);
 
+    public async Task SyncOneFolderOnlineAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
+    {
+        // Fetch the last 50 messages. OnFolderSynced deduplicates by UID so already-visible
+        // messages are harmlessly skipped; only truly new arrivals are inserted.
+        var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, sinceUid: 0, initialCount: 50, ct);
+        if (incoming.Count > 0)
+        {
+            await Application.Current.Dispatcher.InvokeAsync(() => FolderSynced?.Invoke(incoming));
+        }
+    }
+
     private async Task<List<MailMessageSummary>> SyncFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
     {
         // ── New messages ─────────────────────────────────────────────────────────

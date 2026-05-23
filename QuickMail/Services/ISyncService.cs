@@ -36,4 +36,10 @@ public interface ISyncService
     /// inbox sync without a full account-wide sweep.
     /// </summary>
     Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct);
+
+    /// <summary>
+    /// Online-mode variant: fetches the most recent messages directly from IMAP without
+    /// touching the local store, then fires <see cref="FolderSynced"/> so the UI updates.
+    /// </summary>
+    Task SyncOneFolderOnlineAsync(AccountModel account, MailFolderModel folder, CancellationToken ct);
 }
