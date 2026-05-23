@@ -95,7 +95,9 @@ public class SyncService : ISyncService
     {
         // Fetch the last 50 messages. OnFolderSynced deduplicates by UID so already-visible
         // messages are harmlessly skipped; only truly new arrivals are inserted.
+        LogService.Log($"IDLE targeted sync: fetching {account.AccountLabel}/{folder.FullName}");
         var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, sinceUid: 0, initialCount: 50, ct);
+        LogService.Log($"IDLE targeted sync: {incoming.Count} messages fetched from {account.AccountLabel}/{folder.FullName}");
         if (incoming.Count > 0)
         {
             await Application.Current.Dispatcher.InvokeAsync(() => FolderSynced?.Invoke(incoming));

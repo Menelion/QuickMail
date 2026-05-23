@@ -1088,6 +1088,25 @@ public partial class MainViewModel : ObservableObject
             // Per-account "All Mail" - only messages belonging to that account.
             relevant = incoming.Where(m => m.AccountId == watchedAccountId);
         }
+        else if (selected.FullName == AllInboxesFolder.FullName ||
+                 selected.FullName == AllDraftsFolder.FullName  ||
+                 selected.FullName == AllSentFolder.FullName    ||
+                 selected.FullName == AllTrashFolder.FullName)
+        {
+            // Kind-specific virtual folders (All Inboxes / Drafts / Sent / Trash) —
+            // accept messages whose source folder has the matching SpecialFolderKind.
+            // Build a lookup set once so the per-message check is O(1).
+            var targetKind = selected.FullName == AllInboxesFolder.FullName ? SpecialFolderKind.Inbox
+                           : selected.FullName == AllDraftsFolder.FullName  ? SpecialFolderKind.Drafts
+                           : selected.FullName == AllSentFolder.FullName    ? SpecialFolderKind.Sent
+                           : SpecialFolderKind.Trash;
+            var matchingFolderKeys = new HashSet<(Guid, string)>(
+                _cachedFolders.SelectMany(kvp => kvp.Value
+                    .Where(f => f.Kind == targetKind)
+                    .Select(f => (kvp.Key, f.FullName.ToUpperInvariant()))));
+            relevant = incoming.Where(m =>
+                matchingFolderKeys.Contains((m.AccountId, m.FolderName.ToUpperInvariant())));
+        }
         else if (!selected.IsHeader && selected.AccountId != Guid.Empty)
         {
             // Regular folder — only accept messages for this specific folder.
