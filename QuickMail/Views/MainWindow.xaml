@@ -620,7 +620,6 @@
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
-                            <Setter Property="ToolTip"                   Value="{Binding StatusLabel}"/>
                             <Setter Property="Padding"                   Value="4,4,4,4"/>
                         </Style>
                     </ListBox.ItemContainerStyle>
