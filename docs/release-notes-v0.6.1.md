@@ -25,6 +25,7 @@ Message dates in the list now use a 12-hour clock with an A or P suffix for toda
 ## Bug Fixes
 
 - **IDLE push not working in `--online` mode** — The IDLE watcher was never started when `--online` was active, so new mail required a manual refresh. IDLE connections now start regardless of caching mode, and new arrivals are fetched live from IMAP and merged into the message list without touching the cache.
+- **Delete and Move to Folder crashing in `--online` mode** — After a successful IMAP delete or move, QuickMail tried to remove the message from the local SQLite cache, which doesn't exist in online mode. This produced the error "SQLite Error 1: no such table: MessageSummary". Both operations now skip the cache cleanup step when running in online mode.
 - **Preview text showing when Preview Lines is set to 0** — When `PreviewLines = 0` in Settings, the IMAP PREVIEW extension on the server was still populating preview text in the message list. QuickMail now clears preview text when loading or inserting messages whenever the preview display is disabled.
 
 ---

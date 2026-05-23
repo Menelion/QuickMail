@@ -11,6 +11,7 @@
 ### Bug Fixes
 
 - IDLE push did not work in `--online` mode — the watcher connections were never started.
+- Delete and Move to Folder crashed in `--online` mode with "no such table: MessageSummary" — the local store cleanup after an IMAP delete is now skipped when running in online mode.
 - Preview text was still shown in the message list when Preview Lines was set to 0 in Settings.
 
 ---
