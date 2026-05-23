@@ -1368,6 +1368,9 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var (id, folders) in results)
         {
+            var account = Accounts.FirstOrDefault(a => a.Id == id);
+            if (account != null)
+                ApplyAccountStatus(account, folders);
             if (folders != null)
                 _cachedFolders[id] = folders;
         }
@@ -1377,6 +1380,26 @@ public partial class MainViewModel : ObservableObject
         StatusText = _cachedFolders.Count > 0
             ? $"{_cachedFolders.Count} of {Accounts.Count} account(s) connected."
             : "No accounts could be connected.";
+    }
+
+    /// <summary>
+    /// Sets IsConnected, InboxUnread, and InboxTotal on <paramref name="account"/> from the
+    /// just-fetched folder list.  Pass <c>null</c> on connection failure to mark as disconnected.
+    /// </summary>
+    private static void ApplyAccountStatus(AccountModel account, List<MailFolderModel>? folders)
+    {
+        if (folders == null)
+        {
+            account.IsConnected = false;
+            account.InboxUnread  = 0;
+            account.InboxTotal   = 0;
+            return;
+        }
+
+        var inbox = folders.FirstOrDefault(f => f.Kind == SpecialFolderKind.Inbox);
+        account.IsConnected = true;
+        account.InboxUnread  = inbox?.UnreadCount ?? 0;
+        account.InboxTotal   = inbox?.MessageCount ?? 0;
     }
 
     private async Task<(Guid Id, List<MailFolderModel>? Folders)> ConnectOneAccountAsync(AccountModel account)
@@ -1778,6 +1801,7 @@ public partial class MainViewModel : ObservableObject
             await _imap.ConnectAsync(account, password, _connectCts.Token);
             var folderList = await _imap.GetFoldersAsync(account.Id, _connectCts.Token);
             _cachedFolders[account.Id] = folderList;
+            ApplyAccountStatus(account, folderList);
             RebuildFolderListFromCache();
             StatusText = $"Connected to {account.AccountLabel}. Press Enter on a folder to load messages.";
         }
@@ -3017,6 +3041,8 @@ public partial class MainViewModel : ObservableObject
             using var cts   = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var folderList  = await _imap.GetFoldersAsync(accountId, cts.Token);
             _cachedFolders[accountId] = folderList;
+            var account = Accounts.FirstOrDefault(a => a.Id == accountId);
+            if (account != null) ApplyAccountStatus(account, folderList);
             RebuildFolderListFromCache();
         }
         catch (Exception ex)
@@ -3602,6 +3628,7 @@ public partial class MainViewModel : ObservableObject
             {
                 if (_cachedFolders.ContainsKey(account.Id)) continue;
                 var result = await ConnectOneAccountAsync(account);
+                App.Current.Dispatcher.Invoke(() => ApplyAccountStatus(account, result.Folders));
                 if (result.Folders != null)
                 {
                     _cachedFolders[result.Id] = result.Folders;

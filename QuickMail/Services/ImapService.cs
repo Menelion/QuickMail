@@ -120,11 +120,12 @@ public class ImapService : IImapService
             LogService.Log($"INBOX: FullName={inbox.FullName} Count={inbox.Count} Unread={inbox.Unread}");
             result.Add(new MailFolderModel
             {
-                FullName    = inbox.FullName,
-                DisplayName = "Inbox",
-                UnreadCount = inbox.Unread,
-                AccountId   = accountId,
-                Kind        = SpecialFolderKind.Inbox
+                FullName     = inbox.FullName,
+                DisplayName  = "Inbox",
+                UnreadCount  = inbox.Unread,
+                MessageCount = inbox.Count,
+                AccountId    = accountId,
+                Kind         = SpecialFolderKind.Inbox
             });
             await inbox.CloseAsync(false, ct);
         }
@@ -144,6 +145,7 @@ public class ImapService : IImapService
                 await folder.OpenAsync(FolderAccess.ReadOnly, ct);
                 LogService.Log($"  Folder: {folder.FullName} Count={folder.Count} Unread={folder.Unread}");
                 var unread   = folder.Unread;
+                var count    = folder.Count;
                 var excluded = IsExcludedFromAllMail(folder.Attributes);
                 var kind     = GetSpecialFolderKind(folder.Attributes);
                 await folder.CloseAsync(false, ct);
@@ -152,6 +154,7 @@ public class ImapService : IImapService
                     FullName           = folder.FullName,
                     DisplayName        = folder.Name,
                     UnreadCount        = unread,
+                    MessageCount       = count,
                     AccountId          = accountId,
                     ExcludeFromAllMail = excluded,
                     Kind               = kind

@@ -607,13 +607,36 @@
                          AutomationProperties.Name="Email accounts"
                          ItemsSource="{Binding Accounts}"
                          SelectedItem="{Binding SelectedAccount, Mode=TwoWay}"
-                         DisplayMemberPath="AccountLabel"
                          TextSearch.TextPath="AccountLabel"
                          BorderThickness="0,0,1,0"
                          TabIndex="1"
                          KeyboardNavigation.TabNavigation="Once"
                          GotKeyboardFocus="List_GotKeyboardFocus"
                          PreviewKeyDown="AccountList_PreviewKeyDown">
+
+                    <!-- Two-line item: account name + live status (connected/disconnected + inbox counts).
+                         AutomationProperties.Name on the container announces the full detail to screen
+                         readers on focus, without requiring the user to hover over the tooltip. -->
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+                            <Setter Property="ToolTip"                   Value="{Binding StatusLabel}"/>
+                            <Setter Property="Padding"                   Value="4,4,4,4"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding AccountLabel}"/>
+                                <TextBlock Text="{Binding StatusLabel}"
+                                           Foreground="DimGray"
+                                           FontSize="11"
+                                           Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+
                     <ListBox.ContextMenu>
                         <ContextMenu AutomationProperties.Name="Account actions">
                             <MenuItem Header="_Delete Account"

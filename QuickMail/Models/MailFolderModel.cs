@@ -11,6 +11,8 @@ public class MailFolderModel
     public string FullName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public int UnreadCount { get; set; }
+    /// <summary>Total number of messages in the folder as reported by the server at connection time.</summary>
+    public int MessageCount { get; set; }
     /// <summary>True for Trash, Junk, Sent, and Drafts — excluded from the All Mail aggregate view.</summary>
     public bool ExcludeFromAllMail { get; set; }
     /// <summary>Identifies special-purpose folders for virtual aggregate views.</summary>
