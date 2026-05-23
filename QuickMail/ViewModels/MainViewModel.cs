@@ -48,6 +48,11 @@ public partial class MainViewModel : ObservableObject
     // can run silently and update the UI once at the end instead of N times.
     private bool _suppressFolderSyncUpdates;
 
+    // When true, OnActiveFilterChanged and OnSearchTextChanged skip ApplyFiltersAndSearch.
+    // Set during SelectFolderAsync's property-reset block to prevent showing the previous
+    // folder's messages through the new filter while the new folder's IMAP fetch is pending.
+    private bool _suppressFilterRebuild;
+
     // Version stamps; latest wins, stale results discarded
     private int _folderLoadVersion;
     private int _conversationRebuildVersion;
@@ -261,7 +266,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Raised when the search box should receive focus (View concern).</summary>
     public event EventHandler? SearchRequested;
 
-    partial void OnSearchTextChanged(string value) => ApplyFiltersAndSearch();
+    partial void OnSearchTextChanged(string value)
+    {
+        if (!_suppressFilterRebuild) ApplyFiltersAndSearch();
+    }
 
     [ObservableProperty]
     private ObservableCollection<ConversationGroup> _conversations = [];
@@ -795,6 +803,7 @@ public partial class MainViewModel : ObservableObject
         };
         ViewMode = newMode;
 
+        var prevSyncDays = _syncDays;
         _syncDays = cfg.SyncDays;
         OnPropertyChanged(nameof(IsSyncDays7));
         OnPropertyChanged(nameof(IsSyncDays30));
@@ -812,6 +821,9 @@ public partial class MainViewModel : ObservableObject
             "countAsc"  => MessageSort.CountAscending,
             _           => MessageSort.DateDescending,
         };
+
+        if (_syncDays != prevSyncDays)
+            _ = RefreshAsync();
     }
 
     private void RegisterCommands(ICommandRegistry registry)
@@ -1512,6 +1524,13 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsFilterActive));
         OnPropertyChanged(nameof(FilterLabel));
         OnPropertyChanged(nameof(WindowTitle));
+
+        if (_suppressFilterRebuild) return;
+
+        if (ViewMode == ViewMode.Messages)
+            ApplyFiltersAndSearch();
+        else
+            RebuildActiveGroupView();
     }
 
     partial void OnActiveSortChanged(MessageSort value)
@@ -1763,6 +1782,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        _suppressFilterRebuild = true;
         ActiveFilter   = MessageFilter.All;
         ActiveDayLimit = null;
         SearchText     = string.Empty;
@@ -1771,6 +1791,7 @@ public partial class MainViewModel : ObservableObject
         SelectedFolder = folder;
         MessageDetail  = null;
         IsMessageOpen  = false;
+        _suppressFilterRebuild = false;
 
         if (IsVirtualFolder(folder))
             await FetchVirtualAsync(folder);
@@ -3371,7 +3392,7 @@ public partial class MainViewModel : ObservableObject
     // ── Filter command ────────────────────────────────────────────────────────
 
     [RelayCommand]
-    private async Task SetFilterAsync(string? filter)
+    private Task SetFilterAsync(string? filter)
     {
         ActiveFilter = filter?.ToLowerInvariant() switch
         {
@@ -3382,7 +3403,7 @@ public partial class MainViewModel : ObservableObject
             "forwarded"   => MessageFilter.Forwarded,
             _             => MessageFilter.All,
         };
-        await RefreshAsync();
+        return Task.CompletedTask;
     }
 
     // ── Sort command ──────────────────────────────────────────────────────────
