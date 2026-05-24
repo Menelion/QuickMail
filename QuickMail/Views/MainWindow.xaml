@@ -1336,18 +1336,17 @@
              Left/Right arrows navigate between regions; Tab exits to the next F6 pane.
              Informational regions use read-only TextBox (ControlType.Edit + ValuePattern).
              Clickable regions use Button (ControlType.Button + InvokePattern).
-             The StatusBar itself exposes ControlType.StatusBar so screen readers'
-             dedicated status-bar commands (JAWS Insert+PageDown, NVDA Insert+End) work. -->
+             The StatusBar UIA control pattern enables screen readers' built-in
+             status-bar read commands. -->
         <StatusBar x:Name="MainStatusBar"
                    Grid.Row="3"
-                   KeyboardNavigation.TabNavigation="Once"
+                   KeyboardNavigation.TabNavigation="None"
                    KeyboardNavigation.DirectionalNavigation="Contained"
-                   AutomationProperties.Name="{Binding StatusBarAccessibleName}">
+                   AutomationProperties.Name="{Binding StatusText, StringFormat='Status bar — {0}', FallbackValue='Status bar'}">
 
             <!-- Region 1: Status message (informational) -->
             <StatusBarItem x:Name="StatusTextItem"
-                           KeyboardNavigation.IsTabStop="True"
-                           AutomationProperties.Name="Status">
+                           KeyboardNavigation.IsTabStop="True">
                 <TextBox x:Name="StatusTextBox"
                          Style="{StaticResource StatusTextBoxStyle}"
                          Text="{Binding StatusText, Mode=OneWay}"
@@ -1356,8 +1355,7 @@
 
             <!-- Region 2: Connection state (informational) -->
             <StatusBarItem x:Name="ConnectionStatusItem"
-                           KeyboardNavigation.IsTabStop="True"
-                           AutomationProperties.Name="Connection">
+                           KeyboardNavigation.IsTabStop="True">
                 <TextBox x:Name="ConnectionStatusTextBox"
                          Style="{StaticResource StatusTextBoxStyle}"
                          Text="{Binding ConnectionStatusText, Mode=OneWay}"
@@ -1370,8 +1368,7 @@
             <!-- Region 3: Rules status (clickable — opens Rules Manager) -->
             <StatusBarItem x:Name="RulesStatusItem"
                            HorizontalAlignment="Right"
-                           KeyboardNavigation.IsTabStop="True"
-                           AutomationProperties.Name="Rules">
+                           KeyboardNavigation.IsTabStop="True">
                 <Button x:Name="RulesStatusButton"
                         Style="{StaticResource StatusBarButtonStyle}"
                         Content="{Binding RulesStatusText, Mode=OneWay}"
@@ -1384,11 +1381,11 @@
             <StatusBarItem x:Name="StatusProgressItem"
                            HorizontalAlignment="Right"
                            KeyboardNavigation.IsTabStop="True"
-                           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
-                           AutomationProperties.Name="Sync progress">
+                           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
                 <ProgressBar x:Name="StatusProgressBar"
                              Width="80" Height="14"
                              IsIndeterminate="True"
+                             Focusable="True"
                              AutomationProperties.Name="{Binding StatusText, StringFormat='Syncing — {0}'}"/>
             </StatusBarItem>
         </StatusBar>

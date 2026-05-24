@@ -378,7 +378,7 @@ The status bar has four regions that you can explore with the keyboard:
 - Press **Tab** to exit the status bar and move to the next pane.
 - The Sync progress region only appears while mail is syncing and is skipped when hidden.
 
-Screen readers can read the entire status bar at once with their dedicated status-bar command: **Insert+PageDown** (JAWS), **Insert+End** (NVDA), or **CapsLock+PageDown** (Narrator).
+Screen readers that support reading a status bar directly can usually do so with a dedicated keyboard command — consult your screen reader's documentation for details.
 
 ---
 

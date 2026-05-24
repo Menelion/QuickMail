@@ -271,13 +271,6 @@ public partial class MainViewModel : ObservableObject
         if (!_suppressFilterRebuild) ApplyFiltersAndSearch();
     }
 
-    partial void OnStatusTextChanged(string value)
-    {
-        StatusBarAccessibleName = string.IsNullOrEmpty(value)
-            ? "Status bar"
-            : $"Status bar — {value}";
-    }
-
     [ObservableProperty]
     private ObservableCollection<ConversationGroup> _conversations = [];
 
@@ -357,9 +350,6 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _connectionStatusText = "Offline";
-
-    [ObservableProperty]
-    private string _statusBarAccessibleName = "Status bar — Ready";
 
     [ObservableProperty]
     private bool _isBusy;
@@ -3110,6 +3100,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         StatusText = $"Account '{account.AccountLabel}' removed.";
+        ConnectionStatusText = Accounts.Count == 0 ? "Offline" : $"{Accounts.Count} account(s) connected";
     }
 
     [RelayCommand]
