@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.6.2
+
+### New Features
+
+- **Connection status and message counts in the account list** — Each account now shows a status line displaying connection state and unread/total message counts across all folders (e.g., "Connected — 5 unread, 44 total").
+- **Unread count badges on folders** — The folder tree now displays an unread count badge (e.g., `(3)`) next to each folder name when there are unread messages.
+- **Account-wide message counts** — Message counts now reflect your entire account across all folders, not just the inbox.
+
+### Bug Fixes
+
+- Status bar message count now updates live during searches, filters, and when new mail arrives via IMAP IDLE.
+- Sync Range setting in Settings now takes effect immediately without requiring a manual refresh.
+- Virtual folders (All Inboxes, All Sent, All Drafts, All Trash) now properly receive new mail in real-time when they are active.
+- Folder navigation no longer flashes stale messages from the previous folder before the new folder loads.
+- Screen reader announcements no longer duplicate folder names, unread counts, or connection status.
+
+---
+
 ## v0.6.1
 
 ### New Features
