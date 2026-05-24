@@ -165,6 +165,8 @@ Custom bindings are saved to `hotkeys.json` in your AppData folder and apply imm
 | Cycle focus forward through all panes | **F6** |
 | Cycle focus backward | **Shift+F6** |
 | Focus the status bar | `Ctrl+9` |
+| Navigate status bar regions | **Left/Right** arrow keys |
+| Activate a clickable status bar region | **Enter** or **Space** |
 
 ### Folder tree shortcut (Ctrl+2 / Ctrl+Y)
 
@@ -358,7 +360,25 @@ Select a rule in the list and activate **Delete**, or press the **Delete** key. 
 
 ### Rules status bar
 
-The status bar shows a summary of your rules — how many are active, how many are disabled, and when they last ran. Select the rules status text in the status bar to open the Rules Manager.
+The status bar shows a summary of your rules — how many are active, how many are disabled, and when they last ran. Press **Enter** or **Space** on the Rules button in the status bar to open the Rules Manager.
+
+### Status bar navigation
+
+The status bar has four regions that you can explore with the keyboard:
+
+| Region | Shows | Interactive |
+|--------|-------|-------------|
+| **Status** | Current status (message counts, sync progress, etc.) | No |
+| **Connection** | Connection state — "Offline", "Connecting…", or "N accounts connected" | No |
+| **Rules** | Summary of active/disabled rules and last run time | Yes — **Enter** or **Space** opens the Rules Manager |
+| **Sync progress** | A progress bar shown during mail sync | No |
+
+- Press `Ctrl+9` or cycle through panes with **F6** to reach the status bar.
+- Use **Left** and **Right** arrow keys to move between regions.
+- Press **Tab** to exit the status bar and move to the next pane.
+- The Sync progress region only appears while mail is syncing and is skipped when hidden.
+
+Screen readers that support reading a status bar directly can usually do so with a dedicated keyboard command — consult your screen reader's documentation for details.
 
 ---
 
@@ -672,6 +692,8 @@ A security warning is shown before opening executable file types.
 | Ctrl+3 | Focus message list / conversation tree |
 | Ctrl+0 | Focus toolbar |
 | Ctrl+9 | Focus status bar |
+| Left/Right | Navigate status bar regions (when status bar is focused) |
+| Enter / Space | Activate status bar button (Rules) |
 | F6 | Cycle focus forward through panes |
 | Shift+F6 | Cycle focus backward through panes |
 | F5 | Refresh current folder |

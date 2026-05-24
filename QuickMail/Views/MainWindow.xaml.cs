@@ -165,17 +165,6 @@ public partial class MainWindow : Window
         vm.RulesManagerRequested += (_, _) => OpenRulesManager();
         vm.CreateRuleFromMessageRequested += (_, template) => OpenRulesManager(template);
 
-        // Wire rules status bar item to open Rules Manager on click/Enter/Space
-        RulesStatusItem.MouseLeftButtonDown += (_, _) => OpenRulesManager();
-        RulesStatusItem.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter || e.Key == Key.Space)
-            {
-                OpenRulesManager();
-                e.Handled = true;
-            }
-        };
-
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
         //
@@ -281,6 +270,7 @@ public partial class MainWindow : Window
         };
 
         PreviewKeyDown += OnWindowKeyDown;
+        MainStatusBar.PreviewKeyDown += StatusBar_PreviewKeyDown;
         Loaded += OnLoaded;
 
         // Debug: trace every SelectionChanged on the message list so we can see
@@ -1626,16 +1616,105 @@ public partial class MainWindow : Window
         MessageBody.IsKeyboardFocusWithin ||
         ViewModeButton.IsKeyboardFocusWithin);
 
-    // Moves keyboard focus to the status bar's read-only TextBox.
-    // StatusTextBox is ControlType.Edit + ValuePattern, so screen readers
-    // announce its value natively when it receives focus — no Announce hack needed.
-    // The Announce call is kept as a belt-and-suspenders fallback for screen readers
-    // that have slow UIA update cycles.
+    // Focuses the first status bar region and announces it to screen readers.
+    // The TextBox child exposes ControlType.Edit + ValuePattern, so screen readers
+    // read its value natively on focus. The Announce call provides a redundant
+    // spoken summary for screen readers with slow UIA update cycles.
     private void FocusStatusBar()
     {
-        StatusTextBox.Focus();
-        AccessibilityHelper.Announce(this, $"Status bar: {_vm.StatusText}", category: AnnouncementCategory.Result);
+        FocusStatusBarRegion(1);
+        AccessibilityHelper.Announce(this, $"Status bar: {_vm.StatusText}",
+            category: AnnouncementCategory.Result);
     }
+
+    // ── Status bar Left/Right arrow navigation ───────────────────────────────
+
+    /// <summary>
+    /// Returns the 1-based index of the status bar region that currently has keyboard focus,
+    /// or 0 if focus is not in the status bar.
+    /// </summary>
+    private int GetFocusedStatusBarRegion()
+    {
+        if (!MainStatusBar.IsKeyboardFocusWithin) return 0;
+
+        if (StatusTextBox.IsKeyboardFocused)          return 1;
+        if (ConnectionStatusTextBox.IsKeyboardFocused) return 2;
+        if (RulesStatusButton.IsKeyboardFocused)       return 3;
+        if (StatusProgressBar.IsKeyboardFocused)       return 4;
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Moves keyboard focus to the specified status bar region (1-based index).
+    /// Region 4 (ProgressBar) is skipped when not visible.
+    /// </summary>
+    private void FocusStatusBarRegion(int region)
+    {
+        switch (region)
+        {
+            case 1:
+                StatusTextBox.Focus();
+                break;
+            case 2:
+                ConnectionStatusTextBox.Focus();
+                break;
+            case 3:
+                RulesStatusButton.Focus();
+                break;
+            case 4:
+                if (StatusProgressItem.Visibility == Visibility.Visible)
+                    StatusProgressBar.Focus();
+                else
+                    FocusStatusBarRegion(1); // fallback: wrap to first
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Moves focus to the next (forward=true) or previous (forward=false) visible
+    /// status bar region. Wraps around at the boundaries.
+    /// </summary>
+    private void NavigateStatusBar(bool forward)
+    {
+        int current = GetFocusedStatusBarRegion();
+        if (current == 0) { FocusStatusBarRegion(1); return; }
+
+        // Build the ordered list of visible region indices.
+        var visible = new List<int> { 1, 2, 3 };
+        if (StatusProgressItem.Visibility == Visibility.Visible)
+            visible.Add(4);
+
+        int pos = visible.IndexOf(current);
+        if (pos < 0) { FocusStatusBarRegion(visible[0]); return; }
+
+        int nextPos = forward
+            ? (pos + 1) % visible.Count
+            : (pos - 1 + visible.Count) % visible.Count;
+
+        FocusStatusBarRegion(visible[nextPos]);
+    }
+
+    /// <summary>
+    /// Handles Left/Right arrow navigation within the status bar.
+    /// Tab and Escape are allowed to bubble so they exit the status bar normally.
+    /// </summary>
+    private void StatusBar_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Right)
+        {
+            NavigateStatusBar(forward: true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Left)
+        {
+            NavigateStatusBar(forward: false);
+            e.Handled = true;
+        }
+        // Tab, Shift+Tab, Escape, F6, Shift+F6 all bubble to OnWindowKeyDown naturally.
+    }
+
+    // ── F6 pane-cycling helpers ──────────────────────────────────────────────
 
     private void ToggleCustomAnnouncements()
     {
@@ -1645,8 +1724,6 @@ public partial class MainWindow : Window
         var msg = cfg.CustomAnnouncements ? "Custom announcements on." : "Custom announcements off.";
         AccessibilityHelper.Announce(this, msg, interrupt: true, category: AnnouncementCategory.Result, force: true);
     }
-
-    // ── F6 pane-cycling helpers ──────────────────────────────────────────────
 
     // Returns the index of the pane that currently holds keyboard focus:
     //   0 = Toolbar, 1 = Account list, 2 = Folder list,
@@ -2994,6 +3071,8 @@ public partial class MainWindow : Window
             }
         });
     }
+
+    private void RulesStatusButton_Click(object sender, RoutedEventArgs e) => OpenRulesManager();
 
     /// <summary>
     /// Creates a <see cref="FolderPickerWindow"/> scoped to only the accounts that own

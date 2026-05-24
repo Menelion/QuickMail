@@ -349,6 +349,9 @@ public partial class MainViewModel : ObservableObject
     private string _rulesStatusText = string.Empty;
 
     [ObservableProperty]
+    private string _connectionStatusText = "Offline";
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -959,6 +962,7 @@ public partial class MainViewModel : ObservableObject
         if (OnlineMode)
         {
             StatusText = "Online mode — connecting…";
+            ConnectionStatusText = "Connecting…";
             return;
         }
         var cached = await _localStore.LoadAllSummariesAsync();
@@ -966,6 +970,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = cached.Count > 0
             ? $"{cached.Count} messages (cached — syncing…)"
             : "Connecting and syncing…";
+        ConnectionStatusText = "Connecting…";
         StartPrefetchTopOfFolder();
         RebuildFolderListFromCache();
     }
@@ -1005,6 +1010,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         StatusText = "Syncing mail…";
+        ConnectionStatusText = "Syncing…";
         _suppressFolderSyncUpdates = true;
         try
         {
@@ -1030,6 +1036,7 @@ public partial class MainViewModel : ObservableObject
 
             var count = Messages.Count;
             StatusText = $"{count} messages.";
+            ConnectionStatusText = $"{Accounts.Count} account{(Accounts.Count == 1 ? "" : "s")} connected";
             Announce($"{count} {(count == 1 ? "message" : "messages")} loaded.", AnnouncementCategory.Status);
 
             // Apply default view (if any) after the initial sync is complete.
@@ -1042,6 +1049,7 @@ public partial class MainViewModel : ObservableObject
         {
             LogService.Log("BackgroundSync", ex);
             StatusText = $"Sync error: {ex.Message}";
+            ConnectionStatusText = "Connection error";
         }
         finally
         {
@@ -1378,6 +1386,7 @@ public partial class MainViewModel : ObservableObject
         StatusText = Accounts.Count == 1
             ? $"Connecting to {Accounts[0].DisplayName}…"
             : $"Connecting to {Accounts.Count} accounts…";
+        ConnectionStatusText = "Connecting…";
         IsBusy = true;
 
         var tasks = Accounts.Select(account => ConnectOneAccountAsync(account)).ToList();
@@ -1397,6 +1406,9 @@ public partial class MainViewModel : ObservableObject
         StatusText = _cachedFolders.Count > 0
             ? $"{_cachedFolders.Count} of {Accounts.Count} account(s) connected."
             : "No accounts could be connected.";
+        ConnectionStatusText = _cachedFolders.Count > 0
+            ? $"{_cachedFolders.Count} account(s) connected"
+            : "Offline";
     }
 
     /// <summary>
@@ -3088,6 +3100,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         StatusText = $"Account '{account.AccountLabel}' removed.";
+        ConnectionStatusText = Accounts.Count == 0 ? "Offline" : $"{Accounts.Count} account(s) connected";
     }
 
     [RelayCommand]

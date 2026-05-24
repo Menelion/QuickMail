@@ -578,7 +578,7 @@
         </ToolBar>
 
         <!-- ── Three-pane layout (Outlook-style): Accounts+Folders left | Messages right ── -->
-        <!--  Tab loop: AccountList(1) → FolderList(2) → MessageList(3) → Toolbar → StatusBar → wrap -->
+        <!--  F6 pane ring: AccountList(1) → FolderList(2) → MessageList(3) → Toolbar → StatusBar → wrap -->
         <!--  Arrow keys navigate within the focused pane (TabNavigation=Once on each)      -->
         <!--  Enter triggers action; focus never changes unless user does it                 -->
         <!--  Ctrl+0 = toolbar | Ctrl+1/2/3 = jump directly to any pane                    -->
@@ -1332,48 +1332,61 @@
         </Grid>
 
         <!-- ── Status bar ── -->
-        <!-- The UIA StatusBar spec says to use edit controls as child elements.
-             TextBox IsReadOnly="True" exposes ControlType.Edit + ValuePattern,
-             which screen readers read natively on focus — unlike TextBlock
-             (ControlType.Text, not keyboard-focusable in UIA). -->
+        <!-- Each StatusBarItem is a distinct focus stop within the status bar.
+             Left/Right arrows navigate between regions; Tab exits to the next F6 pane.
+             Informational regions use read-only TextBox (ControlType.Edit + ValuePattern).
+             Clickable regions use Button (ControlType.Button + InvokePattern).
+             The StatusBar UIA control pattern enables screen readers' built-in
+             status-bar read commands. -->
         <StatusBar x:Name="MainStatusBar"
                    Grid.Row="3"
-                   Focusable="False"
-                   IsTabStop="False"
-                   AutomationProperties.Name="Status bar">
+                   KeyboardNavigation.TabNavigation="None"
+                   KeyboardNavigation.DirectionalNavigation="Contained"
+                   AutomationProperties.Name="{Binding StatusText, StringFormat='Status bar — {0}', FallbackValue='Status bar'}">
+
+            <!-- Region 1: Status message (informational) -->
             <StatusBarItem x:Name="StatusTextItem"
-                           Focusable="False"
-                           IsTabStop="False">
+                           KeyboardNavigation.IsTabStop="True">
                 <TextBox x:Name="StatusTextBox"
                          Style="{StaticResource StatusTextBoxStyle}"
                          Text="{Binding StatusText, Mode=OneWay}"
-                         IsTabStop="False"
-                         Focusable="True"
-                         AutomationProperties.Name="Status"/>
+                         AutomationProperties.Name="{Binding StatusText, StringFormat='Status — {0}'}"/>
             </StatusBarItem>
 
+            <!-- Region 2: Connection state (informational) -->
+            <StatusBarItem x:Name="ConnectionStatusItem"
+                           KeyboardNavigation.IsTabStop="True">
+                <TextBox x:Name="ConnectionStatusTextBox"
+                         Style="{StaticResource StatusTextBoxStyle}"
+                         Text="{Binding ConnectionStatusText, Mode=OneWay}"
+                         AutomationProperties.Name="{Binding ConnectionStatusText, StringFormat='Connection — {0}'}"/>
+            </StatusBarItem>
+
+            <!-- Spacer: pushes Rules and Progress to the right -->
+            <Separator Style="{StaticResource StatusBarSpacerStyle}"/>
+
+            <!-- Region 3: Rules status (clickable — opens Rules Manager) -->
             <StatusBarItem x:Name="RulesStatusItem"
                            HorizontalAlignment="Right"
-                           Focusable="False"
-                           IsTabStop="False"
-                           AutomationProperties.Name="{Binding RulesStatusText}">
-                <TextBox Style="{StaticResource StatusTextBoxStyle}"
-                         Text="{Binding RulesStatusText, Mode=OneWay}"
-                         IsTabStop="False"
-                         Focusable="True"
-                         Cursor="Hand"
-                         AutomationProperties.Name="{Binding RulesStatusText}"/>
+                           KeyboardNavigation.IsTabStop="True">
+                <Button x:Name="RulesStatusButton"
+                        Style="{StaticResource StatusBarButtonStyle}"
+                        Content="{Binding RulesStatusText, Mode=OneWay}"
+                        Click="RulesStatusButton_Click"
+                        AutomationProperties.Name="{Binding RulesStatusText, StringFormat='Rules — {0}'}"
+                        ToolTip="Open Rules Manager (Ctrl+Shift+L)"/>
             </StatusBarItem>
 
+            <!-- Region 4: Sync progress (informational, visible only when busy) -->
             <StatusBarItem x:Name="StatusProgressItem"
                            HorizontalAlignment="Right"
-                           Focusable="False"
-                           IsTabStop="False"
-                           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
-                           AutomationProperties.Name="Loading in progress">
-                <ProgressBar Width="80" Height="14"
+                           KeyboardNavigation.IsTabStop="True"
+                           Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
+                <ProgressBar x:Name="StatusProgressBar"
+                             Width="80" Height="14"
                              IsIndeterminate="True"
-                             AutomationProperties.Name="Loading in progress"/>
+                             Focusable="True"
+                             AutomationProperties.Name="{Binding StatusText, StringFormat='Syncing — {0}'}"/>
             </StatusBarItem>
         </StatusBar>
     </Grid>
