@@ -466,6 +466,11 @@ public partial class MainViewModel : ObservableObject
     public void LoadAccountList()
     {
         Accounts = new ObservableCollection<AccountModel>(_accountService.LoadAccounts());
+
+        // Show the first-run keyboard tutorial if the user hasn't completed it yet.
+        var cfg = _configService.Load();
+        if (!cfg.TutorialCompleted)
+            TutorialRequested?.Invoke(this, EventArgs.Empty);
     }
 
     // ── Saved-views lifecycle ─────────────────────────────────────────────────────
@@ -966,6 +971,10 @@ public partial class MainViewModel : ObservableObject
             id: "mail.tentativeInvite", category: "Mail", title: "Tentatively Accept Invitation",
             execute: () => TentativeInviteCommand.Execute(null),
             isAvailable: () => HasCalendarInvite));
+
+        registry.Register(new CommandDefinition(
+            id: "help.keyboardTutorial", category: "Help", title: "Keyboard Tutorial",
+            execute: () => TutorialRequested?.Invoke(this, EventArgs.Empty)));
     }
 
     // ── Startup ──────────────────────────────────────────────────────────────────
@@ -2782,6 +2791,7 @@ public partial class MainViewModel : ObservableObject
     public event EventHandler<(string Text, AnnouncementCategory Category)>? AnnouncementRequested;
     public event EventHandler? RulesManagerRequested;
     public event EventHandler<MailRule>? CreateRuleFromMessageRequested;
+    public event EventHandler? TutorialRequested;
 
     private void Announce(string text, AnnouncementCategory category = AnnouncementCategory.Result)
     {

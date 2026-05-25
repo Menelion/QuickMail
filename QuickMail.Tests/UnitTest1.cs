@@ -73,6 +73,15 @@ public class ViewModelConstructionTests
         Assert.NotNull(vm);
     }
 
+    [Fact]
+    public void TutorialViewModel_ConstructsWithoutException()
+    {
+        var vm = new TutorialViewModel();
+        Assert.NotNull(vm);
+        Assert.Equal(6, vm.Steps.Count);
+        Assert.False(vm.IsActive);
+    }
+
     // ── Calendar invite tests ───────────────────────────────────────────────────
 
     [Fact]
@@ -291,6 +300,14 @@ public class XamlParseTests
         var window = new ViewManagerWindow(vm);
         Assert.NotNull(window);
         window.Close();
+    }
+
+    [StaFact]
+    public void TutorialOverlay_XamlParsesWithoutException()
+    {
+        EnsureApplication();
+        var overlay = new TutorialOverlay();
+        Assert.NotNull(overlay);
     }
 
     private static (StubImapService imap, StubAccountService accounts, StubCredentialService creds,

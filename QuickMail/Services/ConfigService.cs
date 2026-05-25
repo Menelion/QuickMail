@@ -206,6 +206,7 @@ public class ConfigService : IConfigService
                     case "announcehints":        config.AnnounceHints        = ParseBool(value); break;
                     case "announcestatus":       config.AnnounceStatus       = ParseBool(value); break;
                     case "announceresults":      config.AnnounceResults      = ParseBool(value); break;
+                    case "tutorialcompleted":    config.TutorialCompleted    = ParseBool(value); break;
                 }
             }
             else if (section == "account" && acctGuid != Guid.Empty)
@@ -289,6 +290,11 @@ public class ConfigService : IConfigService
 
         sb.AppendLine($"AnnounceResults = {(config.AnnounceResults ? "on" : "off")}");
         sb.AppendLine("# Announce action outcomes such as search result counts and move confirmations.");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"TutorialCompleted = {(config.TutorialCompleted ? "on" : "off")}");
+        sb.AppendLine("# Whether the first-run keyboard tutorial has been completed.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 

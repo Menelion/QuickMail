@@ -114,6 +114,8 @@ public partial class MainWindow : Window
     private readonly IViewService _viewService;
     private readonly IRuleService _ruleService;
 
+    private TutorialViewModel? _tutorialVm;
+
     public MainWindow(
         MainViewModel vm,
         ISmtpService smtp,
@@ -164,6 +166,7 @@ public partial class MainWindow : Window
             == MessageBoxResult.Yes;
         vm.RulesManagerRequested += (_, _) => OpenRulesManager();
         vm.CreateRuleFromMessageRequested += (_, template) => OpenRulesManager(template);
+        vm.TutorialRequested += (_, _) => ShowTutorial();
 
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
@@ -528,6 +531,19 @@ public partial class MainWindow : Window
             : e.Key == Key.ImeProcessed
                 ? e.ImeProcessedKey
                 : e.Key;
+
+        // ── Tutorial interception (must run before all other handling) ────────────
+        if (_tutorialVm?.IsActive == true)
+        {
+            if (_tutorialVm.CheckKeyPress(key, modifiers))
+            {
+                e.Handled = true;
+                return;
+            }
+            // If the tutorial didn't handle the key, swallow it — the overlay is modal.
+            e.Handled = true;
+            return;
+        }
 
         // ── Navigation shortcuts (hardcoded, not in the command registry) ──────────
         if (modifiers == ModifierKeys.Control)
@@ -1760,6 +1776,35 @@ public partial class MainWindow : Window
         _configService.Save(cfg);
         var msg = cfg.CustomAnnouncements ? "Custom announcements on." : "Custom announcements off.";
         AccessibilityHelper.Announce(this, msg, interrupt: true, category: AnnouncementCategory.Result, force: true);
+    }
+
+    private void ShowTutorial()
+    {
+        if (_tutorialVm?.IsActive == true) return;
+
+        _tutorialVm = new TutorialViewModel();
+        _tutorialVm.TutorialCompleted += OnTutorialCompleted;
+        TutorialOverlayControl.SetViewModel(_tutorialVm);
+        _tutorialVm.Start();
+    }
+
+    private void OnTutorialCompleted()
+    {
+        if (_tutorialVm != null)
+            _tutorialVm.TutorialCompleted -= OnTutorialCompleted;
+
+        var cfg = _configService.Load();
+        cfg.TutorialCompleted = true;
+        _configService.Save(cfg);
+
+        _tutorialVm = null;
+        AccessibilityHelper.Announce(this, "Tutorial complete. You can replay it anytime from the Help menu.",
+            interrupt: true, category: AnnouncementCategory.Result);
+    }
+
+    private void MenuKeyboardTutorial_Click(object sender, RoutedEventArgs e)
+    {
+        ShowTutorial();
     }
 
     // Returns the index of the pane that currently holds keyboard focus:
