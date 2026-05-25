@@ -4,9 +4,15 @@
 
 ### Spell check in compose window
 
-The message body now has spell check enabled. Misspelled words are underlined with the standard red squiggle. Press **F7** to jump to the next misspelling; press **Shift+F7** to go back to the previous one. When you land on a misspelled word, QuickMail announces the word and up to three suggestions through your screen reader — for example, "Misspelling: recieve. Suggestions: receive, relieve, retrieve." When no more misspellings are found, you hear "No more misspellings found."
+The message body now has spell check enabled. Misspelled words are underlined with the standard red squiggle. Press **F7** to jump to the next misspelling; press **Shift+F7** to go back to the previous one.
 
 Spell check is built on the Windows spell-checking engine, the same one used by WordPad and other Windows applications. No configuration needed.
+
+**Screen reader announcements:** As you navigate through the message body with arrow keys, QuickMail automatically detects when the caret enters a misspelled word and announces it through your screen reader. When the "Announce spelling suggestions" setting is on (the default), you hear the word and up to three suggestions — for example, "Misspelling: recieve. receive, relieve, retrieve." When the setting is off, only the misspelled word is announced.
+
+**Quick replacement:** When a misspelling is announced, press **Alt+1**, **Alt+2**, or **Alt+3** to replace the word with the first, second, or third suggestion. QuickMail announces "Replaced with receive." and moves on. This lets experienced users correct errors without opening a context menu.
+
+**Settings:** A new "Announce spelling suggestions" checkbox in **Tools → Settings → Screen Reader Announcements** controls whether suggestions are spoken. Turn it off for faster, quieter spell checking once you know the Alt+number workflow.
 
 ### Email signatures
 
@@ -69,10 +75,15 @@ Placeholders are case-insensitive — `{Sender}`, `{SENDER}`, and `{sender}` all
 
 ## Improvements
 
-- **Compose window spell check** — Enabled WPF spell check on the message body with F7/Shift+F7 keyboard navigation and screen reader announcements for misspellings and suggestions.
+- **Inline spell check announcements** — Screen readers now announce misspelled words automatically as you navigate through the message body with arrow keys, not just when pressing F7.
+- **Alt+1/2/3 quick replacement** — Replace a misspelled word with a suggestion in one keystroke. No context menu needed.
+- **Spelling suggestions setting** — New "Announce spelling suggestions" option in Settings lets experienced users silence suggestion speech while keeping the Alt+number workflow.
+- **Compose window command palette** — Press **Ctrl+Shift+P** in the compose window to open the Command Palette with 11 compose-specific commands (Send, Save Draft, Add Attachments, Insert Template, Save as Template, Cancel, Focus Subject, Focus From, Focus Body, Next/Previous Misspelling).
+- **Alt+Y in compose** — Press **Alt+Y** to jump directly to the message body from any field.
+- **Tutorial wrong-key feedback** — The keyboard tutorial now announces what key you pressed when it's incorrect (e.g. "You pressed Ctrl+N. Try again."), so you get immediate feedback instead of silence.
+- **Tutorial manual-only launch** — The tutorial is now available only from **Help → Keyboard Tutorial**; it no longer auto-launches on first run.
 - **Signature auto-insertion** — Signatures are appended to new messages, replies, and forwards automatically. Drafts re-opened for editing do not receive a duplicate signature.
 - **ICS parsing** — Calendar invites are detected in `text/calendar` MIME parts and displayed as an inline event card. ICS replies are generated and sent via SMTP.
-- **Tutorial overlay** — First-run experience teaches the six essential keyboard shortcuts interactively. Replayable from the Help menu.
 - **Template picker** — Searchable list dialog for inserting saved templates. Filter-as-you-type with screen reader match count announcements.
 - **Template placeholders** — `{sender}`, `{date}`, and `{time}` are replaced automatically when a template is inserted.
 
@@ -93,4 +104,5 @@ Placeholders are case-insensitive — `{Sender}`, `{SENDER}`, and `{sender}` all
 
 ## Bug Fixes
 
-- **Tutorial overlay crash on add account** — The `CurrentStepNumber` binding in `TutorialOverlay.xaml` was missing `Mode=OneWay`, causing an `InvalidOperationException` when WPF tried to write to the read-only computed property. Fixed by adding explicit one-way binding mode.
+- **Tutorial overlay crash** — The `Steps.Count` binding in `TutorialOverlay.xaml` was missing `Mode=OneWay`, causing an `InvalidOperationException` when WPF tried to write to the read-only `ObservableCollection<T>.Count` property. Fixed by adding explicit one-way binding mode.
+- **Alt+1/2/3 focus jump** — Replacing a misspelled word with Alt+1/2/3 would move focus to the first error on the page instead of staying on the replaced word. Fixed by suppressing spelling announcements during the programmatic text change so the `SelectionChanged` handler doesn't fire with a stale caret position.

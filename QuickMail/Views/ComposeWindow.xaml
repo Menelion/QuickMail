@@ -208,7 +208,7 @@
             <TextBox Grid.Row="9" Grid.ColumnSpan="2"
                      x:Name="BodyBox"
                      Text="{Binding Body, UpdateSourceTrigger=PropertyChanged}"
-                     AutomationProperties.Name="Message body. Alt+U for Subject, Alt+M for From, Alt+S to send."
+                     AutomationProperties.Name="Message body. Alt+Y to focus, Alt+U for Subject, Alt+M for From, Alt+S to send."
                      AcceptsReturn="True" AcceptsTab="True"
                      TextWrapping="Wrap"
                      SpellCheck.IsEnabled="True"
