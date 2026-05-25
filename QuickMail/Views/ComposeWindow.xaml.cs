@@ -16,13 +16,15 @@ public partial class ComposeWindow : Window
 {
     private readonly ComposeViewModel   _vm;
     private readonly IContactService    _contactService;
+    private readonly ITemplateService   _templateService;
     private TextBox? _activeAddressBox;
     private CancellationTokenSource? _autocompleteCts;
 
-    public ComposeWindow(ComposeViewModel vm, IContactService contactService)
+    public ComposeWindow(ComposeViewModel vm, IContactService contactService, ITemplateService templateService)
     {
         _vm = vm;
         _contactService = contactService;
+        _templateService = templateService;
         InitializeComponent();
         DataContext = vm;
 
@@ -37,6 +39,16 @@ public partial class ComposeWindow : Window
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(this, message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
+
+        // Wire the template picker so the VM stays out of System.Windows.
+        vm.InsertTemplateRequested += () =>
+        {
+            var pickerVm = new TemplatePickerViewModel(_templateService);
+            var dialog = new TemplatePickerWindow(pickerVm) { Owner = this };
+            if (dialog.ShowDialog() == true)
+                return Task.FromResult(dialog.SelectedTemplate);
+            return Task.FromResult<MessageTemplate?>(null);
+        };
 
         foreach (var box in new[] { ToBox, CcBox, BccBox })
         {

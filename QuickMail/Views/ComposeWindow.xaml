@@ -29,12 +29,24 @@
                     AutomationProperties.Name="Cancel and close compose window"
                     IsCancel="True"
                     MinWidth="80" Margin="6,0,0,0"
-                    TabIndex="9"/>
+                    TabIndex="11"/>
             <Button DockPanel.Dock="Right"
                     Content="Save Draft (Ctrl+S)"
                     Command="{Binding SaveDraftCommand}"
                     AutomationProperties.Name="Save as draft (Ctrl+S)"
                     MinWidth="100" Margin="6,0,0,0"
+                    TabIndex="10"/>
+            <Button DockPanel.Dock="Right"
+                    Content="Save as Template"
+                    Command="{Binding SaveAsTemplateCommand}"
+                    AutomationProperties.Name="Save current message as template"
+                    MinWidth="120" Margin="6,0,0,0"
+                    TabIndex="9"/>
+            <Button DockPanel.Dock="Right"
+                    Content="Insert Template…"
+                    Command="{Binding InsertTemplateCommand}"
+                    AutomationProperties.Name="Insert a saved template"
+                    MinWidth="120" Margin="6,0,0,0"
                     TabIndex="8"/>
             <Button DockPanel.Dock="Right"
                     Content="Send (Alt+S)"

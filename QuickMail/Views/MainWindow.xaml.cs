@@ -113,6 +113,7 @@ public partial class MainWindow : Window
     private readonly ILocalStoreService _localStore;
     private readonly IViewService _viewService;
     private readonly IRuleService _ruleService;
+    private readonly ITemplateService _templateService;
 
     private TutorialViewModel? _tutorialVm;
 
@@ -128,7 +129,8 @@ public partial class MainWindow : Window
         IConfigService configService,
         ILocalStoreService localStore,
         IViewService viewService,
-        IRuleService ruleService)
+        IRuleService ruleService,
+        ITemplateService templateService)
     {
         _vm = vm;
         _smtp = smtp;
@@ -142,6 +144,7 @@ public partial class MainWindow : Window
         _localStore = localStore;
         _viewService = viewService;
         _ruleService = ruleService;
+        _templateService = templateService;
 
         InitializeComponent();
         DataContext = vm;
@@ -2793,9 +2796,9 @@ public partial class MainWindow : Window
 
     private void OpenComposeWindow(ComposeModel composeModel)
     {
-        var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap);
+        var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap, _templateService);
         composeVm.Seed(composeModel);
-        var window = new ComposeWindow(composeVm, _contactService) { Owner = this };
+        var window = new ComposeWindow(composeVm, _contactService, _templateService) { Owner = this };
         composeVm.CloseRequested += window.Close;
         window.Show();
     }

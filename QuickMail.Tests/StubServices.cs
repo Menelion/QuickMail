@@ -179,3 +179,11 @@ sealed class StubConfigService : IConfigService
     public void Save(ConfigModel config)
         => _config = config;
 }
+
+sealed class StubTemplateService : ITemplateService
+{
+    public Task<List<MessageTemplate>> LoadAllAsync() => Task.FromResult(new List<MessageTemplate>());
+    public Task<MessageTemplate> AddAsync(MessageTemplate template) => Task.FromResult(template);
+    public Task UpdateAsync(MessageTemplate template) => Task.CompletedTask;
+    public Task DeleteAsync(int id) => Task.CompletedTask;
+}
