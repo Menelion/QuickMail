@@ -33,7 +33,7 @@
                     <Run Text="Step "/>
                     <Run Text="{Binding CurrentStepNumber, Mode=OneWay, FallbackValue=1}"/>
                     <Run Text=" of "/>
-                    <Run Text="{Binding Steps.Count, FallbackValue=6}"/>
+                    <Run Text="{Binding Steps.Count, Mode=OneWay, FallbackValue=6}"/>
                 </TextBlock>
 
                 <!-- Instruction -->

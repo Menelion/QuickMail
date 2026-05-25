@@ -588,7 +588,16 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            // If the tutorial didn't handle the key, swallow it — the overlay is modal.
+            // Wrong key — announce what was pressed so the user gets feedback.
+            // Skip bare modifier keys (Ctrl, Shift, Alt, Win) — they aren't
+            // meaningful attempts and would just be noise.
+            if (!IsModifierKey(key))
+            {
+                var pressed = FormatKeyGesture(key, modifiers);
+                AccessibilityHelper.Announce(this,
+                    $"You pressed {pressed}. Try again.",
+                    interrupt: true, category: AnnouncementCategory.Result);
+            }
             e.Handled = true;
             return;
         }
@@ -1851,6 +1860,31 @@ public partial class MainWindow : Window
         ShowTutorial();
     }
 
+    /// <summary>
+    /// Formats a key + modifiers combination into a human-readable string
+    /// like "Ctrl+Shift+P" or "F6".
+    /// </summary>
+    private static string FormatKeyGesture(Key key, ModifierKeys modifiers)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+        if ((modifiers & ModifierKeys.Control) != 0) parts.Add("Ctrl");
+        if ((modifiers & ModifierKeys.Alt) != 0) parts.Add("Alt");
+        if ((modifiers & ModifierKeys.Shift) != 0) parts.Add("Shift");
+        if ((modifiers & ModifierKeys.Windows) != 0) parts.Add("Win");
+        parts.Add(key.ToString());
+        return string.Join("+", parts);
+    }
+
+    /// <summary>Returns true for bare modifier keys that shouldn't trigger
+    /// a "wrong key" announcement in the tutorial.</summary>
+    private static bool IsModifierKey(Key key) => key switch
+    {
+        Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
+            or Key.System => true,
+        _ => false
+    };
+
     // Returns the index of the pane that currently holds keyboard focus:
     //   0 = Toolbar, 1 = Account list, 2 = Folder list,
     //   3 = Message list / Conversation tree, 4 = Reading pane (WebView2),
@@ -2751,7 +2785,7 @@ public partial class MainWindow : Window
     {
         var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap, _templateService);
         composeVm.Seed(composeModel);
-        var window = new ComposeWindow(composeVm, _contactService, _templateService) { Owner = this };
+        var window = new ComposeWindow(composeVm, _contactService, _templateService, _configService) { Owner = this };
         composeVm.CloseRequested += window.Close;
         window.Show();
     }

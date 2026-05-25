@@ -17,14 +17,22 @@ public partial class ComposeWindow : Window
     private readonly ComposeViewModel   _vm;
     private readonly IContactService    _contactService;
     private readonly ITemplateService   _templateService;
+    private readonly IConfigService     _configService;
     private TextBox? _activeAddressBox;
     private CancellationTokenSource? _autocompleteCts;
+    private int _lastAnnouncedSpellingIndex = -1;
 
-    public ComposeWindow(ComposeViewModel vm, IContactService contactService, ITemplateService templateService)
+    // Track the current spelling error so Alt+1/2/3 can replace it with a suggestion.
+    private int _currentSpellingWordStart = -1;
+    private int _currentSpellingWordEnd = -1;
+    private System.Collections.Generic.List<string>? _currentSpellingSuggestions;
+
+    public ComposeWindow(ComposeViewModel vm, IContactService contactService, ITemplateService templateService, IConfigService configService)
     {
         _vm = vm;
         _contactService = contactService;
         _templateService = templateService;
+        _configService = configService;
         InitializeComponent();
         DataContext = vm;
 
@@ -71,6 +79,7 @@ public partial class ComposeWindow : Window
                 BodyBox.CaretIndex = 0;
             }
         };
+        BodyBox.SelectionChanged += BodyBox_SelectionChanged;
         Closing += OnWindowClosing;
     }
 
@@ -286,11 +295,124 @@ public partial class ComposeWindow : Window
     }
 
     /// <summary>
+    /// When the caret moves into a misspelled word during normal cursor navigation,
+    /// announce it to screen readers so users hear about spelling errors without
+    /// needing to press F7. WPF's SpellCheck shows red squiggly underlines visually
+    /// but does not expose them through UIA, so we detect them manually.
+    /// </summary>
+    private void BodyBox_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        var text = BodyBox.Text;
+        if (string.IsNullOrEmpty(text)) return;
+
+        int caret = BodyBox.CaretIndex;
+        // If the caret is at the very end, check the character just before it
+        int checkIndex = (caret > 0 && caret == text.Length) ? caret - 1 : caret;
+        if (checkIndex < 0 || checkIndex >= text.Length)
+        {
+            ClearSpellingContext();
+            return;
+        }
+
+        // Only announce if the caret is inside a misspelled word
+        var error = BodyBox.GetSpellingError(checkIndex);
+        if (error == null)
+        {
+            ClearSpellingContext();
+            return;
+        }
+
+        // Walk to word boundaries to get the full word
+        int wordStart = checkIndex;
+        while (wordStart > 0 && !char.IsWhiteSpace(text[wordStart - 1]))
+            wordStart--;
+        int wordEnd = checkIndex;
+        while (wordEnd < text.Length && !char.IsWhiteSpace(text[wordEnd]))
+            wordEnd++;
+
+        // Don't re-announce the same word
+        if (wordStart == _lastAnnouncedSpellingIndex) return;
+        _lastAnnouncedSpellingIndex = wordStart;
+
+        var word = text.Substring(wordStart, wordEnd - wordStart);
+        var suggestions = error.Suggestions.Take(3).ToList();
+
+        // Track the current spelling error so Alt+1/2/3 can replace it.
+        _currentSpellingWordStart = wordStart;
+        _currentSpellingWordEnd = wordEnd;
+        _currentSpellingSuggestions = suggestions;
+
+        var announce = BuildSpellingAnnouncement(word, suggestions);
+
+        AccessibilityHelper.Announce(this, announce,
+            category: AnnouncementCategory.Result);
+    }
+
+    private void ClearSpellingContext()
+    {
+        _lastAnnouncedSpellingIndex = -1;
+        _currentSpellingWordStart = -1;
+        _currentSpellingWordEnd = -1;
+        _currentSpellingSuggestions = null;
+    }
+
+    /// <summary>
+    /// Builds the spelling announcement string. When AnnounceSpellingSuggestions
+    /// is on, includes up to 3 suggestions with Alt+1/2/3 hotkey hints.
+    /// When off, only announces the misspelled word.
+    /// </summary>
+    private string BuildSpellingAnnouncement(string word, System.Collections.Generic.List<string> suggestions)
+    {
+        var announceSuggestions = _configService.Load().AnnounceSpellingSuggestions;
+
+        if (!announceSuggestions || suggestions.Count == 0)
+            return $"Misspelling: {word}.";
+
+        var parts = new System.Collections.Generic.List<string>();
+        for (int i = 0; i < suggestions.Count; i++)
+            parts.Add($"Alt+{i + 1} for {suggestions[i]}");
+
+        return $"Misspelling: {word}. {string.Join(", ", parts)}.";
+    }
+
+    /// <summary>
     /// F7 moves to the next misspelled word; Shift+F7 moves to the previous one.
     /// Announces the misspelling to screen readers so users know what needs correction.
     /// </summary>
     private void BodyBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // Alt+1/2/3: replace the current misspelled word with the corresponding suggestion.
+        // Only works when the caret is on a spelling error that was just announced.
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0
+            && _currentSpellingSuggestions is { Count: > 0 }
+            && _currentSpellingWordStart >= 0
+            && _currentSpellingWordEnd > _currentSpellingWordStart)
+        {
+            int suggestionIndex = e.SystemKey switch
+            {
+                Key.D1 => 0,
+                Key.D2 => 1,
+                Key.D3 => 2,
+                _ => -1
+            };
+            if (suggestionIndex >= 0 && suggestionIndex < _currentSpellingSuggestions.Count)
+            {
+                var replacement = _currentSpellingSuggestions[suggestionIndex];
+                var text = BodyBox.Text;
+                var before = text[.._currentSpellingWordStart];
+                var after = text[_currentSpellingWordEnd..];
+                BodyBox.Text = before + replacement + after;
+                BodyBox.CaretIndex = _currentSpellingWordStart + replacement.Length;
+                BodyBox.Focus();
+                AccessibilityHelper.Announce(this,
+                    $"Replaced with {replacement}.",
+                    category: AnnouncementCategory.Result);
+                ClearSpellingContext();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.F7)
         {
             var forward = (Keyboard.Modifiers & ModifierKeys.Shift) == 0;
@@ -339,19 +461,25 @@ public partial class ComposeWindow : Window
                 BodyBox.SelectionLength = wordEnd - wordStart;
                 BodyBox.Focus();
 
+                _lastAnnouncedSpellingIndex = wordStart;
+
                 var word        = text.Substring(wordStart, wordEnd - wordStart);
                 var suggestions = BodyBox.GetSpellingError(foundIndex)
-                    ?.Suggestions.Take(3).ToList();
+                    ?.Suggestions.Take(3).ToList() ?? new System.Collections.Generic.List<string>();
 
-                var announce = suggestions is { Count: > 0 }
-                    ? $"Misspelling: {word}. Suggestions: {string.Join(", ", suggestions)}"
-                    : $"Misspelling: {word}. No suggestions available.";
+                // Track the current spelling error so Alt+1/2/3 can replace it.
+                _currentSpellingWordStart = wordStart;
+                _currentSpellingWordEnd = wordEnd;
+                _currentSpellingSuggestions = suggestions;
+
+                var announce = BuildSpellingAnnouncement(word, suggestions);
 
                 AccessibilityHelper.Announce(this, announce,
                     category: AnnouncementCategory.Result);
             }
             else
             {
+                ClearSpellingContext();
                 AccessibilityHelper.Announce(this, "No more misspellings found.",
                     category: AnnouncementCategory.Result);
             }

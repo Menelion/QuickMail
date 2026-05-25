@@ -30,9 +30,9 @@ Three buttons let you respond: **Accept**, **Tentative**, or **Decline**. Each g
 
 Screen readers announce the full event summary when the card receives focus, and a confirmation is announced after each response.
 
-### First-run keyboard tutorial
+### Keyboard Tutorial
 
-The first time you launch QuickMail, a tutorial overlay appears and walks you through the six essential keyboard shortcuts by having you press each one:
+A new keyboard tutorial is available off the Help Menu. It allows you to try some of the important keyboard commands for QuickMail and get feedback that you pressed the correct keys.
 
 | Step | Shortcut | What it does |
 |------|----------|--------------|

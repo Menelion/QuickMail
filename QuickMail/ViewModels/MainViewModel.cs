@@ -464,11 +464,6 @@ public partial class MainViewModel : ObservableObject
     public void LoadAccountList()
     {
         Accounts = new ObservableCollection<AccountModel>(_accountService.LoadAccounts());
-
-        // Show the first-run keyboard tutorial if the user hasn't completed it yet.
-        var cfg = _configService.Load();
-        if (!cfg.TutorialCompleted)
-            TutorialRequested?.Invoke(this, EventArgs.Empty);
     }
 
     // ── Saved-views lifecycle ─────────────────────────────────────────────────────

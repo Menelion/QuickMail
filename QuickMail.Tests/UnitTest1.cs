@@ -230,9 +230,9 @@ public class XamlParseTests
     public void ComposeWindow_XamlParsesWithoutException()
     {
         EnsureApplication();
-        var (imap, accounts, creds, _, _, _, _, contacts, templates) = MakeServices();
+        var (imap, accounts, creds, _, _, config, _, contacts, templates) = MakeServices();
         var vm = new ComposeViewModel(new StubSmtpService(), accounts, creds, imap, templates);
-        var window = new ComposeWindow(vm, contacts, templates);
+        var window = new ComposeWindow(vm, contacts, templates, config);
         Assert.NotNull(window);
         window.Close();
     }

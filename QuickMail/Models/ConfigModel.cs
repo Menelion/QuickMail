@@ -55,6 +55,9 @@ public class ConfigModel
     /// <summary>Announce action results (search counts, move/delete confirmations).</summary>
     public bool AnnounceResults { get; set; } = true;
 
+    /// <summary>Announce spelling suggestions when navigating into a misspelled word.</summary>
+    public bool AnnounceSpellingSuggestions { get; set; } = true;
+
     // ── Tutorial ──────────────────────────────────────────────────────────────────
 
     /// <summary>Whether the user has completed the first-run keyboard tutorial.</summary>
