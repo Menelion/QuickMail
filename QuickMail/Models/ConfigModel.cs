@@ -66,6 +66,9 @@ public class ConfigModel
 
     // ── Tutorial ──────────────────────────────────────────────────────────────────
 
+    /// <summary>Show a confirmation dialog before emptying trash. Default on.</summary>
+    public bool ConfirmEmptyTrash { get; set; } = true;
+
     /// <summary>Whether the user has completed the first-run keyboard tutorial.</summary>
     public bool TutorialCompleted { get; set; } = false;
 

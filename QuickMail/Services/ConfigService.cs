@@ -209,6 +209,7 @@ public class ConfigService : IConfigService
                     case "announcespellingwhiletyping":      config.AnnounceSpellingWhileTyping      = ParseBool(value); break;
                     case "announcespellingwhilenavigating": config.AnnounceSpellingWhileNavigating = ParseBool(value); break;
                     case "announcespellingsuggestions":     config.AnnounceSpellingSuggestions     = ParseBool(value); break;
+                    case "confirmemptytrash":    config.ConfirmEmptyTrash    = ParseBool(value); break;
                     case "tutorialcompleted":    config.TutorialCompleted    = ParseBool(value); break;
                 }
             }
@@ -310,6 +311,11 @@ public class ConfigService : IConfigService
         sb.AppendLine($"AnnounceSpellingSuggestions = {(config.AnnounceSpellingSuggestions ? "on" : "off")}");
         sb.AppendLine("# Announce spelling suggestions when a misspelling is announced.");
         sb.AppendLine("# When off, only the misspelled word is spoken without suggestions.");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"ConfirmEmptyTrash = {(config.ConfirmEmptyTrash ? "on" : "off")}");
+        sb.AppendLine("# Show a confirmation dialog before permanently deleting all messages in trash.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 

@@ -49,6 +49,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _announceSpellingSuggestions;
 
+    [ObservableProperty]
+    private bool _confirmEmptyTrash;
+
     public ObservableCollection<HotkeyRowViewModel> HotkeyRows { get; } = [];
 
     [ObservableProperty]
@@ -71,6 +74,7 @@ public partial class SettingsViewModel : ObservableObject
         AnnounceSpellingWhileTyping      = cfg.AnnounceSpellingWhileTyping;
         AnnounceSpellingWhileNavigating  = cfg.AnnounceSpellingWhileNavigating;
         AnnounceSpellingSuggestions      = cfg.AnnounceSpellingSuggestions;
+        ConfirmEmptyTrash                = cfg.ConfirmEmptyTrash;
 
         foreach (var cmd in registry.GetAll())
         {
@@ -102,6 +106,7 @@ public partial class SettingsViewModel : ObservableObject
         cfg.AnnounceSpellingWhileTyping      = AnnounceSpellingWhileTyping;
         cfg.AnnounceSpellingWhileNavigating  = AnnounceSpellingWhileNavigating;
         cfg.AnnounceSpellingSuggestions      = AnnounceSpellingSuggestions;
+        cfg.ConfirmEmptyTrash                = ConfirmEmptyTrash;
 
         cfg.CustomHotkeys = HotkeyRows
             .Where(r => r.HasCustomBinding)
