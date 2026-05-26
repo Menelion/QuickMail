@@ -474,6 +474,10 @@
                 <MenuItem Header="_Keyboard Tutorial"
                           AutomationProperties.Name="Keyboard Tutorial"
                           Click="MenuKeyboardTutorial_Click"/>
+                <Separator/>
+                <MenuItem Header="_About QuickMail"
+                          AutomationProperties.Name="About QuickMail"
+                          Click="MenuAbout_Click"/>
             </MenuItem>
 
         </Menu>

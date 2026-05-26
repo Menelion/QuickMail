@@ -939,6 +939,10 @@ public partial class MainViewModel : ObservableObject
         registry.Register(new CommandDefinition(
             id: "help.keyboardTutorial", category: "Help", title: "Keyboard Tutorial",
             execute: () => TutorialRequested?.Invoke(this, EventArgs.Empty)));
+
+        registry.Register(new CommandDefinition(
+            id: "help.about", category: "Help", title: "About QuickMail",
+            execute: () => AboutRequested?.Invoke(this, EventArgs.Empty)));
     }
 
     // ── Startup ──────────────────────────────────────────────────────────────────
@@ -2729,6 +2733,7 @@ public partial class MainViewModel : ObservableObject
     public event EventHandler? RulesManagerRequested;
     public event EventHandler<MailRule>? CreateRuleFromMessageRequested;
     public event EventHandler? TutorialRequested;
+    public event EventHandler? AboutRequested;
 
     private void Announce(string text, AnnouncementCategory category = AnnouncementCategory.Result)
     {

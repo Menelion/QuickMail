@@ -179,6 +179,7 @@ public partial class MainWindow : Window
         vm.RulesManagerRequested += (_, _) => OpenRulesManager();
         vm.CreateRuleFromMessageRequested += (_, template) => OpenRulesManager(template);
         vm.TutorialRequested += (_, _) => ShowTutorial();
+        vm.AboutRequested += (_, _) => ShowAboutDialog();
 
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
@@ -1908,6 +1909,17 @@ public partial class MainWindow : Window
     private void MenuKeyboardTutorial_Click(object sender, RoutedEventArgs e)
     {
         ShowTutorial();
+    }
+
+    private void ShowAboutDialog()
+    {
+        var dlg = new AboutDialog { Owner = this };
+        dlg.ShowDialog();
+    }
+
+    private void MenuAbout_Click(object sender, RoutedEventArgs e)
+    {
+        ShowAboutDialog();
     }
 
     /// <summary>
