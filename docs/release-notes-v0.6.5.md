@@ -11,7 +11,7 @@ Three refinements to how spelling errors are announced in the compose window:
 **New "Announce spelling errors" toggle.** A new setting controls whether any spelling error is announced at all, regardless of how the caret arrived at the misspelled word. When turned off, F7 still navigates to and selects errors so you can fix them with Alt+1/2/3 — it just does so silently. The existing "Announce spelling suggestions" checkbox is now nested under this toggle and grays out when the parent setting is off.
 
 The toggle is available in two places:
-- **Tools → Settings → Screen Reader Announcements** — "Announce spelling errors" checkbox.
+- **File → Settings → Screen Reader Announcements** — "Announce spelling errors" checkbox.
 - **Compose Command Palette (Ctrl+Shift+P)** — search for "Toggle Spelling Announcements" to flip it on or off without leaving the compose window.
 
 ---
