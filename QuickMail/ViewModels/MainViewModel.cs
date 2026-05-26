@@ -1150,11 +1150,20 @@ public partial class MainViewModel : ObservableObject
         // focused item's UIA position, causing screen readers to re-announce it every time.
         // A single Reset notification lets WPF re-bind once and screen readers see only
         // one structural change for the whole batch.
+        //
+        // Side-effect: WPF's ListView TwoWay-bound SelectedItem may clear SelectedMessage
+        // transiently when the Reset fires (the Selector deselects before re-validating).
+        // Save the reference so it can be restored if that happens.
+        var prevSelected = SelectedMessage;
         using (Messages.BeginBatchScope())
         {
             foreach (var msg in toInsert)
                 InsertMessageSorted(msg);
         }
+        // If WPF cleared SelectedMessage during the Reset but the message is still in
+        // the list, restore it so the reading pane header and command guards stay correct.
+        if (prevSelected != null && SelectedMessage == null && Messages.Contains(prevSelected))
+            SelectedMessage = prevSelected;
 
         if (toInsert.Count > 0)
         {

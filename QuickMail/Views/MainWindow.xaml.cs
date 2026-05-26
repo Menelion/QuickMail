@@ -197,6 +197,12 @@ public partial class MainWindow : Window
                 {
                     LogService.Debug("[FOCUS]   → skipped (menu/toolbar has focus)");
                 }
+                else if (_vm.IsMessageOpen)
+                {
+                    // Reading pane is open — the message collection changed (e.g. folder
+                    // load or Refresh) but focus must stay in the reading pane.
+                    LogService.Debug("[FOCUS]   → skipped (reading pane open)");
+                }
                 else if (vm.IsConversationsView)
                 {
                     LogService.Debug("[FOCUS]   → LandOnConversationAfterRebuild(0)");
@@ -224,6 +230,12 @@ public partial class MainWindow : Window
                 {
                     LogService.Debug("[FOCUS] PropChanged:Conversations skipped (menu/toolbar has focus)");
                 }
+                else if (_vm.IsMessageOpen)
+                {
+                    // Reading pane is open — a background sync rebuilt the Conversations
+                    // collection but focus must stay in the reading pane.
+                    LogService.Debug("[FOCUS] PropChanged:Conversations skipped (reading pane open)");
+                }
                 else
                 {
                     // Capture selected index now (before DataBind replaces items) so we can
@@ -239,6 +251,12 @@ public partial class MainWindow : Window
                 {
                     LogService.Debug("[FOCUS] PropChanged:SenderGroups skipped (menu/toolbar has focus)");
                 }
+                else if (_vm.IsMessageOpen)
+                {
+                    // Reading pane is open — a background sync rebuilt the SenderGroups
+                    // collection but focus must stay in the reading pane.
+                    LogService.Debug("[FOCUS] PropChanged:SenderGroups skipped (reading pane open)");
+                }
                 else
                 {
                     // Capture selected index now (before DataBind replaces items) so we can
@@ -253,6 +271,12 @@ public partial class MainWindow : Window
                 if (IsMenuOrToolbarFocused())
                 {
                     LogService.Debug("[FOCUS] PropChanged:ToGroups skipped (menu/toolbar has focus)");
+                }
+                else if (_vm.IsMessageOpen)
+                {
+                    // Reading pane is open — a background sync rebuilt the ToGroups
+                    // collection but focus must stay in the reading pane.
+                    LogService.Debug("[FOCUS] PropChanged:ToGroups skipped (reading pane open)");
                 }
                 else
                 {
