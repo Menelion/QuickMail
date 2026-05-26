@@ -2,7 +2,7 @@ using System;
 
 namespace QuickMail.Models;
 
-public enum SpecialFolderKind { None, Inbox, Sent, Drafts, Trash }
+public enum SpecialFolderKind { None, Inbox, Sent, Drafts, Trash, Junk }
 
 public class MailFolderModel
 {

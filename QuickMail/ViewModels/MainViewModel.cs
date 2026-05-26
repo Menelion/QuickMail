@@ -3000,7 +3000,7 @@ public partial class MainViewModel : ObservableObject
                 return;
         }
 
-        LogService.Debug($"EmptyTrash: viewingTrash={viewingTrash} folder='{SelectedFolder?.FullName}'");
+        LogService.Log($"EmptyTrash: viewingTrash={viewingTrash} folder='{SelectedFolder?.FullName}' accounts={accountsToEmpty.Count}");
 
         StatusText = "Emptying trash…";
         IsBusy = true;
@@ -3016,7 +3016,7 @@ public partial class MainViewModel : ObservableObject
             StatusText = msg;
             Announce(msg);
             trashEmptied = true;
-            LogService.Debug($"EmptyTrash: deleted {totalDeleted} messages");
+            LogService.Log($"EmptyTrash: deleted {totalDeleted} messages");
         }
         catch (OperationCanceledException)
         {
@@ -3030,6 +3030,21 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+
+        if (trashEmptied)
+        {
+            // Zero out the cached trash MessageCount for each account so that if the user
+            // runs Empty Trash again in this session, the confirmation dialog shows 0 rather
+            // than the stale count recorded at connection time.
+            foreach (var account in accountsToEmpty)
+            {
+                if (_cachedFolders.TryGetValue(account.Id, out var folders))
+                {
+                    foreach (var f in folders.Where(f => f.Kind == SpecialFolderKind.Trash))
+                        f.MessageCount = 0;
+                }
+            }
         }
 
         // Only update the message list if the user is currently looking at the trash.

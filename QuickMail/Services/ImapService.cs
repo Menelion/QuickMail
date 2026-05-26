@@ -1296,7 +1296,8 @@ public class ImapService : IImapService
 
     private static SpecialFolderKind GetSpecialFolderKind(FolderAttributes attrs)
     {
-        if ((attrs & (FolderAttributes.Trash | FolderAttributes.Junk)) != 0) return SpecialFolderKind.Trash;
+        if ((attrs & FolderAttributes.Trash)  != 0) return SpecialFolderKind.Trash;
+        if ((attrs & FolderAttributes.Junk)   != 0) return SpecialFolderKind.Junk;
         if ((attrs & FolderAttributes.Sent)   != 0) return SpecialFolderKind.Sent;
         if ((attrs & FolderAttributes.Drafts) != 0) return SpecialFolderKind.Drafts;
         return SpecialFolderKind.None;
