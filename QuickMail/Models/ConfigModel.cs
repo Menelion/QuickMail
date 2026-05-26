@@ -55,10 +55,13 @@ public class ConfigModel
     /// <summary>Announce action results (search counts, move/delete confirmations).</summary>
     public bool AnnounceResults { get; set; } = true;
 
-    /// <summary>Announce spelling errors when the caret is on a misspelled word or F7 navigates to one.</summary>
-    public bool AnnounceSpellingErrors { get; set; } = true;
+    /// <summary>Announce spelling errors while typing (before the word is complete). Default off.</summary>
+    public bool AnnounceSpellingWhileTyping { get; set; } = false;
 
-    /// <summary>Announce spelling suggestions when navigating into a misspelled word.</summary>
+    /// <summary>Announce spelling errors when the caret moves into a misspelled word during navigation.</summary>
+    public bool AnnounceSpellingWhileNavigating { get; set; } = true;
+
+    /// <summary>Announce spelling suggestions when a misspelling is announced.</summary>
     public bool AnnounceSpellingSuggestions { get; set; } = true;
 
     // ── Tutorial ──────────────────────────────────────────────────────────────────

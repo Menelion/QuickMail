@@ -340,8 +340,9 @@ public partial class ComposeWindow : Window
     private void BodyBox_SelectionChanged(object sender, RoutedEventArgs e)
     {
         if (_suppressSpellingAnnouncement) return;
-        if (_caretMovedByTyping) return;
-        if (!_configService.Load().AnnounceSpellingErrors) return;
+        var cfg = _configService.Load();
+        if (_caretMovedByTyping  && !cfg.AnnounceSpellingWhileTyping)      return;
+        if (!_caretMovedByTyping && !cfg.AnnounceSpellingWhileNavigating)  return;
 
         var text = BodyBox.Text;
         if (string.IsNullOrEmpty(text)) return;
@@ -550,10 +551,10 @@ public partial class ComposeWindow : Window
     private void ToggleSpellingAnnouncements()
     {
         var cfg = _configService.Load();
-        cfg.AnnounceSpellingErrors = !cfg.AnnounceSpellingErrors;
+        cfg.AnnounceSpellingWhileNavigating = !cfg.AnnounceSpellingWhileNavigating;
         _configService.Save(cfg);
-        var state = cfg.AnnounceSpellingErrors ? "on" : "off";
-        AccessibilityHelper.Announce(this, $"Spelling error announcements {state}.",
+        var state = cfg.AnnounceSpellingWhileNavigating ? "on" : "off";
+        AccessibilityHelper.Announce(this, $"Spelling announcements while navigating {state}.",
             interrupt: true, category: AnnouncementCategory.Result, force: true);
     }
 

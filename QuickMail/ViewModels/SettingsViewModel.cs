@@ -41,7 +41,10 @@ public partial class SettingsViewModel : ObservableObject
     private bool _announceResults;
 
     [ObservableProperty]
-    private bool _announceSpellingErrors;
+    private bool _announceSpellingWhileTyping;
+
+    [ObservableProperty]
+    private bool _announceSpellingWhileNavigating;
 
     [ObservableProperty]
     private bool _announceSpellingSuggestions;
@@ -65,8 +68,9 @@ public partial class SettingsViewModel : ObservableObject
         AnnounceHints       = cfg.AnnounceHints;
         AnnounceStatus      = cfg.AnnounceStatus;
         AnnounceResults     = cfg.AnnounceResults;
-        AnnounceSpellingErrors      = cfg.AnnounceSpellingErrors;
-        AnnounceSpellingSuggestions = cfg.AnnounceSpellingSuggestions;
+        AnnounceSpellingWhileTyping      = cfg.AnnounceSpellingWhileTyping;
+        AnnounceSpellingWhileNavigating  = cfg.AnnounceSpellingWhileNavigating;
+        AnnounceSpellingSuggestions      = cfg.AnnounceSpellingSuggestions;
 
         foreach (var cmd in registry.GetAll())
         {
@@ -95,8 +99,9 @@ public partial class SettingsViewModel : ObservableObject
         cfg.AnnounceHints       = AnnounceHints;
         cfg.AnnounceStatus      = AnnounceStatus;
         cfg.AnnounceResults     = AnnounceResults;
-        cfg.AnnounceSpellingErrors      = AnnounceSpellingErrors;
-        cfg.AnnounceSpellingSuggestions = AnnounceSpellingSuggestions;
+        cfg.AnnounceSpellingWhileTyping      = AnnounceSpellingWhileTyping;
+        cfg.AnnounceSpellingWhileNavigating  = AnnounceSpellingWhileNavigating;
+        cfg.AnnounceSpellingSuggestions      = AnnounceSpellingSuggestions;
 
         cfg.CustomHotkeys = HotkeyRows
             .Where(r => r.HasCustomBinding)

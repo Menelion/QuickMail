@@ -8,11 +8,13 @@ Three refinements to how spelling errors are announced in the compose window:
 
 **No more mid-word interruptions while typing.** Previously, QuickMail would announce a spelling error as soon as the partial word you were typing matched a known misspelling — even before you finished the word. Now, spelling announcements are suppressed while you are actively typing. Errors are announced when you navigate (arrow keys, Home/End, mouse) or jump between errors with F7/Shift+F7, but never mid-keystroke.
 
-**New "Announce spelling errors while navigating" toggle.** A new setting controls whether spelling errors are announced as you arrow through the message body. When turned off, moving the caret into a misspelled word is silent — but **F7 and Shift+F7 always announce**, so you can still jump from error to error and hear each one. Alt+1/2/3 replacement works either way. The existing "Announce spelling suggestions" checkbox is now nested under this toggle and grays out when the parent setting is off.
+**Three independent spelling announcement settings.** The Screen Reader Announcements section in **File → Settings** now has three separate spelling controls:
 
-The toggle is available in two places:
-- **File → Settings → Screen Reader Announcements** — "Announce spelling errors while navigating" checkbox.
-- **Compose Command Palette (Ctrl+Shift+P)** — search for "Toggle Spelling Announcements" to flip it on or off without leaving the compose window.
+- **Announce spelling errors while typing** — when on, errors are announced as you type each letter of a word. Off by default so you are not interrupted mid-word.
+- **Announce spelling errors while navigating** — when on, errors are announced as you arrow through the message body and the caret moves into a misspelled word. On by default. F7 and Shift+F7 always announce regardless of this setting.
+- **Announce spelling suggestions** — when on, up to three correction suggestions are spoken alongside the error. On by default.
+
+The **Compose Command Palette (Ctrl+Shift+P)** includes a "Toggle Spelling Announcements" command that flips the "while navigating" setting on or off without leaving the compose window.
 
 ---
 

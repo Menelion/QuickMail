@@ -206,8 +206,9 @@ public class ConfigService : IConfigService
                     case "announcehints":        config.AnnounceHints        = ParseBool(value); break;
                     case "announcestatus":       config.AnnounceStatus       = ParseBool(value); break;
                     case "announceresults":      config.AnnounceResults      = ParseBool(value); break;
-                    case "announcespellingerrors":      config.AnnounceSpellingErrors      = ParseBool(value); break;
-                    case "announcespellingsuggestions": config.AnnounceSpellingSuggestions = ParseBool(value); break;
+                    case "announcespellingwhiletyping":      config.AnnounceSpellingWhileTyping      = ParseBool(value); break;
+                    case "announcespellingwhilenavigating": config.AnnounceSpellingWhileNavigating = ParseBool(value); break;
+                    case "announcespellingsuggestions":     config.AnnounceSpellingSuggestions     = ParseBool(value); break;
                     case "tutorialcompleted":    config.TutorialCompleted    = ParseBool(value); break;
                 }
             }
@@ -295,15 +296,21 @@ public class ConfigService : IConfigService
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 
-        sb.AppendLine($"AnnounceSpellingErrors = {(config.AnnounceSpellingErrors ? "on" : "off")}");
-        sb.AppendLine("# Announce spelling errors when navigating to a misspelled word or using F7.");
-        sb.AppendLine("# When off, spelling navigation still works but nothing is spoken.");
+        sb.AppendLine($"AnnounceSpellingWhileTyping = {(config.AnnounceSpellingWhileTyping ? "on" : "off")}");
+        sb.AppendLine("# Announce spelling errors while actively typing a word. Default off.");
+        sb.AppendLine("# When on, errors may be announced before the word is finished.");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AnnounceSpellingWhileNavigating = {(config.AnnounceSpellingWhileNavigating ? "on" : "off")}");
+        sb.AppendLine("# Announce spelling errors when the caret moves into a misspelled word during navigation.");
+        sb.AppendLine("# F7/Shift+F7 always announce regardless of this setting.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 
         sb.AppendLine($"AnnounceSpellingSuggestions = {(config.AnnounceSpellingSuggestions ? "on" : "off")}");
-        sb.AppendLine("# Announce spelling suggestions when navigating into a misspelled word.");
-        sb.AppendLine("# When off, only the misspelled word is announced without suggestions.");
+        sb.AppendLine("# Announce spelling suggestions when a misspelling is announced.");
+        sb.AppendLine("# When off, only the misspelled word is spoken without suggestions.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 
