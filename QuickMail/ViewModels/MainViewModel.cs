@@ -2976,6 +2976,30 @@ public partial class MainViewModel : ObservableObject
         bool viewingTrash = SelectedFolder?.Kind == SpecialFolderKind.Trash
                          || SelectedFolder?.FullName == AllTrashFolder.FullName;
 
+        // Confirmation dialog (if enabled in settings).
+        if (_configService.Load().ConfirmEmptyTrash && ConfirmationRequested != null)
+        {
+            // When the user is already viewing a trash folder, _rawMessages contains exactly
+            // what is displayed — use that count.  Otherwise fall back to the cached
+            // MessageCount from each account's trash folder model (zero IMAP cost).
+            int trashCount = viewingTrash
+                ? _rawMessages.Count
+                : accountsToEmpty
+                    .Where(a => _cachedFolders.TryGetValue(a.Id, out _))
+                    .Sum(a => _cachedFolders[a.Id]
+                        .Where(f => f.Kind == SpecialFolderKind.Trash)
+                        .Sum(f => f.MessageCount));
+
+            string countText = trashCount > 0
+                ? $"This will permanently delete {trashCount:N0} {(trashCount == 1 ? "message" : "messages")} from your trash. This cannot be undone."
+                : "This will permanently delete all messages in your trash. This cannot be undone.";
+
+            if (!ConfirmationRequested(
+                    countText + "\n\nYou can turn off this confirmation in Settings.",
+                    "Empty Trash"))
+                return;
+        }
+
         LogService.Debug($"EmptyTrash: viewingTrash={viewingTrash} folder='{SelectedFolder?.FullName}'");
 
         StatusText = "Emptying trash…";
@@ -3013,6 +3037,11 @@ public partial class MainViewModel : ObservableObject
         // unaffected — leave the view and focus exactly as they are.
         if (trashEmptied && viewingTrash)
         {
+            // Clear _rawMessages alongside Messages so ApplyFiltersAndSearch cannot
+            // restore the just-deleted messages if the user changes sort/filter/search
+            // while still in the trash view.  (In online mode the background sync skips
+            // trash folders, so _rawMessages is never cleaned up automatically.)
+            _rawMessages.Clear();
             Messages.Clear();
             SelectedMessage = null;
             MessageDetail   = null;
