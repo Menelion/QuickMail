@@ -507,6 +507,18 @@ public partial class MainWindow : Window
             id: "settings.toggleCustomAnnouncements", category: "Settings", title: "Toggle Custom Announcements",
             execute: ToggleCustomAnnouncements));
 
+        _registry.Register(new CommandDefinition(
+            id: "mail.jumpToFirstInGroup", category: "Mail", title: "First Message in Group",
+            execute: JumpToFirstMessageInGroup,
+            defaultKey: Key.OemComma, defaultModifiers: ModifierKeys.Shift,
+            isAvailable: IsGroupedViewActive));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.jumpToLastInGroup", category: "Mail", title: "Last Message in Group",
+            execute: JumpToLastMessageInGroup,
+            defaultKey: Key.OemPeriod, defaultModifiers: ModifierKeys.Shift,
+            isAvailable: IsGroupedViewActive));
+
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
         {
@@ -1220,6 +1232,14 @@ public partial class MainWindow : Window
         if (e.Key == Key.Oem2 && Keyboard.Modifiers == ModifierKeys.None)
         {
             OpenSearch();
+            e.Handled = true;
+            return;
+        }
+
+        // < and > (Shift+, and Shift+.) jump to group boundaries in grouped views only.
+        // Consume them here so they are silent no-ops in the flat message list.
+        if ((e.Key == Key.OemComma || e.Key == Key.OemPeriod) && Keyboard.Modifiers == ModifierKeys.Shift)
+        {
             e.Handled = true;
             return;
         }
@@ -2372,6 +2392,58 @@ public partial class MainWindow : Window
             }, DispatcherPriority.Input);
         }
         _vm.PropertyChanged += OnPropertyChanged;
+    }
+
+    // ── Group-boundary navigation (< / >) ────────────────────────────────────
+
+    /// <summary>Returns true when the active view mode uses grouped trees.</summary>
+    private bool IsGroupedViewActive() =>
+        _vm.IsConversationsView || _vm.IsFromView || _vm.IsToView;
+
+    private void JumpToFirstMessageInGroup() => JumpToGroupBoundary(first: true);
+    private void JumpToLastMessageInGroup()  => JumpToGroupBoundary(first: false);
+
+    /// <summary>
+    /// Jumps to the first (newest, <paramref name="first"/>=true) or last (oldest,
+    /// <paramref name="first"/>=false) message in whichever group the current selection
+    /// belongs to.  Works whether a group header or a child message is selected, and
+    /// expands a collapsed group automatically.
+    /// </summary>
+    private void JumpToGroupBoundary(bool first)
+    {
+        if (_vm.IsConversationsView)
+        {
+            var group = ConversationTree.SelectedItem switch
+            {
+                ConversationGroup g    => g,
+                MailMessageSummary msg => _vm.Conversations.FirstOrDefault(g => g.Messages.Contains(msg)),
+                _                      => null
+            };
+            if (group?.Messages.Count > 0)
+                FocusConversationMessage(group, first ? 0 : group.Messages.Count - 1);
+        }
+        else if (_vm.IsFromView)
+        {
+            var group = SenderGroupTree.SelectedItem switch
+            {
+                SenderGroup g          => g,
+                MailMessageSummary msg => _vm.SenderGroups.FirstOrDefault(g => g.Messages.Contains(msg)),
+                _                      => null
+            };
+            if (group?.Messages.Count > 0)
+                FocusSenderGroupMessage(group, first ? 0 : group.Messages.Count - 1);
+        }
+        else if (_vm.IsToView)
+        {
+            var group = ToGroupTree.SelectedItem switch
+            {
+                SenderGroup g          => g,
+                MailMessageSummary msg => _vm.ToGroups.FirstOrDefault(g => g.Messages.Contains(msg)),
+                _                      => null
+            };
+            if (group?.Messages.Count > 0)
+                FocusToGroupMessage(group, first ? 0 : group.Messages.Count - 1);
+        }
     }
 
     // ── Message-level focus helpers for grouped views ────────────────────────

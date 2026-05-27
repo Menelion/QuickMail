@@ -95,6 +95,8 @@ public static class GestureHelper
         d[Key.Down]     = "Down";
         d[Key.Left]     = "Left";
         d[Key.Right]    = "Right";
+        d[Key.OemComma]  = ",";
+        d[Key.OemPeriod] = ".";
         return d;
     }
 
@@ -126,6 +128,8 @@ public static class GestureHelper
         d["Down"]      = Key.Down;
         d["Left"]      = Key.Left;
         d["Right"]     = Key.Right;
+        d[","]         = Key.OemComma;
+        d["."]         = Key.OemPeriod;
         return d;
     }
 }
