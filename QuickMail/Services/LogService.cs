@@ -28,12 +28,23 @@ public static class LogService
     /// <summary>Set to true by App.xaml.cs when /debug is on the command line.</summary>
     public static bool DebugMode { get; set; }
 
+    /// <summary>
+    /// Controls log line layout. "actionFirst" (default) puts the message before the timestamp,
+    /// which is easier to scan with a screen reader since logs are already chronological.
+    /// "timeFirst" puts the timestamp first (the original format).
+    /// Set this from ConfigService after loading config on startup.
+    /// </summary>
+    public static string Format { get; set; } = "actionFirst";
+
     public static void Log(string message)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_logFile)!);
-            var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}";
+            var ts   = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            var line = Format == "timeFirst"
+                ? $"{ts}  {message}{Environment.NewLine}"
+                : $"{message}  [{ts}]{Environment.NewLine}";
             lock (_writeGate)
             {
                 File.AppendAllText(_logFile, line);

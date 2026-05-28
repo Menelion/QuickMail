@@ -28,6 +28,7 @@ public partial class SettingsDialog : Window
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         _vm.SaveCommand.Execute(null);
+        LogService.Format = _vm.LogFormat;
         DialogResult = true;
         Close();
     }

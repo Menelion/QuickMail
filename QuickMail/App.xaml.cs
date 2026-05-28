@@ -84,10 +84,12 @@ public partial class App : Application
             var ruleService = new RuleService(imapService, localStore, profile.ProfileDir);
             var syncService = new SyncService(imapService, localStore, configService, ruleService);
 
-            Views.AccessibilityHelper.Configure(configService.Load());
+            var startupCfg = configService.Load();
+            Views.AccessibilityHelper.Configure(startupCfg);
+            LogService.Format = startupCfg.LogFormat;
 
             var commandRegistry = new CommandRegistry();
-            commandRegistry.ApplyUserOverrides(configService.Load().CustomHotkeys);
+            commandRegistry.ApplyUserOverrides(startupCfg.CustomHotkeys);
 
             var viewService = new ViewService(profile);
 

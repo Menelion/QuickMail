@@ -210,6 +210,9 @@ public class ConfigService : IConfigService
                     case "announcespellingwhilenavigating": config.AnnounceSpellingWhileNavigating = ParseBool(value); break;
                     case "announcespellingsuggestions":     config.AnnounceSpellingSuggestions     = ParseBool(value); break;
                     case "confirmemptytrash":    config.ConfirmEmptyTrash    = ParseBool(value); break;
+                    case "logformat":
+                        config.LogFormat = value.ToLowerInvariant() == "timefirst" ? "timeFirst" : "actionFirst";
+                        break;
                     case "tutorialcompleted":    config.TutorialCompleted    = ParseBool(value); break;
                 }
             }
@@ -317,6 +320,13 @@ public class ConfigService : IConfigService
         sb.AppendLine($"ConfirmEmptyTrash = {(config.ConfirmEmptyTrash ? "on" : "off")}");
         sb.AppendLine("# Show a confirmation dialog before permanently deleting all messages in trash.");
         sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"LogFormat = {config.LogFormat}");
+        sb.AppendLine("# How log lines are formatted.");
+        sb.AppendLine("# actionFirst: message then timestamp — easier to scan with a screen reader.");
+        sb.AppendLine("# timeFirst: timestamp then message (historical format).");
+        sb.AppendLine("# Values: actionFirst, timeFirst.");
         sb.AppendLine();
 
         sb.AppendLine($"TutorialCompleted = {(config.TutorialCompleted ? "on" : "off")}");

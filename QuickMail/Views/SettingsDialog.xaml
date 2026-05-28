@@ -179,6 +179,34 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- Advanced Tab -->
+            <TabItem Header="_Advanced" AutomationProperties.Name="Advanced settings tab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <!-- Log Format Group -->
+                        <GroupBox Header="_Log Format" Padding="10" Margin="0,0,0,15"
+                                  AutomationProperties.Name="Log format settings">
+                            <StackPanel>
+                                <RadioButton Content="_Action first (recommended)"
+                                             IsChecked="{Binding IsLogFormatActionFirst, Mode=TwoWay}"
+                                             GroupName="LogFormat"
+                                             AutomationProperties.Name="Action first — message then timestamp. Easier to scan with a screen reader since the log is already chronological."/>
+                                <TextBlock Text="Example: Sync completed: 42 messages  [2024-11-15 14:23:45.123]"
+                                           Foreground="DimGray" FontSize="11" Margin="16,2,0,8"
+                                           FontFamily="Consolas"/>
+                                <RadioButton Content="_Time first"
+                                             IsChecked="{Binding IsLogFormatTimeFirst, Mode=TwoWay}"
+                                             GroupName="LogFormat"
+                                             AutomationProperties.Name="Time first — timestamp then message. The original log format."/>
+                                <TextBlock Text="Example: 2024-11-15 14:23:45.123  Sync completed: 42 messages"
+                                           Foreground="DimGray" FontSize="11" Margin="16,2,0,0"
+                                           FontFamily="Consolas"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- Keyboard Shortcuts Tab -->
             <TabItem Header="_Keyboard Shortcuts" AutomationProperties.Name="Keyboard shortcuts tab">
                 <Grid Margin="10">

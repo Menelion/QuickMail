@@ -64,6 +64,15 @@ public class ConfigModel
     /// <summary>Announce spelling suggestions when a misspelling is announced.</summary>
     public bool AnnounceSpellingSuggestions { get; set; } = true;
 
+    // ── Advanced ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// How log lines are formatted.
+    /// "actionFirst" (default): message then timestamp — easier to scan with a screen reader.
+    /// "timeFirst": timestamp then message — the historical format.
+    /// </summary>
+    public string LogFormat { get; set; } = "actionFirst";
+
     // ── Tutorial ──────────────────────────────────────────────────────────────────
 
     /// <summary>Show a confirmation dialog before emptying trash. Default on.</summary>
