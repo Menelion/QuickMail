@@ -248,6 +248,7 @@ Every user-facing keyboard shortcut **must** be registered in `CommandRegistry` 
 | Ctrl+Shift+R | `mail.replyAll` | Reply All |
 | Ctrl+F | `mail.forward` | Forward |
 | Delete | `mail.delete` | Delete |
+| Ctrl+Q | `mail.markRead` | Mark as Read |
 | F5 | `mail.refresh` | Refresh |
 | Ctrl+Shift+E | `mail.emptyTrash` | Empty Trash |
 | Ctrl+Shift+V | `view.openViewMenu` | Open View Menu |
