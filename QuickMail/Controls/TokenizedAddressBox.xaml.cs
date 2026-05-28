@@ -68,6 +68,8 @@ public partial class TokenizedAddressBox : UserControl
     {
         InitializeComponent();
 
+        Loaded += OnLoaded;
+
         InputBox.TextChanged += (s, e) =>
         {
             InputTextChanged?.Invoke(this, e);
@@ -92,6 +94,20 @@ public partial class TokenizedAddressBox : UserControl
             OuterBorder.BorderBrush = IsKeyboardFocusWithin
                 ? SystemColors.HotTrackBrush
                 : SystemColors.ControlDarkBrush;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // AutomationProperties set on the outer UserControl don't reach the inner InputBox
+        // because focus lands on InputBox (the UserControl is Focusable=False). Transfer
+        // LabeledBy and HelpText so screen readers can name the focused element correctly.
+        var labeledBy = AutomationProperties.GetLabeledBy(this);
+        if (labeledBy != null)
+            AutomationProperties.SetLabeledBy(InputBox, labeledBy);
+
+        var helpText = AutomationProperties.GetHelpText(this);
+        if (!string.IsNullOrEmpty(helpText))
+            AutomationProperties.SetHelpText(InputBox, helpText);
     }
 
     /// <summary>Text currently being typed — the search token for autocomplete.</summary>

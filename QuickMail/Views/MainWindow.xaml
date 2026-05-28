@@ -183,7 +183,8 @@
             <Separator/>
             <MenuItem Header="Create _Rule from Message…"
                       InputGestureText="Ctrl+Shift+T"
-                      AutomationProperties.Name="Create Rule from Message. Ctrl+Shift+T"
+                      AutomationProperties.Name="Create Rule from Message"
+                      AutomationProperties.AcceleratorKey="Ctrl+Shift+T"
                       Command="{Binding CreateRuleFromMessageCommand}"/>
         </ContextMenu>
 
@@ -313,7 +314,8 @@
                 <MenuItem Header="_Rules…"
                           Command="{Binding OpenRulesManagerCommand}"
                           InputGestureText="Ctrl+Shift+L"
-                          AutomationProperties.Name="Manage Rules. Ctrl+Shift+L"/>
+                          AutomationProperties.Name="Manage Rules"
+                          AutomationProperties.AcceleratorKey="Ctrl+Shift+L"/>
             </MenuItem>
 
             <!-- View -->
@@ -492,35 +494,41 @@
             <Button x:Name="ToolbarFirstButton"
                     Style="{StaticResource ToolbarButton}"
                     Command="{Binding NewMessageCommand}"
-                    AutomationProperties.Name="New Message (Ctrl+N)"
+                    AutomationProperties.Name="New Message"
+                    AutomationProperties.AcceleratorKey="Ctrl+N"
                     ToolTip="New Message (Ctrl+N)"
                     Content="_New"/>
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding ReplyCommand}"
-                    AutomationProperties.Name="Reply (Ctrl+R)"
+                    AutomationProperties.Name="Reply"
+                    AutomationProperties.AcceleratorKey="Ctrl+R"
                     ToolTip="Reply (Ctrl+R)"
                     Content="_Reply"/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding ReplyAllCommand}"
-                    AutomationProperties.Name="Reply All (Ctrl+Shift+R)"
+                    AutomationProperties.Name="Reply All"
+                    AutomationProperties.AcceleratorKey="Ctrl+Shift+R"
                     ToolTip="Reply All (Ctrl+Shift+R)"
                     Content="Reply _All"/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding ForwardCommand}"
-                    AutomationProperties.Name="Forward (Ctrl+F)"
+                    AutomationProperties.Name="Forward"
+                    AutomationProperties.AcceleratorKey="Ctrl+F"
                     ToolTip="Forward (Ctrl+F)"
                     Content="_Forward"/>
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding DeleteMessageCommand}"
-                    AutomationProperties.Name="Delete message (Delete key)"
+                    AutomationProperties.Name="Delete message"
+                    AutomationProperties.AcceleratorKey="Delete"
                     ToolTip="Delete (Del)"
                     Content="_Delete"/>
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding RefreshCommand}"
-                    AutomationProperties.Name="Refresh (F5)"
+                    AutomationProperties.Name="Refresh"
+                    AutomationProperties.AcceleratorKey="F5"
                     ToolTip="Refresh (F5)"
                     Content="Refres_h"/>
             <Button x:Name="SyncRangeButton"
@@ -597,7 +605,8 @@
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding EmptyTrashCommand}"
-                    AutomationProperties.Name="Empty Trash (Ctrl+Shift+E)"
+                    AutomationProperties.Name="Empty Trash"
+                    AutomationProperties.AcceleratorKey="Ctrl+Shift+E"
                     ToolTip="Empty Trash (Ctrl+Shift+E)"
                     Content="Empty _Trash"/>
             <Separator/>
@@ -609,7 +618,8 @@
             <Separator/>
             <Button Style="{StaticResource ToolbarButton}"
                     Command="{Binding ViewUserGuideCommand}"
-                    AutomationProperties.Name="View User Guide (F1)"
+                    AutomationProperties.Name="View User Guide"
+                    AutomationProperties.AcceleratorKey="F1"
                     ToolTip="View User Guide (F1)"
                     Content="User _Guide"/>
         </ToolBar>

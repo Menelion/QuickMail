@@ -32,9 +32,10 @@
                     MinWidth="80" Margin="6,0,0,0"
                     TabIndex="11"/>
             <Button DockPanel.Dock="Right"
-                    Content="Save Draft (Ctrl+S)"
+                    Content="Save Draft"
                     Command="{Binding SaveDraftCommand}"
-                    AutomationProperties.Name="Save as draft (Ctrl+S)"
+                    AutomationProperties.Name="Save as draft"
+                    AutomationProperties.AcceleratorKey="Ctrl+S"
                     MinWidth="100" Margin="6,0,0,0"
                     TabIndex="10"/>
             <Button DockPanel.Dock="Right"
@@ -51,9 +52,10 @@
                     TabIndex="8"/>
             <Button DockPanel.Dock="Right"
                     x:Name="SendButton"
-                    Content="Send (Alt+S)"
+                    Content="Send"
                     Command="{Binding SendCommand}"
-                    AutomationProperties.Name="Send message (Alt+S)"
+                    AutomationProperties.Name="Send message"
+                    AutomationProperties.AcceleratorKey="Alt+S"
                     IsDefault="True"
                     MinWidth="80"
                     TabIndex="7"/>
@@ -91,7 +93,8 @@
                       ItemsSource="{Binding SenderAccounts}"
                       SelectedItem="{Binding SenderAccount, Mode=TwoWay}"
                       DisplayMemberPath="AccountLabel"
-                      AutomationProperties.Name="From account. Alt+M to focus."
+                      AutomationProperties.Name="From account"
+                      AutomationProperties.AcceleratorKey="Alt+M"
                       AutomationProperties.HelpText="Choose which account to send from"
                       Margin="0,4" TabIndex="0"/>
 
@@ -134,16 +137,18 @@
                      x:Name="SubjectBox"
                      Text="{Binding Subject, UpdateSourceTrigger=PropertyChanged}"
                      AutomationProperties.LabeledBy="{Binding ElementName=SubjectLabel}"
-                     AutomationProperties.Name="Subject. Alt+U to focus."
+                     AutomationProperties.Name="Subject"
+                     AutomationProperties.AcceleratorKey="Alt+U"
                      Margin="0,4" TabIndex="4"/>
 
             <Separator Grid.Row="5" Grid.ColumnSpan="2" Margin="0,4"/>
 
             <!-- Attachments -->
             <Button Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
-                    Content="Add Files… (Ctrl+Shift+A)"
+                    Content="Add Files…"
                     Command="{Binding AddAttachmentsCommand}"
-                    AutomationProperties.Name="Add file attachments (Ctrl+Shift+A)"
+                    AutomationProperties.Name="Add file attachments"
+                    AutomationProperties.AcceleratorKey="Ctrl+Shift+A"
                     HorizontalAlignment="Left"
                     Margin="0,2" TabIndex="5"/>
             <ListBox Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2"
@@ -210,7 +215,8 @@
             <TextBox Grid.Row="9" Grid.ColumnSpan="2"
                      x:Name="BodyBox"
                      Text="{Binding Body, UpdateSourceTrigger=PropertyChanged}"
-                     AutomationProperties.Name="Message body. Alt+Y to focus, Alt+U for Subject, Alt+M for From, Alt+S to send."
+                     AutomationProperties.Name="Message body"
+                     AutomationProperties.AcceleratorKey="Alt+Y"
                      AcceptsReturn="True" AcceptsTab="True"
                      TextWrapping="Wrap"
                      SpellCheck.IsEnabled="True"
