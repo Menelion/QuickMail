@@ -229,6 +229,7 @@ When conversation view is on:
 - Each row in the message list represents a thread rather than a single message.
 - Select the arrow next to a thread (or press **Right** arrow when the thread is selected) to expand it and see the individual messages inside.
 - **Reply**, **Forward**, and **Delete** always act on the specific message selected within the thread.
+- Press **Shift+,** (less-than) to jump to the first (newest) message in the current thread. Press **Shift+.** (greater-than) to jump to the last (oldest) message. If the thread is collapsed, it expands automatically first.
 
 ---
 
@@ -525,15 +526,13 @@ While reading a message, you can quickly save the sender, recipients, and reply-
 
 When composing a message, as you type in the **To**, **Cc**, or **Bcc** fields, matching contacts from your address book appear in a dropdown suggestion list:
 
-- Type at least one character to see suggestions.
+- Type at least one character to see suggestions. The number of matches is announced.
 - Press **Down arrow** to move into the suggestion list.
-- Use **Up/Down** arrows to select a contact, then press **Enter** or **Tab** to insert it.
+- Use **Up/Down** arrows to select a contact, then press **Enter** or **Tab** to accept it as a chip.
 - Press **Escape** to dismiss the suggestions without selecting.
 - Press **Up arrow** on the first item to return focus to the text field.
 
 Contacts are sorted by how recently they were used, so your most-contacted people appear first.
-
-**Address separator:** When inserting an address from the address book, QuickMail detects which separator (comma or semicolon) you've been using in the field and inserts the new address with the same separator. Both formats are supported: `address1, address2` or `address1; address2`.
 
 ---
 
@@ -565,6 +564,47 @@ Common actions available through context menus:
 
 - Press `Ctrl+N`, or activate **New** in the toolbar.
 - The compose window opens. If you have more than one account, the **From** field lets you choose which account to send from.
+
+### Address fields (To, Cc, Bcc)
+
+The **To**, **Cc**, and **Bcc** fields work as token fields. When you commit an address it becomes a compact chip — a button showing the contact's name (or email address if no name is known). Multiple addresses appear as a row of chips before the text cursor.
+
+**Entering an address:**
+
+- Type an address or name and press **Tab**, **Enter**, **comma (,)**, or **semicolon (;)** to commit it as a chip.
+- Or type a few characters and select a contact from the autocomplete dropdown that appears (see [Autocomplete in compose](#autocomplete-in-compose)).
+
+**Navigating chips with the keyboard:**
+
+| Key | Action |
+|-----|--------|
+| **Left / Right arrow** | Move focus between chips |
+| **Right arrow** on the last chip | Move focus back to the text input |
+| **Left arrow** at the start of the text input | Move focus to the last chip |
+| **Delete** or **Backspace** on a focused chip | Remove that address |
+| **Backspace** in an empty text input | Remove the last chip |
+| **Ctrl+C** on a focused chip | Copy the full address to the clipboard |
+
+**Context menu (right-click or Shift+F10 on a chip):**
+
+| Option | Action |
+|--------|--------|
+| **Copy Address** | Copies the full address (name and email) to the clipboard |
+| **Add to Address Book** | Saves the contact silently — no dialog unless the address is already in the book |
+| **Remove** | Removes this address from the field |
+
+**Checking addresses (Ctrl+K):**
+
+Press `Ctrl+K` or open the compose Command Palette and search for **Check Addresses** to validate every address in all three fields at once:
+
+- Addresses that cannot be validated are highlighted in red.
+- Bare names with no @ sign are looked up in your address book. If a single match is found, the chip is automatically resolved to the full address.
+- A summary is announced when the check is complete — for example, "3 addresses checked. All valid."
+
+**Screen reader behavior:**
+
+- Each chip's accessible name is the full RFC address — for example, "Kelly Ford &lt;kelly@example.com&gt;".
+- When you Tab into a field that already has addresses, those addresses are announced immediately so you are not left wondering whether the field is empty.
 
 ### Spell check
 
@@ -607,7 +647,9 @@ These are also available as buttons in the toolbar.
 | Shortcut | Action |
 |----------|--------|
 | Alt+S | Send the message |
+| Ctrl+Enter | Send the message (alternate shortcut) |
 | Ctrl+S | Save as draft |
+| Ctrl+K | Check addresses |
 | Alt+U | Jump to the Subject field |
 | Alt+M | Jump to the From (account) field |
 | Alt+Y | Jump to the message body |
@@ -695,7 +737,9 @@ A security warning is shown before opening executable file types.
 
 - Select one or more messages and press **Delete**. Use **Shift+Up/Down** to select multiple.
 - Messages are moved to the **Trash** folder. They are not permanently deleted.
-- To permanently delete everything in Trash, activate **Empty Trash** in the toolbar or press `Ctrl+Shift+E`.
+- To permanently delete everything in Trash, activate **Empty Trash** in the toolbar or press `Ctrl+Shift+E`. A confirmation dialog shows how many messages will be deleted before anything is removed.
+
+To skip the confirmation, open **File → Settings**, select the **General** tab, and turn off **Confirm before emptying trash** in the **Mail Actions** group.
 
 ---
 
@@ -740,6 +784,8 @@ A security warning is shown before opening executable file types.
 | Ctrl+Shift+B | Open Address Book |
 | Ctrl+Shift+G | Grab addresses from open message |
 | Shift+Up / Shift+Down | Extend message selection |
+| Shift+, (< ) | Jump to the first (newest) message in the current group — grouped views only |
+| Shift+. (> ) | Jump to the last (oldest) message in the current group — grouped views only |
 | Shift+F10 | Open context menu for focused item |
 | Escape | Close reading pane |
 
@@ -748,12 +794,23 @@ A security warning is shown before opening executable file types.
 | Shortcut | Action |
 |----------|--------|
 | Alt+S | Send |
+| Ctrl+Enter | Send (alternate shortcut) |
 | Ctrl+S | Save draft |
+| Ctrl+K | Check addresses |
 | Alt+U | Jump to Subject field |
 | Alt+M | Jump to From (account) field |
+| Alt+Y | Jump to message body |
+| Left / Right arrow (on address chip) | Move between address chips |
+| Delete / Backspace (on address chip) | Remove focused address |
+| Ctrl+C (on address chip) | Copy address to clipboard |
+| F7 | Jump to next misspelling |
+| Shift+F7 | Jump to previous misspelling |
+| Alt+F7 | Repeat spelling announcement |
+| Alt+1 / Alt+2 / Alt+3 | Replace misspelling with suggestion |
 | Ctrl+Shift+A | Add file attachments |
 | Ctrl+V | Paste files from clipboard as attachments |
 | Delete (in attachment list) | Remove selected attachment |
+| Ctrl+Shift+P | Open compose command palette |
 | Tab | Move between fields |
 | Escape | Close window (prompts if there are unsaved changes) |
 
