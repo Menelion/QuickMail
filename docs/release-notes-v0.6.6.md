@@ -27,6 +27,14 @@ The **To**, **Cc**, and **Bcc** fields in the compose window now keep each confi
 
 ---
 
+### Open Address Book from the compose window
+
+You can now open the Address Book directly from the compose window with **Ctrl+Shift+B**. When opened this way, a row of three buttons appears at the top of the dialog — **To** (Alt+T), **Cc** (Alt+C), and **Bcc** (Alt+B) — so you can search for a contact and insert them into whichever field you choose. The dialog stays open after each insertion, so you can add several contacts in one session before closing.
+
+When the Address Book is opened from the main window the insert buttons are not shown and the dialog works as before.
+
+---
+
 ### Group boundary navigation in grouped views
 
 Two new keyboard shortcuts let you jump to the start or end of a group in Conversations, By Sender, and By Recipient views:
@@ -71,3 +79,7 @@ QuickMail now recognises and tracks the **Junk** (spam) folder as a distinct spe
 - **Reading pane closed by incoming mail** — When new mail arrived while you were reading a message, the reading pane appeared to close and focus jumped back to the message list. QuickMail now leaves focus in the reading pane when new mail arrives.
 
 - **Trash messages reappear after Empty Trash** — If you emptied trash and then changed the sort order or applied a filter, previously deleted messages could briefly reappear in the message list. QuickMail now clears the cached message count for each account's Trash folder immediately after a successful empty, so the list stays correct.
+
+- **To, Cc, and Bcc fields not named correctly for screen readers** — The To, Cc, and Bcc fields in the compose window now report their names correctly to screen readers and braille displays. Previously the field names were either missing or announced twice when tabbing between fields.
+
+- **Keyboard shortcuts announced as part of control names** — Keyboard shortcut text (for example "Alt+S" or "Ctrl+Shift+A") was embedded directly in the accessible names of buttons and fields throughout the compose window and toolbar, causing screen readers to read it as part of the control's identity on every focus. Shortcuts are now exposed through the correct UIA AcceleratorKey property, where screen readers can surface them on request rather than announcing them automatically every time focus arrives.

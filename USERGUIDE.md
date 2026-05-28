@@ -505,12 +505,24 @@ QuickMail includes a built-in address book for storing email addresses and displ
 
 ### Managing the address book
 
-- Open **File → Address Book** (or press `Ctrl+Shift+B`) to view, search, and manage all your saved contacts.
+- Open **File → Address Book** (or press `Ctrl+Shift+B` from the main window) to view, search, and manage all your saved contacts.
 - Search for a contact by typing in the search field — matches appear for both name and email address.
 - Click on any contact to view its details in the edit fields below.
 - To add a contact manually, type in the **Name** and **Email** fields and press **Enter** or click **Add**.
 - To edit a contact's name, select it in the list, edit the **Name** field, and click **Add** to save the changes.
 - To delete a contact, select it in the list and click **Delete** (or press **Delete**).
+
+### Opening the address book from a compose window
+
+Press `Ctrl+Shift+B` while composing a message to open the Address Book without leaving the compose window. When opened this way, three buttons appear at the top of the dialog:
+
+| Button | Shortcut | Action |
+|--------|----------|--------|
+| **To** | Alt+T | Insert the selected contact into the To field |
+| **Cc** | Alt+C | Insert the selected contact into the Cc field |
+| **Bcc** | Alt+B | Insert the selected contact into the Bcc field |
+
+Search for a contact, select them in the list, then press the button for the field you want. The dialog stays open after each insertion so you can add several contacts before closing.
 
 ### Grab addresses from a message
 
@@ -659,6 +671,7 @@ These are also available as buttons in the toolbar.
 | Alt+1/2/3 | Replace misspelling with 1st/2nd/3rd suggestion |
 | Ctrl+Shift+P | Open command palette |
 | Ctrl+Shift+A | Add file attachments |
+| Ctrl+Shift+B | Open Address Book (insert contacts into To, Cc, or Bcc) |
 | Ctrl+V | Paste files from clipboard as attachments |
 | Delete (in attachment list) | Remove selected attachment |
 | Escape | Close the window (prompts to save if there are unsaved changes) |
@@ -808,6 +821,7 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Alt+F7 | Repeat spelling announcement |
 | Alt+1 / Alt+2 / Alt+3 | Replace misspelling with suggestion |
 | Ctrl+Shift+A | Add file attachments |
+| Ctrl+Shift+B | Open Address Book (insert contacts into To, Cc, or Bcc) |
 | Ctrl+V | Paste files from clipboard as attachments |
 | Delete (in attachment list) | Remove selected attachment |
 | Ctrl+Shift+P | Open compose command palette |
