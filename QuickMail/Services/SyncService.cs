@@ -88,8 +88,29 @@ public class SyncService : ISyncService
         }
     }
 
-    public Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
-        => SyncFolderAsync(account, folder, ct);
+    public async Task SyncOneFolderAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
+    {
+        // IDLE-triggered sync in non-online (SQLite cache) mode.
+        //
+        // We intentionally mirror SyncOneFolderOnlineAsync rather than calling
+        // SyncFolderAsync here.  SyncFolderAsync queries maxUid from the store and
+        // fetches only messages *after* that UID — but by the time IDLE fires,
+        // RefreshFolderFromServerAsync has usually already stored the new messages and
+        // advanced maxUid.  That causes SyncFolderAsync to see incoming.Count == 0,
+        // skip FolderSynced, and produce no announcement.
+        //
+        // Fetching the last 50 by count (sinceUid: 0) guarantees FolderSynced fires
+        // whenever the server has messages.  OnFolderSynced deduplicates by UID so
+        // already-visible messages are discarded; only genuinely new arrivals are inserted.
+        LogService.Log($"IDLE targeted sync: fetching {account.AccountLabel}/{folder.FullName}");
+        var incoming = await _imap.GetMessagesSinceAsync(account.Id, folder.FullName, sinceUid: 0, initialCount: 50, ct);
+        LogService.Log($"IDLE targeted sync: {incoming.Count} messages fetched from {account.AccountLabel}/{folder.FullName}");
+        if (incoming.Count > 0)
+        {
+            await _store.UpsertSummariesAsync(incoming);
+            await Application.Current.Dispatcher.InvokeAsync(() => FolderSynced?.Invoke(incoming));
+        }
+    }
 
     public async Task SyncOneFolderOnlineAsync(AccountModel account, MailFolderModel folder, CancellationToken ct)
     {
