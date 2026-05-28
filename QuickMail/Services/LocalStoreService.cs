@@ -277,6 +277,30 @@ public class LocalStoreService : ILocalStoreService
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task UpdateIsReadBatchAsync(IEnumerable<(Guid AccountId, string FolderName, uint UniqueId)> items, bool isRead)
+    {
+        await using var conn = await OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = (Microsoft.Data.Sqlite.SqliteTransaction)tx;
+        cmd.CommandText =
+            "UPDATE MessageSummary SET is_read=$read " +
+            "WHERE unique_id=$uid AND account_id=$aid AND folder_name=$fn;";
+        var pRead = cmd.Parameters.Add("$read", Microsoft.Data.Sqlite.SqliteType.Integer);
+        var pUid  = cmd.Parameters.Add("$uid",  Microsoft.Data.Sqlite.SqliteType.Integer);
+        var pAid  = cmd.Parameters.Add("$aid",  Microsoft.Data.Sqlite.SqliteType.Text);
+        var pFn   = cmd.Parameters.Add("$fn",   Microsoft.Data.Sqlite.SqliteType.Text);
+        pRead.Value = isRead ? 1 : 0;
+        foreach (var (accountId, folderName, uniqueId) in items)
+        {
+            pUid.Value = (long)uniqueId;
+            pAid.Value = accountId.ToString();
+            pFn.Value  = folderName;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await tx.CommitAsync();
+    }
+
     public async Task UpdatePreviewAsync(Guid accountId, string folderName, uint uniqueId, string preview)
     {
         await using var conn = await OpenAsync();

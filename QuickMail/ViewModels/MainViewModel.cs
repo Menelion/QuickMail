@@ -264,6 +264,9 @@ public partial class MainViewModel : ObservableObject
     // Raw messages before search filtering; repopulated by SetMessages().
     private List<MailMessageSummary> _rawMessages = [];
 
+    /// <summary>All messages loaded for the current folder/view, before filtering.</summary>
+    public IReadOnlyList<MailMessageSummary> LoadedMessages => _rawMessages;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private bool _isSearchActive = false;
@@ -2625,6 +2628,29 @@ public partial class MainViewModel : ObservableObject
     }
 
     // ── Delete / Trash ───────────────────────────────────────────────────────────
+
+    public Task MarkMessagesReadAsync(IReadOnlyList<MailMessageSummary> messages)
+    {
+        var unread = messages.Where(m => !m.IsRead).ToList();
+        if (unread.Count == 0) return Task.CompletedTask;
+
+        foreach (var m in unread)
+            m.IsRead = true;
+
+        var label = unread.Count == 1 ? "message" : $"{unread.Count} messages";
+        StatusText = $"Marked {label} as read.";
+
+        _ = _localStore.UpdateIsReadBatchAsync(
+            unread.Select(m => (m.AccountId, m.FolderName, m.UniqueId)), true);
+
+        foreach (var group in unread.GroupBy(m => (m.AccountId, m.FolderName)))
+        {
+            var uids = group.Select(m => m.UniqueId).ToList();
+            _ = _imap.MarkReadBatchAsync(group.Key.AccountId, group.Key.FolderName, uids);
+        }
+
+        return Task.CompletedTask;
+    }
 
     [RelayCommand]
     private async Task DeleteMessageAsync()

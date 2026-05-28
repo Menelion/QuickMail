@@ -508,6 +508,11 @@ public partial class MainWindow : Window
             execute: ToggleCustomAnnouncements));
 
         _registry.Register(new CommandDefinition(
+            id: "mail.markRead", category: "Mail", title: "Mark as Read",
+            execute: async () => await MarkReadCommand(),
+            defaultKey: Key.Q, defaultModifiers: ModifierKeys.Control));
+
+        _registry.Register(new CommandDefinition(
             id: "mail.jumpToFirstInGroup", category: "Mail", title: "First Message in Group",
             execute: JumpToFirstMessageInGroup,
             defaultKey: Key.OemComma, defaultModifiers: ModifierKeys.Shift,
@@ -2444,6 +2449,30 @@ public partial class MainWindow : Window
             if (group?.Messages.Count > 0)
                 FocusToGroupMessage(group, first ? 0 : group.Messages.Count - 1);
         }
+    }
+
+    // ── Mark as Read ─────────────────────────────────────────────────────────
+
+    private async Task MarkReadCommand()
+    {
+        // Priority: group header selected → mark whole group.
+        // Then: individual message selected → mark that message.
+        // Then: folder tree focused → mark all loaded messages in the current folder/view.
+        IReadOnlyList<MailMessageSummary>? targets = null;
+
+        if (_vm.IsConversationsView && ConversationTree.SelectedItem is ConversationGroup convGroup)
+            targets = convGroup.Messages;
+        else if (_vm.IsFromView && SenderGroupTree.SelectedItem is SenderGroup fromGroup)
+            targets = fromGroup.Messages;
+        else if (_vm.IsToView && ToGroupTree.SelectedItem is SenderGroup toGroup)
+            targets = toGroup.Messages;
+        else if (_vm.SelectedMessage != null)
+            targets = [_vm.SelectedMessage];
+        else if (FolderList.IsKeyboardFocusWithin && _vm.SelectedFolder != null)
+            targets = _vm.LoadedMessages;
+
+        if (targets != null)
+            await _vm.MarkMessagesReadAsync(targets);
     }
 
     // ── Message-level focus helpers for grouped views ────────────────────────

@@ -16,6 +16,7 @@ public interface ILocalStoreService
     Task DeleteSummariesAsync(Guid accountId, string folderName, IEnumerable<uint> uniqueIds);
     Task DeleteAccountDataAsync(Guid accountId);
     Task UpdateIsReadAsync(Guid accountId, string folderName, uint uniqueId, bool isRead);
+    Task UpdateIsReadBatchAsync(IEnumerable<(Guid AccountId, string FolderName, uint UniqueId)> items, bool isRead);
     Task UpdatePreviewAsync(Guid accountId, string folderName, uint uniqueId, string preview);
 
     /// <summary>

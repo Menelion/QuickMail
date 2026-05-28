@@ -391,6 +391,17 @@ public class ImapService : IImapService
         finally { await folder.CloseAsync(false, ct); }
     }
 
+    public async Task MarkReadBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default)
+    {
+        if (uids.Count == 0) return;
+        using var lease = await RentClientAsync(accountId, ct, ImapLeasePriority.Foreground);
+        var client = lease.Client;
+        var folder = await client.GetFolderAsync(folderName, ct);
+        await folder.OpenAsync(FolderAccess.ReadWrite, ct);
+        try   { await folder.AddFlagsAsync(uids.Select(u => new UniqueId(u)).ToList(), MessageFlags.Seen, true, ct); }
+        finally { await folder.CloseAsync(false, ct); }
+    }
+
     public async Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default)
     {
         using var lease = await RentClientAsync(accountId, ct, ImapLeasePriority.Foreground);

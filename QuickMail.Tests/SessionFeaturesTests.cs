@@ -92,6 +92,7 @@ public class PreviewSuppressionTests
         public Task DeleteSummariesAsync(Guid accountId, string folderName, IEnumerable<uint> uniqueIds) => Task.CompletedTask;
         public Task DeleteAccountDataAsync(Guid accountId) => Task.CompletedTask;
         public Task UpdateIsReadAsync(Guid accountId, string folderName, uint uniqueId, bool isRead) => Task.CompletedTask;
+        public Task UpdateIsReadBatchAsync(IEnumerable<(Guid AccountId, string FolderName, uint UniqueId)> items, bool isRead) => Task.CompletedTask;
         public Task UpdatePreviewAsync(Guid accountId, string folderName, uint uniqueId, string preview) => Task.CompletedTask;
         public Task UpdatePreviewsBatchAsync(Guid accountId, string folderName, IEnumerable<(uint UniqueId, string Preview)> updates) => Task.CompletedTask;
         public Task<bool> HasSummariesMissingRecipientsAsync() => Task.FromResult(false);
@@ -202,6 +203,7 @@ public class IdleNewMailTests
         public Task<MailMessageDetail> GetMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
         public Task<MailMessageDetail> PrefetchMessageDetailAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.FromResult(new MailMessageDetail());
         public Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.CompletedTask;
+        public Task MarkReadBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default) => Task.CompletedTask;
         public Task MoveToTrashAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default) => Task.CompletedTask;
         public Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default) => Task.CompletedTask;
         public Task PermanentlyDeleteBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default) => Task.CompletedTask;

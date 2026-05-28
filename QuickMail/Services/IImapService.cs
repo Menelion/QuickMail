@@ -39,6 +39,7 @@ public interface IImapService : IDisposable
     Task<MailMessageDetail> PrefetchMessageDetailAsync(
         Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MarkReadAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
+    Task MarkReadBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default);
     Task MoveToTrashAsync(Guid accountId, string folderName, uint uid, CancellationToken ct = default);
     Task MoveToTrashBatchAsync(Guid accountId, string folderName, IList<uint> uids, CancellationToken ct = default);
     /// <summary>Permanently deletes messages already in Trash by setting \Deleted and expunging.</summary>
