@@ -18,7 +18,7 @@ These compose naturally with the existing **Shift+Up/Down** selection: after pre
 
 **Ctrl+A** is also registered in the Command Palette as **Select All Messages** and can be remapped in **File → Settings → Keyboard Shortcuts**. It is context-sensitive: it only fires when the message list has focus, so pressing Ctrl+A in the search box or any text field still selects the text in that field as expected.
 
-**In the Address Book:** Press **Ctrl+A** while the contact list has focus to select all visible contacts.
+**In the Address Book:** Press **Ctrl+A** while the contact list has focus to select all visible contacts. Press **Delete** to remove all selected contacts (a single confirmation prompt shows the count before anything is deleted).
 
 **In Compose address fields (To/Cc/Bcc):** Press **Ctrl+A** to select all address chips in the field. Selected chips are highlighted. Press **Delete** or **Backspace** to remove them all, or **Ctrl+C** to copy all their addresses. Any arrow-key navigation or click clears the selection. When the field has typed text (not yet committed as a chip), **Ctrl+A** selects that text as usual.
 

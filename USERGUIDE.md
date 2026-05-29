@@ -830,7 +830,9 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Alt+Y | Jump to message body |
 | Left / Right arrow (on an address) | Move between addresses |
 | Delete / Backspace (on an address) | Remove focused address |
+| Delete / Backspace (with chips selected) | Remove all selected addresses |
 | Ctrl+A (in address field) | Select all address chips |
+| Ctrl+C (with chips selected) | Copy all selected addresses |
 | Ctrl+C (on an address) | Copy address to clipboard |
 | F7 | Jump to next misspelling |
 | Shift+F7 | Jump to previous misspelling |
