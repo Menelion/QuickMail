@@ -722,10 +722,15 @@ public partial class MainWindow : Window
         }
         // ── Registry-based action commands ───────────────────────────────────────
         var cmd = _registry.FindByGesture(key, modifiers);
-        if (cmd != null && (cmd.IsAvailable?.Invoke() ?? true))
+        if (cmd != null)
         {
-            cmd.Execute();
-            e.Handled = true;
+            var available = cmd.IsAvailable?.Invoke() ?? true;
+            LogService.Debug($"OnWindowKeyDown registry: id='{cmd.Id}' key={key} mod={modifiers} focused={Keyboard.FocusedElement?.GetType().Name} isAvailable={available}");
+            if (available)
+            {
+                cmd.Execute();
+                e.Handled = true;
+            }
         }
     }
 
@@ -1376,6 +1381,7 @@ public partial class MainWindow : Window
         if (MessageList.Items.Count == 0) return;
         MessageList.SelectAll();
         var count = MessageList.SelectedItems.Count;
+        LogService.Debug($"SelectAllMessages: items={MessageList.Items.Count} selected={count}");
         AccessibilityHelper.Announce(this,
             $"{count} message{(count == 1 ? "" : "s")} selected.",
             category: AnnouncementCategory.Result);
