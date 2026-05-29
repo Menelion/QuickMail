@@ -1,7 +1,7 @@
 # Selection Keyboard Shortcuts — Combined PM & Dev Specification
 
 **Status:** Implemented  
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** 2026-05-29  
 **Author:** AI coding agent (based on comprehensive app audit)  
 **Target release:** v0.6.8
@@ -12,6 +12,7 @@
 - **`IsDescendantOf` helper not added** — an identical static helper already existed in `MainWindow` with signature `(DependencyObject ancestor, DependencyObject descendant)`. `IsMessageListFocused` reuses it with corrected argument order (`IsDescendantOf(MessageList, dep)`).
 - **`SelectAllMessages` uses no batch scope** — `BatchObservableCollection.BeginBatchScope()` suppresses `CollectionChanged` events on the underlying data collection, not `SelectionChanged` on `ListView`. The batch scope would be a no-op around `MessageList.SelectAll()`, so it was omitted for clarity.
 - **`ExtendSelectionToBottom` loop starts at `anchorIndex`** (spec says inclusive) — the `Contains` guard prevents double-adding already-selected items, so this is correct and identical to the spec.
+- **5.6 (TokenizedAddressBox Ctrl+A) revised** — spec recommended deleting all chips immediately on Ctrl+A (Appendix A.3). This was wrong: Ctrl+A should not be destructive. Revised behavior: Ctrl+A in an empty input moves focus to the first chip so the user can navigate and delete with arrow keys and Delete/Backspace. Chips are not removed.
 
 ---
 
