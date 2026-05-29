@@ -530,6 +530,18 @@ public partial class MainWindow : Window
             defaultKey: Key.A, defaultModifiers: ModifierKeys.Control,
             isAvailable: IsMessageListFocused));
 
+        // Override the VM's mail.delete with one that deletes ALL selected messages.
+        // The VM registration uses DeleteMessageCommand, which deletes only SelectedMessage
+        // (one item). When the message list has focus with multiple items selected, bypass
+        // the registry entirely so MessageList_PreviewKeyDown handles it instead — that
+        // handler reads MessageList.SelectedItems and deletes everything.
+        _registry.Register(new CommandDefinition(
+            id: "mail.delete", category: "Mail", title: "Delete",
+            execute: () => _vm.DeleteMessageCommand.Execute(null),
+            defaultKey: Key.Delete, defaultModifiers: ModifierKeys.None,
+            isAvailable: () => _vm.HasSelectedMessage
+                && !(IsMessageListFocused() && MessageList.SelectedItems.Count > 1)));
+
         // Initialise the embedded browser.  Wire Escape before doing anything else.
         try
         {
