@@ -287,7 +287,7 @@ public class SavedViewsMainViewModelTests
     // -- Factory -------------------------------------------------------------
 
     private static MainViewModel MakeVm(IEnumerable<SavedView>? views = null)
-        => new(new StubImapService(),
+        => new(new StubImapMailService(),
                new StubAccountService(),
                new StubCredentialService(),
                new StubLocalStoreService(),
@@ -775,10 +775,10 @@ public class SavedViewsMainViewModelTests
     // Regression test: persisting DaysOfMail and setting ActiveDayLimit isn't
     // enough — Messages must also be filtered when the view is applied.
 
-    sealed class DatedImap : IImapService
+    sealed class DatedMailService : IMailService
     {
         private readonly List<MailMessageSummary> _messages;
-        public DatedImap(IEnumerable<MailMessageSummary> messages) => _messages = new(messages);
+        public DatedMailService(IEnumerable<MailMessageSummary> messages) => _messages = new(messages);
         public Task ConnectAsync(AccountModel account, string? password = null, CancellationToken ct = default) => Task.CompletedTask;
         public Task DisconnectAsync(Guid accountId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<List<MailFolderModel>> GetFoldersAsync(Guid accountId, CancellationToken ct = default) => Task.FromResult(new List<MailFolderModel>());
@@ -838,8 +838,8 @@ public class SavedViewsMainViewModelTests
         public Task<HashSet<uint>> GetAllUidsAsync(Guid accountId, string folderName) => Task.FromResult(new HashSet<uint>());
     }
 
-    private static MainViewModel MakeVmWithStore(IEnumerable<SavedView> views, ILocalStoreService store, IImapService? imap = null)
-        => new(imap ?? new StubImapService(),
+    private static MainViewModel MakeVmWithStore(IEnumerable<SavedView> views, ILocalStoreService store, IMailService? imap = null)
+        => new(imap ?? new StubImapMailService(),
                new StubAccountService(),
                new StubCredentialService(),
                store,
@@ -885,7 +885,7 @@ public class SavedViewsMainViewModelTests
         // Local store is empty so Phase 1 contributes nothing — every visible
         // message has to survive Phase 2's incremental insert path.
         var store  = new DatedStore([]);
-        var imap   = new DatedImap([recent, older]);
+        var imap   = new DatedMailService([recent, older]);
 
         var view = MakeVirtualView("AllMail");
         view.DaysOfMail = 7;
@@ -914,7 +914,7 @@ public class SavedViewsMainViewModelTests
         var view = MakeRealFolderView(acctId, "INBOX");
         view.DaysOfMail = 7;
 
-        var imap = new DatedImap([recent, older]);
+        var imap = new DatedMailService([recent, older]);
         var vm = MakeVmWithStore([view], store, imap);
         // Match the AccountId on the live Folders collection so ApplyViewAsync's
         // single-folder branch finds the real folder.
