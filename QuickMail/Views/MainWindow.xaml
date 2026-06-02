@@ -379,6 +379,12 @@
                               IsChecked="{Binding IsFilterForwarded, Mode=OneWay}"
                               Command="{Binding SetFilterCommand}"
                               CommandParameter="forwarded"/>
+                    <Separator/>
+                    <MenuItem Header="To _Me"
+                              IsCheckable="True"
+                              IsChecked="{Binding IsFilterToMe, Mode=OneWay}"
+                              Command="{Binding SetFilterCommand}"
+                              CommandParameter="tome"/>
                 </MenuItem>
                 <MenuItem Header="S_ort">
                     <MenuItem Header="Newest _First"

@@ -307,6 +307,7 @@ public partial class MainViewModel : ObservableObject
     public bool IsFilterWithAttachments => ActiveFilter == MessageFilter.WithAttachments;
     public bool IsFilterReplied         => ActiveFilter == MessageFilter.Replied;
     public bool IsFilterForwarded       => ActiveFilter == MessageFilter.Forwarded;
+    public bool IsFilterToMe            => ActiveFilter == MessageFilter.ToMe;
     public bool IsFilterActive          => ActiveFilter != MessageFilter.All;
     public string FilterLabel => ActiveFilter switch
     {
@@ -315,6 +316,7 @@ public partial class MainViewModel : ObservableObject
         MessageFilter.WithAttachments => "With Attachments",
         MessageFilter.Replied         => "Replied",
         MessageFilter.Forwarded       => "Forwarded",
+        MessageFilter.ToMe            => "To Me",
         _                             => string.Empty,
     };
 
@@ -594,6 +596,7 @@ public partial class MainViewModel : ObservableObject
             "attachments" => MessageFilter.WithAttachments,
             "replied"     => MessageFilter.Replied,
             "forwarded"   => MessageFilter.Forwarded,
+            "tome"        => MessageFilter.ToMe,
             _             => MessageFilter.All,
         };
         ActiveSort = ConfigModel.ParseSort(view.Sort);
@@ -886,6 +889,10 @@ public partial class MainViewModel : ObservableObject
         registry.Register(new CommandDefinition(
             id: "view.filterForwarded", category: "View", title: "Show Forwarded Only",
             execute: () => SetFilterCommand.Execute("forwarded")));
+
+        registry.Register(new CommandDefinition(
+            id: "view.filterToMe", category: "View", title: "Show Messages Addressed to Me",
+            execute: () => SetFilterCommand.Execute("tome")));
 
         registry.Register(new CommandDefinition(
             id: "view.sortDateDesc", category: "View", title: "Sort: Newest First",
@@ -1356,6 +1363,7 @@ public partial class MainViewModel : ObservableObject
         MessageFilter.WithAttachments => msg.HasAttachments,
         MessageFilter.Replied         => msg.IsReplied,
         MessageFilter.Forwarded       => msg.IsForwarded,
+        MessageFilter.ToMe            => !msg.IsMailingList && Accounts.Any(a => msg.To.Contains(a.Username, StringComparison.OrdinalIgnoreCase)),
         _                             => true,
     };
 
@@ -1652,16 +1660,16 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsFilterWithAttachments));
         OnPropertyChanged(nameof(IsFilterReplied));
         OnPropertyChanged(nameof(IsFilterForwarded));
+        OnPropertyChanged(nameof(IsFilterToMe));
         OnPropertyChanged(nameof(IsFilterActive));
         OnPropertyChanged(nameof(FilterLabel));
         OnPropertyChanged(nameof(WindowTitle));
 
         if (_suppressFilterRebuild) return;
 
-        if (ViewMode == ViewMode.Messages)
-            ApplyFiltersAndSearch();
-        else
-            RebuildActiveGroupView();
+        // Always rebuild Messages from _rawMessages; OnMessagesChanged then triggers
+        // RebuildActiveGroupView automatically for Conversations/From/To view modes.
+        ApplyFiltersAndSearch();
     }
 
     partial void OnActiveSortChanged(MessageSort value)
@@ -3579,6 +3587,7 @@ public partial class MainViewModel : ObservableObject
             "attachments" => MessageFilter.WithAttachments,
             "replied"     => MessageFilter.Replied,
             "forwarded"   => MessageFilter.Forwarded,
+            "tome"        => MessageFilter.ToMe,
             _             => MessageFilter.All,
         };
         return Task.CompletedTask;

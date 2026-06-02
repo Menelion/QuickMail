@@ -62,6 +62,7 @@ public class LocalStoreService : ILocalStoreService
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN is_replied    INTEGER NOT NULL DEFAULT 0;");
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN is_forwarded  INTEGER NOT NULL DEFAULT 0;");
         RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN has_attachments INTEGER NOT NULL DEFAULT 0;");
+        RunMigration(conn, "ALTER TABLE MessageSummary ADD COLUMN is_mailing_list INTEGER NOT NULL DEFAULT 0;");
         RunMigration(conn, "ALTER TABLE MessageDetail ADD COLUMN attachments_json TEXT DEFAULT NULL;");
 
         RunDataMigrations(conn);
@@ -73,8 +74,9 @@ public class LocalStoreService : ILocalStoreService
     //
     // Migration numbering:
     //   0 → 1   to_addr backfill from MessageDetail
-    // Add new migrations as: if (version < 2) { ...; SetUserVersion(conn, 2); }
-    private const int CurrentSchemaVersion = 1;
+    //   1 → 2   is_mailing_list backfill from to_addr patterns
+    // Add new migrations as: if (version < 3) { ...; SetUserVersion(conn, 3); }
+    private const int CurrentSchemaVersion = 2;
 
     private static void RunDataMigrations(SqliteConnection conn)
     {
@@ -96,6 +98,28 @@ public class LocalStoreService : ILocalStoreService
                 WHERE to_addr = '';
                 """;
             backfillCmd.ExecuteNonQuery();
+        }
+
+        if (version < 2)
+        {
+            // Best-effort backfill: flag rows whose to_addr contains a recognisable
+            // mailing-list domain. The IMAP List-Id header detection handles newly
+            // synced messages; this covers rows already in the DB.
+            using var mlCmd = conn.CreateCommand();
+            mlCmd.CommandText = """
+                UPDATE MessageSummary
+                SET is_mailing_list = 1
+                WHERE is_mailing_list = 0
+                  AND (
+                        to_addr LIKE '%.groups.io%'
+                     OR to_addr LIKE '%freelists.org%'
+                     OR to_addr LIKE '%@listserv.%'
+                     OR to_addr LIKE '%@mailman.%'
+                     OR to_addr LIKE '%yahoogroups.com%'
+                     OR to_addr LIKE '%googlegroups.com%'
+                  );
+                """;
+            mlCmd.ExecuteNonQuery();
         }
 
         SetUserVersion(conn, CurrentSchemaVersion);
@@ -133,17 +157,18 @@ public class LocalStoreService : ILocalStoreService
         await using var tx = await conn.BeginTransactionAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO MessageSummary(unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded)
-            VALUES($uid, $aid, $fn, $from, $to, $subj, $dt, $read, $preview, $replied, $forwarded)
+            INSERT INTO MessageSummary(unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, is_mailing_list)
+            VALUES($uid, $aid, $fn, $from, $to, $subj, $dt, $read, $preview, $replied, $forwarded, $ml)
             ON CONFLICT(unique_id, account_id, folder_name) DO UPDATE SET
-                from_disp    = excluded.from_disp,
-                to_addr      = excluded.to_addr,
-                subject      = excluded.subject,
-                date_ticks   = excluded.date_ticks,
-                is_read      = excluded.is_read,
-                is_replied   = excluded.is_replied,
-                is_forwarded = excluded.is_forwarded,
-                preview_text = CASE WHEN excluded.preview_text = '' THEN preview_text ELSE excluded.preview_text END;
+                from_disp      = excluded.from_disp,
+                to_addr        = excluded.to_addr,
+                subject        = excluded.subject,
+                date_ticks     = excluded.date_ticks,
+                is_read        = excluded.is_read,
+                is_replied     = excluded.is_replied,
+                is_forwarded   = excluded.is_forwarded,
+                is_mailing_list = excluded.is_mailing_list,
+                preview_text   = CASE WHEN excluded.preview_text = '' THEN preview_text ELSE excluded.preview_text END;
             """;
         var pUid       = cmd.Parameters.Add("$uid",       SqliteType.Integer);
         var pAid       = cmd.Parameters.Add("$aid",       SqliteType.Text);
@@ -156,6 +181,7 @@ public class LocalStoreService : ILocalStoreService
         var pPreview   = cmd.Parameters.Add("$preview",   SqliteType.Text);
         var pReplied   = cmd.Parameters.Add("$replied",   SqliteType.Integer);
         var pForwarded = cmd.Parameters.Add("$forwarded", SqliteType.Integer);
+        var pMl        = cmd.Parameters.Add("$ml",        SqliteType.Integer);
 
         foreach (var s in summaries)
         {
@@ -166,10 +192,11 @@ public class LocalStoreService : ILocalStoreService
             pTo.Value        = s.To;
             pSubj.Value      = s.Subject;
             pDt.Value        = s.Date.UtcTicks;
-            pRead.Value      = s.IsRead      ? 1 : 0;
+            pRead.Value      = s.IsRead          ? 1 : 0;
             pPreview.Value   = s.Preview;
-            pReplied.Value   = s.IsReplied   ? 1 : 0;
-            pForwarded.Value = s.IsForwarded ? 1 : 0;
+            pReplied.Value   = s.IsReplied        ? 1 : 0;
+            pForwarded.Value = s.IsForwarded      ? 1 : 0;
+            pMl.Value        = s.IsMailingList    ? 1 : 0;
             await cmd.ExecuteNonQueryAsync();
         }
         await tx.CommitAsync();
@@ -180,7 +207,7 @@ public class LocalStoreService : ILocalStoreService
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments " +
+            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments, is_mailing_list " +
             "FROM MessageSummary ORDER BY date_ticks DESC;";
         return await ReadSummariesAsync(cmd);
     }
@@ -190,7 +217,7 @@ public class LocalStoreService : ILocalStoreService
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments " +
+            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments, is_mailing_list " +
             "FROM MessageSummary WHERE account_id=$aid ORDER BY date_ticks DESC;";
         cmd.Parameters.AddWithValue("$aid", accountId.ToString());
         return await ReadSummariesAsync(cmd);
@@ -201,7 +228,7 @@ public class LocalStoreService : ILocalStoreService
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments " +
+            "SELECT unique_id, account_id, folder_name, from_disp, to_addr, subject, date_ticks, is_read, preview_text, is_replied, is_forwarded, has_attachments, is_mailing_list " +
             "FROM MessageSummary WHERE account_id=$aid AND folder_name=$fn ORDER BY date_ticks DESC" +
             (limit.HasValue ? " LIMIT $limit;" : ";");
         cmd.Parameters.AddWithValue("$aid", accountId.ToString());
@@ -492,6 +519,7 @@ public class LocalStoreService : ILocalStoreService
                 IsReplied      = r.GetInt64(9) != 0,
                 IsForwarded    = r.GetInt64(10) != 0,
                 HasAttachments = r.GetInt64(11) != 0,
+                IsMailingList  = r.GetInt64(12) != 0,
             });
         }
         return list;
