@@ -568,8 +568,11 @@ The Address Book window has a second tab called **Groups** that lets you bundle 
 **Creating a group**
 
 1. Make sure the **Groups** tab is selected.
-2. Type a name in the **New group** text box at the bottom.
-3. Press **Enter** or click **New**. The new group appears in the list and is selected automatically.
+2. Focus lands on the **New** button when there are no groups, and on the groups list when there are groups. Use **Ctrl+G** to jump back to the Groups tab from anywhere in the address book.
+3. If focus is on the **New** button and the name box is empty, pressing the button (or **Enter**) focuses the **New group** name box. Type a name and press **Enter** to create the group.
+4. If focus is on the groups list (you have existing groups), press **F2** to focus the **New group** name box for renaming the selected group, or click the **New** button to start a new name. Type a name and press **Enter** to commit.
+
+The new group appears in the list and is selected automatically.
 
 **Adding contacts to a group**
 
@@ -589,7 +592,7 @@ When you have a compose window open, the Address Book window can insert every me
 
 **Renaming and deleting groups**
 
-- To rename a group, select it in the groups list, type the new name in the **New group** text box, and click **Rename** (or press **F2**).
+- To rename a group, select it in the groups list, press **F2** to focus the **New group** name box, type the new name, and press **Enter**.
 - To delete a group, select it and press **Delete** (or click **Delete**). A confirmation appears. Deleting a group does **not** delete the contacts in it.
 
 **Keyboard reference for the Address Book window**
