@@ -48,11 +48,10 @@ public partial class PropertiesViewModel : ObservableObject
     [RelayCommand]
     private void CopyRow(FlatRow? row)
     {
-        if (row is null || row.IsHeader) return;
-        Clipboard.SetText($"{row.Label}: {row.Value}");
-        AnnouncementRequested?.Invoke(
-            $"Copied: {row.Label}: {row.Value}",
-            AnnouncementCategory.Result);
+        if (row is null) return;
+        var text = row.IsHeader ? row.Label : $"{row.Label}: {row.Value}";
+        Clipboard.SetText(text);
+        AnnouncementRequested?.Invoke($"Copied: {text}", AnnouncementCategory.Result);
     }
 
     [RelayCommand]

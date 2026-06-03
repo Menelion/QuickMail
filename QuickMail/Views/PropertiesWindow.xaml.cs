@@ -47,9 +47,7 @@ public partial class PropertiesWindow : Window
         {
             if (sender is not ListView lv) return;
 
-            var selected = lv.SelectedItems.OfType<FlatRow>()
-                             .Where(r => !r.IsHeader)
-                             .ToList();
+            var selected = lv.SelectedItems.OfType<FlatRow>().ToList();
 
             if (selected.Count == 0) return;
 
@@ -58,7 +56,7 @@ public partial class PropertiesWindow : Window
             else
             {
                 var text = string.Join(Environment.NewLine,
-                    selected.Select(r => $"{r.Label}: {r.Value}"));
+                    selected.Select(r => r.IsHeader ? r.Label : $"{r.Label}: {r.Value}"));
                 Clipboard.SetText(text);
                 AccessibilityHelper.Announce(this,
                     $"{selected.Count} rows copied",

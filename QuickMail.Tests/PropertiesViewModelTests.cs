@@ -135,16 +135,20 @@ public class PropertiesViewModelTests
     }
 
     [Fact]
-    public void CopyRow_HeaderRow_DoesNotRaiseAnnouncement()
+    public void CopyRow_HeaderRow_RaisesAnnouncementWithSectionName()
     {
-        bool announced = false;
+        string? announced = null;
         var vm = Make();
-        vm.AnnouncementRequested += (_, _) => announced = true;
+        vm.AnnouncementRequested += (text, _) => announced = text;
 
-        // Returns early before touching clipboard, so no STA needed.
-        vm.CopyRowCommand.Execute(vm.Rows.First(r => r.IsHeader));
+        var thread = new Thread(() =>
+            vm.CopyRowCommand.Execute(vm.Rows.First(r => r.IsHeader)));
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
 
-        Assert.False(announced);
+        Assert.NotNull(announced);
+        Assert.Contains("Headers", announced);
     }
 
     [Fact]
