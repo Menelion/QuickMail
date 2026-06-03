@@ -107,7 +107,9 @@ public partial class GroupManagerWindow : Window
     {
         if (e.Key == Key.Enter && CandidatesList.SelectedItem is ContactModel c)
         {
-            _vm.AddMemberCommand.Execute(c);
+            // Toggle: adds if not yet a member, removes if already one.
+            // This prevents repeated Enter presses from firing repeated "Added" announcements.
+            _vm.ToggleMemberCommand.Execute(c);
             e.Handled = true;
         }
     }

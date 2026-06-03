@@ -256,6 +256,36 @@ public class ContactService : IContactService
         }
     }
 
+    public async Task<List<GroupModel>> SearchGroupsAsync(string prefix, CancellationToken ct = default)
+    {
+        await EnsureLoadedAsync();
+        ct.ThrowIfCancellationRequested();
+        var q = prefix.Trim();
+        await _loadLock.WaitAsync(ct);
+        try
+        {
+            var byId = _contactsCache.ToDictionary(c => c.Id);
+            var matches = (string.IsNullOrEmpty(q)
+                ? _groupsCache.AsEnumerable()
+                : _groupsCache.Where(g => g.Name.Contains(q, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            foreach (var g in matches)
+                g.ResolvedMemberCount = g.MemberContactIds.Count(id => byId.ContainsKey(id));
+
+            return matches
+                .Where(g => g.ResolvedMemberCount > 0)   // skip empty groups — nothing to insert
+                .OrderByDescending(g => g.LastUsedTicks)
+                .ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .ToList();
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
+    }
+
     public async Task TouchGroupAsync(int groupId)
     {
         await EnsureLoadedAsync();

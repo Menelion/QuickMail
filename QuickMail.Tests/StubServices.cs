@@ -116,6 +116,8 @@ sealed class StubContactService : IContactService
     public Task RemoveMemberAsync(int groupId, int contactId) => Task.CompletedTask;
     public Task<List<int>> ListGroupsForContactAsync(int contactId) => Task.FromResult(new List<int>());
     public Task TouchGroupAsync(int groupId) => Task.CompletedTask;
+    public Task<List<GroupModel>> SearchGroupsAsync(string prefix, CancellationToken ct = default)
+        => Task.FromResult(new List<GroupModel>());
 }
 
 sealed class StubViewService : IViewService

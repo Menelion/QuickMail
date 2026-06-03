@@ -66,25 +66,40 @@ public partial class AddressBookWindow : Window
 
     private void RegisterCommands()
     {
-        // The five group-related commands are registered here so they appear in
-        // the address book's own command palette (Ctrl+Shift+P) and can be
-        // rebound from the Settings dialog.  They follow the same pattern as
-        // main-window commands in MainWindow.OnLoaded.
+        // The group-related commands are registered here so they appear in the
+        // address book's own command palette (Ctrl+Shift+P) and can be rebound
+        // from the Settings dialog.  They follow the same pattern as main-window
+        // commands in MainWindow.OnLoaded.
+
+        // Ctrl+Shift+N: switch to Groups tab and show the name entry area in create mode.
         _registry.Register(new CommandDefinition(
             id: "contacts.createGroup", category: "Contacts", title: "New Group",
             defaultKey: Key.N, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            execute: () => _vm.CreateGroupCommand.Execute(null)));
+            execute: () =>
+            {
+                MainTabs.SelectedIndex = 1;
+                _vm.SelectedGroup = null;  // ensure create-new mode
+                ShowGroupNameEntry(null);
+            }));
 
+        // Delete deletes a group only when the Groups list itself has focus.
+        // When focus is in the group-members list, Delete there removes a member
+        // and the GroupMembersList_PreviewKeyDown handler takes care of it.
         _registry.Register(new CommandDefinition(
             id: "contacts.deleteGroup", category: "Contacts", title: "Delete Group",
             defaultKey: Key.Delete, defaultModifiers: ModifierKeys.None,
             execute: () => _vm.DeleteGroupCommand.Execute(null),
-            isAvailable: () => _vm.HasSelectedGroup));
+            isAvailable: () => _vm.HasSelectedGroup && GroupsList.IsKeyboardFocusWithin));
 
+        // F2 / Rename: show the name entry area pre-filled with the current name.
         _registry.Register(new CommandDefinition(
             id: "contacts.renameGroup", category: "Contacts", title: "Rename Group",
             defaultKey: Key.F2, defaultModifiers: ModifierKeys.None,
-            execute: () => _vm.RenameGroupCommand.Execute(null),
+            execute: () =>
+            {
+                if (_vm.SelectedGroup is { } g)
+                    ShowGroupNameEntry(g.Name);
+            },
             isAvailable: () => _vm.HasSelectedGroup));
 
         _registry.Register(new CommandDefinition(
@@ -110,6 +125,8 @@ public partial class AddressBookWindow : Window
         _ = _vm.LoadAsync();
     }
 
+    private void ManageGroupsButton_Click(object sender, RoutedEventArgs e) => OpenGroupManager();
+
     // ── Event sinks ──────────────────────────────────────────────────────────
 
     private void OnAnnouncement(string text, AnnouncementCategory category) =>
@@ -130,6 +147,14 @@ public partial class AddressBookWindow : Window
         // the per-window CommandRegistry above.
         if (e.Key == Key.Escape)
         {
+            // If the name entry panel is open, Escape dismisses it without
+            // closing the whole window. A second Escape then closes.
+            if (GroupNameEntryPanel.Visibility == Visibility.Visible)
+            {
+                HideGroupNameEntry();
+                e.Handled = true;
+                return;
+            }
             Close();
             e.Handled = true;
             return;
@@ -143,6 +168,34 @@ public partial class AddressBookWindow : Window
             OpenCommandPalette();
             e.Handled = true;
             return;
+        }
+
+        // Alt+T / Alt+C / Alt+B — insert into the chosen field. On the Contacts
+        // tab the button access keys (_To/_Cc/_Bcc) handle this automatically.
+        // On the Groups tab those access keys are not present, so we intercept
+        // here and route to the group-insert commands instead. This means the
+        // shortcuts work regardless of which tab is active.
+        if (e.Key == Key.System && Keyboard.Modifiers == ModifierKeys.Alt
+            && MainTabs.SelectedIndex == 1)
+        {
+            if (e.SystemKey == Key.T && _vm.HasSelectedGroup)
+            {
+                _vm.AddGroupToToCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.SystemKey == Key.C && _vm.HasSelectedGroup)
+            {
+                _vm.AddGroupToCcCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.SystemKey == Key.B && _vm.HasSelectedGroup)
+            {
+                _vm.AddGroupToBccCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
         }
 
         // Dispatch any registered command whose key/modifiers match.
@@ -163,6 +216,38 @@ public partial class AddressBookWindow : Window
         var palette = new CommandPaletteWindow(_registry) { Owner = this };
         palette.ShowDialog();
         (previousFocus ?? SearchBox).Focus();
+    }
+
+    private void ContactList_ContextMenuOpening(object sender, System.Windows.Controls.ContextMenuEventArgs e)
+    {
+        // Suppress the context menu when no contact is selected.
+        if (_vm.SelectedContact is null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var menu = ContactList.ContextMenu!;
+        menu.Items.Clear();
+
+        if (_vm.Groups.Count == 0)
+        {
+            menu.Items.Add(new System.Windows.Controls.MenuItem
+            {
+                Header = "No groups — create one on the Groups tab",
+                IsEnabled = false
+            });
+        }
+        else
+        {
+            foreach (var group in _vm.Groups)
+            {
+                var item = new System.Windows.Controls.MenuItem { Header = $"Add to \"{group.Name}\"" };
+                var g = group;
+                item.Click += (_, _) => _vm.AddContactToGroupCommand.Execute(g);
+                menu.Items.Add(item);
+            }
+        }
     }
 
     private async void ContactList_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -209,11 +294,18 @@ public partial class AddressBookWindow : Window
     {
         if (e.Key == Key.Return)
         {
-            _vm.NewGroupName = NewGroupNameBox.Text;
+            // NewGroupName is kept in sync by the TwoWay binding, so the VM
+            // already has the current text. Run the command, then hide the entry.
             if (_vm.SelectedGroup is not null)
                 _vm.RenameGroupCommand.Execute(null);
             else
                 _vm.CreateGroupCommand.Execute(null);
+            HideGroupNameEntry();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            HideGroupNameEntry();
             e.Handled = true;
         }
     }
@@ -230,11 +322,9 @@ public partial class AddressBookWindow : Window
             return;
         }
 
-        if (e.Key == Key.F2)
+        if (e.Key == Key.F2 && _vm.SelectedGroup is { } g)
         {
-            // F2 moves focus to the rename textbox and pre-selects the name.
-            NewGroupNameBox.Focus();
-            NewGroupNameBox.SelectAll();
+            ShowGroupNameEntry(g.Name);
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && _vm.SelectedGroup is not null)
@@ -262,11 +352,12 @@ public partial class AddressBookWindow : Window
 
     private void FocusGroupsPane()
     {
-        // Focus the most useful starting point for the user's first
-        // interaction with the Groups tab. With no groups, the list is
-        // empty so the most useful first stop is the New button (which
-        // focuses the name box when its content is empty). With at least
-        // one group, the list has something to navigate to.
+        // If the name entry panel was open, dismiss it before switching.
+        if (GroupNameEntryPanel.Visibility == Visibility.Visible)
+        {
+            GroupNameEntryPanel.Visibility = Visibility.Collapsed;
+            _vm.NewGroupName = string.Empty;
+        }
         MainTabs.SelectedIndex = 1;
         if (_vm.Groups.Count == 0)
             NewGroupButton.Focus();
@@ -275,20 +366,50 @@ public partial class AddressBookWindow : Window
         OnAnnouncement("Groups tab", AnnouncementCategory.Status);
     }
 
+    // ── Group name entry helpers ─────────────────────────────────────────────
+
     /// <summary>
-    /// When the New group button is clicked with an empty name box,
-    /// focus the name box so the user can type a name and press Enter
-    /// to create the group. The bound <c>CreateGroupCommand</c> runs
-    /// regardless, but its <c>Execute</c> method returns early when
-    /// the name is empty — so the click is a no-op for the VM, and
-    /// the focus jump is the only effect.
+    /// Shows the name entry panel and focuses the text box. If <paramref name="prefill"/>
+    /// is supplied the text is pre-filled and fully selected (rename mode); otherwise
+    /// the box is cleared (create mode).
     /// </summary>
+    private void ShowGroupNameEntry(string? prefill)
+    {
+        GroupNameEntryPanel.Visibility = Visibility.Visible;
+        if (prefill is not null)
+        {
+            _vm.NewGroupName = prefill;
+            NewGroupNameBox.SelectAll();
+        }
+        else
+        {
+            _vm.NewGroupName = string.Empty;
+        }
+        NewGroupNameBox.Focus();
+        OnAnnouncement(
+            prefill is null
+                ? "Type a new group name and press Enter. Press Escape to cancel."
+                : $"Rename \"{prefill}\". Type a new name and press Enter. Press Escape to cancel.",
+            AnnouncementCategory.Hint);
+    }
+
+    private void HideGroupNameEntry()
+    {
+        GroupNameEntryPanel.Visibility = Visibility.Collapsed;
+        _vm.NewGroupName = string.Empty;
+        GroupsList.Focus();
+    }
+
     private void NewGroupButton_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_vm.NewGroupName))
-            NewGroupNameBox.Focus();
-        // If the name already has text, the bound Command runs normally
-        // and creates the group with that name.
+        _vm.SelectedGroup = null;  // ensure create-new mode
+        ShowGroupNameEntry(null);
+    }
+
+    private void RenameGroupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.SelectedGroup is { } g)
+            ShowGroupNameEntry(g.Name);
     }
 
     private void NewNameBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)

@@ -146,6 +146,33 @@ public partial class GroupManagerViewModel : ObservableObject
         GroupsChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Adds the contact if they are not yet a member of the selected group;
+    /// removes them if they already are. This is the primary "Enter on a
+    /// candidate" action so pressing Enter twice on the same contact cleanly
+    /// undoes the first press instead of silently repeating the announcement.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleMemberAsync(ContactModel? contact)
+    {
+        if (SelectedGroup is not { } g || contact is null) return;
+        if (g.MemberContactIds.Contains(contact.Id))
+        {
+            await _contactService.RemoveMemberAsync(g.Id, contact.Id);
+            await ReloadGroupsAsync();
+            SelectedGroup = Groups.FirstOrDefault(x => x.Id == g.Id);
+            Announce($"Removed {contact.Display} from {g.Name}", AnnouncementCategory.Result);
+        }
+        else
+        {
+            await _contactService.AddMemberAsync(g.Id, contact.Id);
+            await ReloadGroupsAsync();
+            SelectedGroup = Groups.FirstOrDefault(x => x.Id == g.Id);
+            Announce($"Added {contact.Display} to {g.Name}", AnnouncementCategory.Result);
+        }
+        GroupsChanged?.Invoke();
+    }
+
     [RelayCommand]
     private async Task CreateGroupAsync()
     {

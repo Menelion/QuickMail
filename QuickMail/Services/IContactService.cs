@@ -70,4 +70,13 @@ public interface IContactService
     /// matching the contact sort.
     /// </summary>
     Task TouchGroupAsync(int groupId);
+
+    /// <summary>
+    /// Returns up to 5 non-empty groups whose name contains <paramref name="prefix"/>
+    /// (case-insensitive), sorted by <see cref="GroupModel.LastUsedTicks"/> descending.
+    /// Used by the compose-window address autocomplete to suggest groups alongside
+    /// individual contacts. <see cref="GroupModel.ResolvedMemberCount"/> is recomputed
+    /// on each returned result.
+    /// </summary>
+    Task<List<GroupModel>> SearchGroupsAsync(string prefix, CancellationToken ct = default);
 }

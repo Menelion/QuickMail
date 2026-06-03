@@ -129,7 +129,11 @@
                               TabIndex="4"
                               KeyboardNavigation.TabNavigation="Once"
                               KeyboardNavigation.DirectionalNavigation="Contained"
-                              PreviewKeyDown="ContactList_PreviewKeyDown">
+                              PreviewKeyDown="ContactList_PreviewKeyDown"
+                              ContextMenuOpening="ContactList_ContextMenuOpening">
+                        <ListView.ContextMenu>
+                            <ContextMenu AutomationProperties.Name="Add to group"/>
+                        </ListView.ContextMenu>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -249,52 +253,73 @@
                         </ListView>
                     </DockPanel>
 
-                    <!-- New group + rename row -->
+                    <!-- Bottom action area: name entry (hidden until needed) + buttons.
+                         Buttons are direct Grid children (not wrapped) so the BFS tab-order
+                         scan finds them before the insert-row buttons in the right pane. -->
                     <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Label Grid.Column="0"
-                               Content="_Name:"
-                               Target="{Binding ElementName=NewGroupNameBox}"
-                               VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1"
-                                 x:Name="NewGroupNameBox"
-                                 Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="New or rename group"
-                                 IsTabStop="False"
-                                 Margin="4,0" TabIndex="22"
-                                 PreviewKeyDown="NewGroupNameBox_PreviewKeyDown"/>
-                        <Button Grid.Column="2"
+                        <!-- Row 0: Name entry — Collapsed until New or Rename is activated -->
+                        <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="6"
+                                   x:Name="GroupNameEntryPanel"
+                                   Visibility="Collapsed" Margin="0,0,0,6">
+                            <Label DockPanel.Dock="Left"
+                                   x:Name="GroupNameLabel"
+                                   Content="Name:"
+                                   Target="{Binding ElementName=NewGroupNameBox}"
+                                   VerticalAlignment="Center"/>
+                            <TextBox x:Name="NewGroupNameBox"
+                                     Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Group name"
+                                     IsTabStop="False"
+                                     Margin="4,0"
+                                     PreviewKeyDown="NewGroupNameBox_PreviewKeyDown"/>
+                        </DockPanel>
+
+                        <!-- Row 1: buttons as direct Grid children (Col 4 is the * spacer that
+                             pushes Close to the right without wrapping in a DockPanel) -->
+                        <Button Grid.Row="1" Grid.Column="0"
                                 x:Name="NewGroupButton"
                                 Content="_New"
-                                Command="{Binding CreateGroupCommand}"
                                 AutomationProperties.Name="New group"
-                                Margin="8,0,0,0" MinWidth="60" TabIndex="23"
+                                MinWidth="60" Margin="0,0,4,0" TabIndex="23"
                                 Click="NewGroupButton_Click"/>
-                        <Button Grid.Column="3"
+                        <Button Grid.Row="1" Grid.Column="1"
+                                x:Name="RenameGroupButton"
                                 Content="_Rename"
-                                Command="{Binding RenameGroupCommand}"
                                 IsEnabled="{Binding HasSelectedGroup}"
                                 AutomationProperties.Name="Rename selected group"
-                                Margin="4,0,0,0" MinWidth="60" TabIndex="24"/>
-                        <Button Grid.Column="4"
+                                MinWidth="60" Margin="0,0,4,0" TabIndex="24"
+                                Click="RenameGroupButton_Click"/>
+                        <Button Grid.Row="1" Grid.Column="2"
                                 Content="_Delete"
                                 Command="{Binding DeleteGroupCommand}"
                                 IsEnabled="{Binding HasSelectedGroup}"
                                 AutomationProperties.Name="Delete selected group"
-                                Margin="4,0,0,0" MinWidth="60" TabIndex="25"/>
-                        <Button Grid.Column="5"
+                                MinWidth="60" Margin="0,0,4,0" TabIndex="25"/>
+                        <Button Grid.Row="1" Grid.Column="3"
+                                x:Name="ManageGroupsButton"
+                                Content="_Manage…"
+                                AutomationProperties.Name="Open Group Manager"
+                                MinWidth="70" Margin="0,0,4,0" TabIndex="26"
+                                Click="ManageGroupsButton_Click"/>
+                        <!-- Col 4 (*) is empty — acts as spacer to right-align Close -->
+                        <Button Grid.Row="1" Grid.Column="5"
                                 Content="Close"
                                 IsCancel="True"
                                 AutomationProperties.Name="Close address book"
-                                Margin="12,0,0,0" MinWidth="60" TabIndex="26"
+                                MinWidth="60" TabIndex="27"
                                 Click="Close_Click"/>
                     </Grid>
                 </Grid>
