@@ -2796,7 +2796,10 @@ public partial class MainViewModel : ObservableObject
     // focusedFolder overrides SelectedFolder for pane 2: the folder tree's TreeView
     // updates its internal SelectedItem on arrow-key navigation but has no
     // SelectedItemChanged handler, so SelectedFolder lags until Enter commits it.
-    public async Task ShowPropertiesAsync(int paneIndex, MailFolderModel? focusedFolder = null)
+    // focusedMessage overrides SelectedMessage for pane 3: grouped-tree OnSelectedItemChanged
+    // only fires for individual MailMessageSummary items, not group headers, so SelectedMessage
+    // is stale when a ConversationGroup or SenderGroup header is focused.
+    public async Task ShowPropertiesAsync(int paneIndex, MailFolderModel? focusedFolder = null, MailMessageSummary? focusedMessage = null)
     {
         // pane 0 means toolbar or unknown focus (e.g. command palette has focus, or WPF
         // moved focus to the menu bar when Alt was pressed). Fall back to whichever
@@ -2804,13 +2807,13 @@ public partial class MainViewModel : ObservableObject
         // useful from the command palette or via Alt+Enter with menu-bar focus.
         if (paneIndex == 0)
         {
-            if (SelectedMessage != null)      paneIndex = 3;
-            else if (SelectedFolder != null)  paneIndex = 2;
-            else if (SelectedAccount != null) paneIndex = 1;
+            if (focusedMessage != null || SelectedMessage != null) paneIndex = 3;
+            else if (SelectedFolder != null)                       paneIndex = 2;
+            else if (SelectedAccount != null)                      paneIndex = 1;
             else return;
         }
 
-        if ((paneIndex == 3 || paneIndex == 4) && SelectedMessage is { } msg)
+        if ((paneIndex == 3 || paneIndex == 4) && (focusedMessage ?? SelectedMessage) is { } msg)
         {
             // Load detail if not already open (detail may already be in MessageDetail
             // when the reading pane is open for this message).

@@ -502,14 +502,46 @@ public partial class MainWindow : Window
             id: "view.showProperties", category: "View", title: "View Properties",
             execute: () =>
             {
+                // Attachment list: it sits outside MessageBody in the visual tree so
+                // GetFocusedPaneIndex() returns 0 for it. Handle here before the
+                // pane-index path so the window handler doesn't shadow the attachment.
+                if (ReadingPaneAttachmentList.IsKeyboardFocusWithin
+                    && ReadingPaneAttachmentList.SelectedItem is AttachmentModel att)
+                {
+                    var (attTitle, attSections) = AttachmentPropertiesBuilder.Build(att);
+                    new PropertiesWindow(new PropertiesViewModel(attTitle, attSections)) { Owner = this }
+                        .ShowDialog();
+                    return;
+                }
+
                 var pane = GetFocusedPaneIndex();
+
                 // FolderList is a TreeView: arrow-key navigation updates TreeView.SelectedItem
                 // but there is no SelectedItemChanged handler, so _vm.SelectedFolder lags
                 // behind until Enter commits the selection. Pass the live node directly.
                 var focusedFolder = pane == 2
                     ? (FolderList.SelectedItem as FolderTreeNode)?.Folder
                     : null;
-                _ = _vm.ShowPropertiesAsync(pane, focusedFolder);
+
+                // Grouped trees (conversations, sender, recipient): OnSelectedItemChanged
+                // only fires for MailMessageSummary, not for group headers. When a group
+                // header is focused SelectedMessage retains its previous (stale) value.
+                // Derive the correct message from the focused tree's selected item.
+                MailMessageSummary? focusedMessage = null;
+                if (pane == 3)
+                {
+                    if (ConversationTree.IsKeyboardFocusWithin
+                        && ConversationTree.SelectedItem is ConversationGroup cg && cg.Messages.Count > 0)
+                        focusedMessage = cg.Messages[0];
+                    else if (SenderGroupTree.IsKeyboardFocusWithin
+                        && SenderGroupTree.SelectedItem is SenderGroup sg && sg.Messages.Count > 0)
+                        focusedMessage = sg.Messages[0];
+                    else if (ToGroupTree.IsKeyboardFocusWithin
+                        && ToGroupTree.SelectedItem is SenderGroup tg && tg.Messages.Count > 0)
+                        focusedMessage = tg.Messages[0];
+                }
+
+                _ = _vm.ShowPropertiesAsync(pane, focusedFolder, focusedMessage);
             },
             defaultKey: Key.Return, defaultModifiers: ModifierKeys.Alt,
             isAvailable: () => _vm.SelectedMessage != null
