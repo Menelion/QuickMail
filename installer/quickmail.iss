@@ -9,7 +9,7 @@
 #define MyAppName "QuickMail"
 #define MyAppNameLower Lowercase(MyAppName)
 #define MyAppPublisher "Kelly Ford"
-#define MyAppURL "https://github.com/kellylford/quickmail"
+#define MyAppURL "https://github.com/kellylford/QuickMail"
 #define MyAppSupportURL MyAppURL + "/issues"
 #define MyAppExeName MyAppName + ".exe"
 #define MyAppDescription "Keyboard-first, accessible desktop email client for Windows"
@@ -65,7 +65,6 @@ CloseApplications=yes
 RestartApplications=no
 
 DisableProgramGroupPage=yes
-DisableReadyPage=yes
 
 ; License shown during installation
 LicenseFile=..\LICENSE
@@ -132,7 +131,7 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if CurPageID in [wpSelectProgramGroup, wpReady] then
+  if CurPageID = wpReady then
     WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall)
   else if CurPageID = wpFinished then
     WizardForm.NextButton.Caption := SetupMessage(msgButtonFinish)
