@@ -2795,6 +2795,18 @@ public partial class MainViewModel : ObservableObject
     //   3 = Message list / conversation trees, 4 = Reading pane, 5 = Status bar
     public async Task ShowPropertiesAsync(int paneIndex)
     {
+        // pane 0 means toolbar or unknown focus (e.g. command palette has focus, or WPF
+        // moved focus to the menu bar when Alt was pressed). Fall back to whichever
+        // context item is most specifically selected so the command still does something
+        // useful from the command palette or via Alt+Enter with menu-bar focus.
+        if (paneIndex == 0)
+        {
+            if (SelectedMessage != null)      paneIndex = 3;
+            else if (SelectedFolder != null)  paneIndex = 2;
+            else if (SelectedAccount != null) paneIndex = 1;
+            else return;
+        }
+
         if ((paneIndex == 3 || paneIndex == 4) && SelectedMessage is { } msg)
         {
             // Load detail if not already open (detail may already be in MessageDetail
