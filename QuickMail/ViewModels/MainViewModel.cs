@@ -947,6 +947,8 @@ public partial class MainViewModel : ObservableObject
 
         ActiveSort = ConfigModel.ParseSort(cfg.Sort);
 
+        MessageOpenMode = cfg.Windowing.MessageOpenMode;
+
         if (_syncDays != prevSyncDays)
             _ = RefreshAsync();
     }
