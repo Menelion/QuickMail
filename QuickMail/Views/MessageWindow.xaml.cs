@@ -128,8 +128,16 @@ public partial class MessageWindow : Window
         _vm.IsLoading = true;
         try
         {
-            var detail = await _localStore.LoadDetailAsync(
-                summary.AccountId, summary.FolderName, summary.UniqueId);
+            // Try local store first; it may be unavailable (e.g. online mode with no schema).
+            // On any failure, fall through to IMAP.
+            MailMessageDetail? detail = null;
+            try
+            {
+                detail = await _localStore.LoadDetailAsync(
+                    summary.AccountId, summary.FolderName, summary.UniqueId);
+            }
+            catch { /* local store unavailable — fetch from IMAP below */ }
+
             if (detail == null)
             {
                 detail = await _imap.GetMessageDetailAsync(
