@@ -1,6 +1,6 @@
 # Alt+Enter — View Properties: PM & Dev Specification
 
-**Status:** Ready for Dev
+**Status:** Implemented
 **Date:** June 2, 2026
 **Target:** Phase 5 (Power User) — Discoverability & Information
 **Crew:** Delta (PM → Dev Lead → Test Enforcer)

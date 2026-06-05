@@ -1,6 +1,6 @@
 # Address Book Groups — PM & Dev Specification
 
-**Status:** Ready for Dev
+**Status:** Implemented
 **Date:** June 2, 2026
 **Target:** Phase 5 (Power User) — Groups feature
 **Crew:** Delta (PM → Dev Lead → Test Enforcer)
