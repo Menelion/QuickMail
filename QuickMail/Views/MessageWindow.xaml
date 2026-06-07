@@ -110,10 +110,22 @@
             </StackPanel>
         </Border>
 
-        <!-- Message body -->
-        <wv2:WebView2 x:Name="MessageBody"
-                      AutomationProperties.Name="Message body"
-                      KeyboardNavigation.IsTabStop="True"
-                      GotKeyboardFocus="MessageBody_GotKeyboardFocus"/>
+        <!-- Message body + loading overlay -->
+        <Grid>
+            <wv2:WebView2 x:Name="MessageBody"
+                          AutomationProperties.Name="Message body"
+                          KeyboardNavigation.IsTabStop="True"
+                          GotKeyboardFocus="MessageBody_GotKeyboardFocus"/>
+            <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+                    IsHitTestVisible="False">
+                <TextBlock Text="Loading…"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                           AutomationProperties.LiveSetting="Polite"/>
+            </Border>
+        </Grid>
     </DockPanel>
 </Window>

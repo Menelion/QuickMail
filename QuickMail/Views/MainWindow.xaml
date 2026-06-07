@@ -799,8 +799,12 @@
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              ScrollViewer.VerticalScrollBarVisibility="Disabled"
                              KeyboardNavigation.TabNavigation="Once"
-                             AutomationProperties.Name="Open message tabs. Ctrl+Tab for next tab, Ctrl+Shift+Tab for previous tab, Ctrl+W to close."
-                             SelectionChanged="TabStrip_SelectionChanged">
+                             AutomationProperties.Name="Open message tabs"
+                             SelectionChanged="TabStrip_SelectionChanged"
+                             PreviewKeyDown="TabStrip_PreviewKeyDown"
+                             PreviewMouseDown="TabStrip_PreviewMouseDown"
+                             GotKeyboardFocus="TabStrip_GotKeyboardFocus"
+                             LostKeyboardFocus="TabStrip_LostKeyboardFocus">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal"/>
@@ -830,7 +834,8 @@
                                             Tag="{Binding}"
                                             IsTabStop="False"
                                             AutomationProperties.Name="Close this tab"
-                                            ToolTip="Close tab (Ctrl+W)"/>
+                                            ToolTip="Close tab"
+                                            Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

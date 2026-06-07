@@ -20,7 +20,7 @@
         <!-- Tabs -->
         <TabControl Grid.Row="0" Margin="0,0,0,10">
             <!-- General Settings Tab -->
-            <TabItem Header="_General" AutomationProperties.Name="General settings tab">
+            <TabItem Header="_General" AutomationProperties.Name="General settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10" >
                         <!-- Message List Group -->
@@ -180,7 +180,7 @@
             </TabItem>
 
             <!-- Advanced Tab -->
-            <TabItem Header="_Advanced" AutomationProperties.Name="Advanced settings tab">
+            <TabItem Header="_Advanced" AutomationProperties.Name="Advanced settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
                         <!-- Log Format Group -->
@@ -208,7 +208,7 @@
             </TabItem>
 
             <!-- Keyboard Shortcuts Tab -->
-            <TabItem Header="_Keyboard Shortcuts" AutomationProperties.Name="Keyboard shortcuts tab">
+            <TabItem Header="_Keyboard Shortcuts" AutomationProperties.Name="Keyboard shortcuts">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -265,7 +265,7 @@
             </TabItem>
 
             <!-- Windowing Tab -->
-            <TabItem Header="_Windowing" AutomationProperties.Name="Windowing settings tab">
+            <TabItem Header="_Windowing" AutomationProperties.Name="Windowing settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
                         <!-- Message open mode -->
@@ -274,26 +274,32 @@
                             <StackPanel>
                                 <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Foreground="DimGray" FontSize="11"
                                            Text="Choose where messages open when you press Enter or select one."/>
-                                <RadioButton Content="Reading _pane (default)"
-                                             IsChecked="{Binding IsReadingPaneMode, Mode=TwoWay}"
-                                             GroupName="MessageOpenMode"
-                                             AutomationProperties.Name="Reading pane — opens messages in the reading pane below the message list. This is the default behaviour."/>
-                                <TextBlock Text="Enter opens a message in the reading pane below the list."
-                                           Foreground="DimGray" FontSize="11" Margin="16,2,0,8"/>
-                                <RadioButton Content="_Tab"
-                                             IsChecked="{Binding IsTabMode, Mode=TwoWay}"
-                                             GroupName="MessageOpenMode"
-                                             AutomationProperties.Name="Tab — opens messages in a tab strip above the message list."/>
-                                <TextBlock Text="Enter opens a message as a new tab. Ctrl+Tab cycles tabs. Ctrl+W closes."
-                                           TextWrapping="Wrap"
-                                           Foreground="DimGray" FontSize="11" Margin="16,2,0,8"/>
-                                <RadioButton Content="_Window"
-                                             IsChecked="{Binding IsWindowMode, Mode=TwoWay}"
-                                             GroupName="MessageOpenMode"
-                                             AutomationProperties.Name="Window — opens each message in its own window."/>
-                                <TextBlock Text="Enter opens a message in a new window. Use Ctrl+Enter in any mode to always open in a new window."
-                                           TextWrapping="Wrap"
-                                           Foreground="DimGray" FontSize="11" Margin="16,2,0,0"/>
+                                <StackPanel KeyboardNavigation.TabNavigation="Once"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle">
+                                    <RadioButton Content="Reading _pane (default)"
+                                                 IsChecked="{Binding IsReadingPaneMode, Mode=TwoWay}"
+                                                 GroupName="MessageOpenMode"
+                                                 AutomationProperties.Name="Reading pane"
+                                                 AutomationProperties.HelpText="Opens messages in the reading pane below the message list. This is the default behaviour."/>
+                                    <TextBlock Text="Enter opens a message in the reading pane below the list."
+                                               Foreground="DimGray" FontSize="11" Margin="16,2,0,8"/>
+                                    <RadioButton Content="_Tab"
+                                                 IsChecked="{Binding IsTabMode, Mode=TwoWay}"
+                                                 GroupName="MessageOpenMode"
+                                                 AutomationProperties.Name="Tab"
+                                                 AutomationProperties.HelpText="Opens messages in a tab strip above the message list."/>
+                                    <TextBlock Text="Enter opens a message as a new tab. Ctrl+Tab cycles tabs. Ctrl+W closes."
+                                               TextWrapping="Wrap"
+                                               Foreground="DimGray" FontSize="11" Margin="16,2,0,8"/>
+                                    <RadioButton Content="_Window"
+                                                 IsChecked="{Binding IsWindowMode, Mode=TwoWay}"
+                                                 GroupName="MessageOpenMode"
+                                                 AutomationProperties.Name="Window"
+                                                 AutomationProperties.HelpText="Opens each message in its own window."/>
+                                    <TextBlock Text="Enter opens a message in a new window. Use Ctrl+Enter in any mode to always open in a new window."
+                                               TextWrapping="Wrap"
+                                               Foreground="DimGray" FontSize="11" Margin="16,2,0,0"/>
+                                </StackPanel>
                             </StackPanel>
                         </GroupBox>
 

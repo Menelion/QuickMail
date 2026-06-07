@@ -192,7 +192,7 @@ public partial class MainWindow : Window
 
         vm.PropertyChanged += async (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.ActiveTab))
+            if (e.PropertyName == nameof(MainViewModel.ActiveTab) && !_tabStripArrowNavInProgress)
                 await OnActiveTabChangedAsync();
         };
 
@@ -212,10 +212,10 @@ public partial class MainWindow : Window
                 {
                     LogService.Debug("[FOCUS]   → skipped (menu/toolbar has focus)");
                 }
-                else if (_vm.IsMessageOpen)
+                else if (_vm.IsMessageOpen || _vm.IsMessageOpenInWindow)
                 {
-                    // Reading pane is open — the message collection changed (e.g. folder
-                    // load or Refresh) but focus must stay in the reading pane.
+                    // Reading pane is open (or a message window is open) — the message
+                    // collection changed but focus must not move.
                     LogService.Debug("[FOCUS]   → skipped (reading pane open)");
                 }
                 else if (vm.IsConversationsView)
@@ -574,7 +574,7 @@ public partial class MainWindow : Window
             id: "contacts.grabAddresses", category: "Contacts", title: "Grab Addresses from Message",
             execute: GrabAddressesFromMessage,
             defaultKey: Key.G, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: () => _vm.IsMessageOpen));
+            isAvailable: () => _vm.IsMessageOpen || _vm.IsMessageOpenInWindow));
 
         _registry.Register(new CommandDefinition(
             id: "contacts.openAddressBook", category: "Contacts", title: "Address Book",
@@ -639,6 +639,12 @@ public partial class MainWindow : Window
                 else                               MessageList.Focus();
             },
             defaultKey: Key.D3, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt));
+
+        _registry.Register(new CommandDefinition(
+            id: "view.focusTabs", category: "View", title: "Focus Tab Strip",
+            execute: () => { if (_vm.ShowTabStrip) TabStrip.Focus(); },
+            defaultKey: Key.D4, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt,
+            isAvailable: () => _vm.ShowTabStrip));
 
         // ── Tab & Window Management commands ─────────────────────────────────────
         _registry.Register(new CommandDefinition(
@@ -2345,6 +2351,7 @@ public partial class MainWindow : Window
         if (FolderList.IsKeyboardFocusWithin)   return 2;
         if (SearchBox.IsKeyboardFocusWithin)    return 6;
         if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin || SenderGroupTree.IsKeyboardFocusWithin || ToGroupTree.IsKeyboardFocusWithin) return 3;
+        if (TabStrip.IsKeyboardFocusWithin)     return 7; // between message list and reading pane
         if (MessageBody.IsKeyboardFocusWithin)  return 4;
         if (MainStatusBar.IsKeyboardFocusWithin) return 5;
         return 0;
@@ -2360,6 +2367,7 @@ public partial class MainWindow : Window
             case 2: FolderList.Focus(); break;
             case 6: SearchBox.Focus(); break;
             case 3: FocusActiveMessagePanel(); break;
+            case 7: TabStrip.Focus(); break;
             case 4:
                 if (_vm.IsMessageOpen && _webViewReady)
                 {
@@ -2375,6 +2383,7 @@ public partial class MainWindow : Window
     }
 
     // Cycles keyboard focus forward (F6) or backward (Shift+F6) through the pane ring.
+    // The tab strip (index 7) is included when visible, between message list and reading pane.
     // The reading pane (index 4) is included only when a message is open.
     // StatusBar (index 5) is always the last stop before wrapping back to Toolbar.
     private async Task CycleFocusAsync(bool forward)
@@ -2383,6 +2392,7 @@ public partial class MainWindow : Window
         var panes = new System.Collections.Generic.List<int> { 0, 1, 2 };
         if (_vm.IsSearchActive) panes.Add(6); // search box between folder tree and message list
         panes.Add(3);
+        if (_vm.ShowTabStrip) panes.Add(7);   // tab strip between message list and reading pane
         if (_vm.IsMessageOpen && _webViewReady) panes.Add(4);
         panes.Add(5); // StatusBar always included
 
@@ -3371,7 +3381,7 @@ public partial class MainWindow : Window
 
     private void TabCloseButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button { Tag: MessageTabViewModel tab })
+        if (sender is System.Windows.Controls.Button { Tag: TabSessionViewModel tab })
             _vm.CloseTab(tab);
     }
 
@@ -3393,6 +3403,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Message-list tab: show the list, hide reading pane, done.
+        if (tab is MessageListTabViewModel)
+        {
+            _vm.IsMessageOpen = false;
+            _vm.MessageDetail = null;
+            FocusActiveMessagePanel();
+            return;
+        }
+
+        if (tab is not MessageTabViewModel msgTab) return;
+
         // Scroll active tab into view in the strip (fire-and-forget).
         _ = Dispatcher.InvokeAsync(() =>
         {
@@ -3401,11 +3422,11 @@ public partial class MainWindow : Window
         }, System.Windows.Threading.DispatcherPriority.Loaded);
 
         // Load via SelectMessageCommand (handles SelectedMessage, IsRead, cache, etc.)
-        await _vm.SelectMessageCommand.ExecuteAsync(tab.Summary);
+        await _vm.SelectMessageCommand.ExecuteAsync(msgTab.Summary);
         if (_vm.IsMessageOpen && _vm.MessageDetail != null)
         {
-            tab.Detail   = _vm.MessageDetail;
-            tab.IsLoaded = true;
+            msgTab.Detail   = _vm.MessageDetail;
+            msgTab.IsLoaded = true;
             await ShowMessageBodyAsync(_vm.MessageDetail);
         }
     }
@@ -3430,16 +3451,42 @@ public partial class MainWindow : Window
     {
         var winVm = new MessageWindowViewModel
         {
-            OriginalSummary  = summary,
-            SelectedMessage  = summary,
+            OriginalSummary = summary,
+            SelectedMessage = summary,
         };
-        winVm.MessageList.Add(summary);
+
+        // Populate the surrounding message list so Prev/Next navigation works (issue 41).
+        foreach (var msg in _vm.Messages)
+            winVm.MessageList.Add(msg);
+
+        // Pre-populate detail if already loaded in the reading pane (issue 48).
+        if (_vm.SelectedMessage?.UniqueId == summary.UniqueId && _vm.MessageDetail != null)
+            winVm.MessageDetail = _vm.MessageDetail;
+
+        // Track that a message window is open so sync guards and commands work (issue 43).
+        _vm.IsMessageOpenInWindow = true;
+
+        // Capture the originating message list item for focus restoration on close (issue 46).
+        var originatingIndex = _vm.Messages.IndexOf(summary);
 
         var win = new MessageWindow(winVm, _imap, _localStore, _webViewEnvironment) { Owner = this };
         win.MoveToMainWindowRequested += (_, vm) =>
         {
             if (vm.OriginalSummary != null)
                 _vm.OpenMessageTab(vm.OriginalSummary);
+        };
+        win.Closed += (_, _) =>
+        {
+            _vm.IsMessageOpenInWindow =
+                Application.Current.Windows.OfType<MessageWindow>().Any();
+
+            // Restore focus to the originating message list item (issue 46).
+            Dispatcher.InvokeAsync(() =>
+            {
+                FocusActiveMessagePanel();
+                if (originatingIndex >= 0 && originatingIndex < MessageList.Items.Count)
+                    MessageList.ScrollIntoView(MessageList.Items[originatingIndex]);
+            }, System.Windows.Threading.DispatcherPriority.Input);
         };
 
         // Offset from previous windows so they don't stack exactly.
@@ -3454,6 +3501,49 @@ public partial class MainWindow : Window
     {
         _vm.CloseTab(tab);
         OpenMessageInNewWindow(tab.Summary);
+    }
+
+    // ── Tab strip keyboard navigation (issue 52 Bug 1) ─────────────────────────
+
+    // True while the user is arrowing through the tab strip without activating a tab.
+    // Prevents PropertyChanged on ActiveTab from loading the message body during navigation.
+    private bool _tabStripArrowNavInProgress;
+
+    private void TabStrip_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        switch (key)
+        {
+            case Key.Left:
+            case Key.Right:
+            case Key.Up:
+            case Key.Down:
+                _tabStripArrowNavInProgress = true;
+                break;
+            case Key.Return:
+            case Key.Space:
+                _tabStripArrowNavInProgress = false;
+                _ = OnActiveTabChangedAsync();
+                e.Handled = true;
+                break;
+            default:
+                _tabStripArrowNavInProgress = false;
+                break;
+        }
+    }
+
+    private void TabStrip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        => _tabStripArrowNavInProgress = false;
+
+    private void TabStrip_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        => _tabStripArrowNavInProgress = false;
+
+    private void TabStrip_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        AccessibilityHelper.Announce(
+            this,
+            "Ctrl+Tab for next tab, Ctrl+Shift+Tab for previous, Ctrl+W to close.",
+            category: AnnouncementCategory.Hint);
     }
 
     // ── Folder context menu handlers ─────────────────────────────────────────

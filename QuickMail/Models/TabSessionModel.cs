@@ -6,6 +6,7 @@ namespace QuickMail.Models;
 public enum TabKind
 {
     Message,
+    MessageList,
     Unknown,
 }
 
