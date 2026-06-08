@@ -1654,6 +1654,7 @@ public partial class MainWindow : Window
                 +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
                 +"else if(e.ctrlKey&&(e.key==='2'||e.key==='y'||e.key==='Y')){window.chrome.webview.postMessage('focus-folders');e.preventDefault();}"
                 +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
+                +"else if(e.ctrlKey&&e.key==='w'){window.chrome.webview.postMessage('ctrl-w');e.preventDefault();}"
                 +"});");
 
             MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
@@ -1669,6 +1670,10 @@ public partial class MainWindow : Window
                     Dispatcher.InvokeAsync(FocusFolderTree, DispatcherPriority.Input);
                 else if (msg == "shift-tab")
                     Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
+                else if (msg == "ctrl-w")
+                    Dispatcher.InvokeAsync(
+                        () => _registry.FindByGesture(Key.W, ModifierKeys.Control)?.Execute(),
+                        DispatcherPriority.Input);
             };
 
             MessageBody.CoreWebView2.NavigationStarting += (_, args) =>

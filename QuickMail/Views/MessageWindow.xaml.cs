@@ -103,13 +103,14 @@ public partial class MessageWindow : Window
             MessageBody.CoreWebView2.Settings.AreDevToolsEnabled             = false;
             MessageBody.CoreWebView2.Settings.IsStatusBarEnabled             = false;
 
-            // Relay Escape, Shift+Tab, and F6 / Shift+F6 from inside the WebView.
+            // Relay Escape, Shift+Tab, F6 / Shift+F6, and Ctrl+W from inside the WebView.
             await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
                 "window.addEventListener('keydown',function(e){" +
                 "if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}" +
                 "else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}" +
                 "else if(e.key==='F6'&&!e.shiftKey){window.chrome.webview.postMessage('f6');e.preventDefault();}" +
                 "else if(e.key==='F6'&&e.shiftKey){window.chrome.webview.postMessage('shift-f6');e.preventDefault();}" +
+                "else if(e.ctrlKey&&e.key==='w'){window.chrome.webview.postMessage('ctrl-w');e.preventDefault();}" +
                 "});");
 
             MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
@@ -117,8 +118,9 @@ public partial class MessageWindow : Window
                 var msg = args.TryGetWebMessageAsString();
                 switch (msg)
                 {
-                    case "escape":     Dispatcher.InvokeAsync(Close,               DispatcherPriority.Input); break;
-                    case "shift-tab":  Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input); break;
+                    case "escape":     Dispatcher.InvokeAsync(Close,                DispatcherPriority.Input); break;
+                    case "ctrl-w":     Dispatcher.InvokeAsync(Close,                DispatcherPriority.Input); break;
+                    case "shift-tab":  Dispatcher.InvokeAsync(FocusLastHeaderField,  DispatcherPriority.Input); break;
                     case "f6":         Dispatcher.InvokeAsync(() => CycleFocus(true),  DispatcherPriority.Input); break;
                     case "shift-f6":   Dispatcher.InvokeAsync(() => CycleFocus(false), DispatcherPriority.Input); break;
                 }
