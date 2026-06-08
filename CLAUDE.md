@@ -278,6 +278,64 @@ Every user-facing keyboard shortcut **must** be registered in `CommandRegistry` 
 **Compose window shortcuts** (Alt+S, Ctrl+Enter, Ctrl+S, Ctrl+Shift+A, F7, Shift+F7, Alt+Y, Alt+U, Alt+M, Escape) are registered or hardcoded in `ComposeWindow.xaml.cs`. Registry-based ones appear in the compose window's command palette (`Ctrl+Shift+P`) but are **not** user-customisable via the Settings dialog. The main window's `CommandRegistry` and `hotkeys.json` do not include compose commands. `Ctrl+Enter` is hardcoded (like `Ctrl+Shift+P`) as a second send gesture so it does not create a duplicate "Send Message" entry in the palette.
 
 
+## Accessibility Checklist — Apply to Every XAML Change
+
+Before committing any XAML, verify each of these:
+
+- **`AutomationProperties.Name` is a short label only.** No descriptions, no role names (not "tab", "button", "checkbox"), no keyboard shortcuts, no sentences. The screen reader already announces the role; repeating it doubles the speech. Wrong: `"General settings tab"`. Right: `"General settings"`.
+- **Hints and usage instructions go through `AccessibilityHelper.Announce`**, not into `AutomationProperties.Name`. If a keyboard shortcut or usage tip is worth surfacing, deliver it as `AnnouncementCategory.Hint` when the control is first focused — where the user's hint preference applies.
+- **Radio button groups have one tab stop.** The container must have `KeyboardNavigation.TabNavigation="Once"` and `KeyboardNavigation.DirectionalNavigation="Cycle"`. All buttons in the group share the same `GroupName`. Individual radio buttons must not each be reachable via Tab.
+- **New primary pane controls are in the F6 ring.** Any list, tree, or panel that is a major navigation destination must be added to `CycleFocusAsync` and `GetFocusedPaneIndex` in `MainWindow.xaml.cs`. A control that can receive focus but is not in F6 is stranded.
+
+## New Window Checklist — Apply When Creating Any Window Subclass
+
+Every `Window` subclass requires all of the following before it is committed:
+
+- **F6 / Shift+F6 focus cycle.** Define the logical pane stops (e.g. toolbar, header fields, body). Implement a cycle method and handle `F6` / `Shift+F6` in `PreviewKeyDown`.
+- **WebView2 F6 relay.** If the window contains a WebView2, the injected JS keydown script must relay `F6` and `Shift+F6` as postMessages back to WPF, exactly as `MainWindow` does. Without this, F6 pressed inside the body is swallowed and the cycle breaks.
+- **Command palette.** Wire `Ctrl+Shift+P` to open a local command palette containing all window-scoped actions (close, navigate, move, etc.). Follow the pattern in `ComposeWindow.xaml.cs`. Actions that have no default hotkey still belong in the palette so users can discover them.
+- **Cancellation token.** Any async load must use a `CancellationTokenSource` field. Cancel and dispose it in `OnClosing`. Re-create it at the start of each new load so navigating away cancels in-flight fetches.
+- **Focus restoration on close.** Capture the originating focused element (or its index) before the window opens. When the window closes, explicitly return focus to that position. WPF's default return-to-owner behaviour is not reliable for virtualised list items.
+
+## Feature Checklist — Apply Before Committing Any New Feature
+
+Before a feature branch is committed:
+
+1. **Exercise every entry point.** A message-opening feature must be tested from the flat message list, the conversations tree, and the from/to group trees. A feature that only works from one view is incomplete.
+2. **Exercise every configured mode.** If a feature has a mode setting (e.g. ReadingPane / Tab / Window), verify it works correctly in every mode before committing.
+3. **Keyboard-only walkthrough.** Perform the full user journey using only the keyboard — Tab, arrow keys, Enter, Escape, F6. If focus is lost or stranded at any point, it is a bug, not a follow-up.
+4. **No silent empty state from caught exceptions.** A `catch` block that swallows an exception and leaves the UI blank is never acceptable. If a primary data source fails (e.g. SQLite unavailable in `--online` mode), the catch must fall through to a visible fallback (e.g. IMAP fetch) or surface an error. Catch blocks that silently return convert failures into debugging marathons. See the **standard fetch pattern** in the Runtime Modes section — the local store and IMAP calls must be in separate catch scopes so a local store failure does not prevent the IMAP fallback from running.
+5. **Test in `--online` mode** for any feature that calls `LocalStoreService`. Run with `--online` and verify the feature works correctly from IMAP alone. Features that only pass in normal mode are incomplete.
+6. **If the feature affects startup state, verify it activates before the user sees content.** Any feature that influences what the user sees or hears at launch (default view, folder selection, announcement text, connection status, etc.) must be applied in `InitialLoadAsync`, not deferred to the end of `StartBackgroundSyncAsync`. Deferring to post-sync means the user sees a different state for 20–40 seconds before the feature takes effect.
+
+## Spec Writing Requirements
+
+When AI generates a spec from a conceptual directive, the spec is not ready for implementation until it includes all three of these sections.
+
+### Keyboard walkthrough
+
+A numbered step-by-step sequence showing exactly what the user does and what they hear or see, for each distinct mode or path. Example:
+
+1. User presses Enter on a message. Screen reader announces: "Opening message."
+2. A window appears with focus on the message body. Screen reader announces: "Message body. [Subject]."
+3. User presses F6. Focus moves to the toolbar. Screen reader announces: "Toolbar."
+4. User presses Escape. Window closes. Focus returns to the originating message in the list.
+
+This forces every interaction to be explicitly designed before any code is written. A gap in the walkthrough means a missing design decision — not something to be resolved during coding.
+
+### Infrastructure changes
+
+Explicitly list every change to shared infrastructure:
+- Which panes are added to or removed from the F6 ring
+- Which commands are added to `CommandRegistry`, with category and whether a default key is assigned
+- Which `AutomationProperties.Name` values are introduced or changed
+- Which `AccessibilityHelper.Announce` calls are added, with category
+- Whether VM state properties (e.g. `IsMessageOpen`) need updating to reflect the new feature
+
+### Out of scope
+
+Explicitly state what the feature does not do. This surfaces assumptions that need a design decision and prevents scope creep. If something is deferred, say so — do not leave it implicit.
+
 ## Installer
 
 `installer/quickmail.iss` is an Inno Setup 6 script that packages the **self-contained single-file** `publish/QuickMail.exe` into a Windows installer. `build.bat installer` runs `dotnet publish` then `ISCC.exe`, emitting `installer/Output/quickmail-v<version>-setup.exe` (gitignored).
