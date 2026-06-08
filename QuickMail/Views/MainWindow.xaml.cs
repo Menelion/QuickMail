@@ -194,6 +194,12 @@ public partial class MainWindow : Window
         {
             if (e.PropertyName == nameof(MainViewModel.ActiveTab) && !_tabStripArrowNavInProgress)
                 await OnActiveTabChangedAsync();
+
+            // WebView2 is a Win32 HWND and remains accessible to screen readers even when
+            // its WPF container is Visibility=Collapsed. Clear the document when the reading
+            // pane closes so AT browse-mode has no stale message content to navigate into.
+            if (e.PropertyName == nameof(MainViewModel.IsMessageOpen) && !_vm.IsMessageOpen && _webViewReady)
+                MessageBody.CoreWebView2.NavigateToString("<html><body></body></html>");
         };
 
         // Re-focus the active message panel whenever the message collections are replaced
