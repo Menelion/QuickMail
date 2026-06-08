@@ -109,7 +109,6 @@ With `Ctrl+1`–`8` now doing double duty (pane focus when no tabs are open; tab
 
 ## Internal
 
-- **Database schema migration to v2.** The `unique_id` column (previously INTEGER) is now stored as TEXT throughout the SQLite schema, making message identifiers backend-agnostic. The migration runs automatically at first launch and creates a backup of `mail.db` as `mail.db.pre-v2` before migrating. The backup is safe to delete once you have verified the app is working correctly.
 - `MessageBodyHtmlBuilder` — new shared static class extracts all HTML rendering helpers (reader-mode detection, sanitization, plain-text auto-linking, heavy-HTML stripping) from both `MainWindow.xaml.cs` and `MessageWindow.xaml.cs`. Previously the ~150-line render pipeline was duplicated verbatim in both files.
 - `MessageListTabViewModel` — new sentinel VM for the non-closeable "Messages" tab in Tab mode; extends `TabSessionViewModel` with `CanClose = false`.
 - `TabSessionModel.TabKind` gains a `MessageList` variant for the sentinel tab.
