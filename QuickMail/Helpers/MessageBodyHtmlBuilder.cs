@@ -129,8 +129,13 @@ public static class MessageBodyHtmlBuilder
 
     public static string EnsureBodyFocusable(string html)
     {
-        if (!html.Contains("<body", StringComparison.OrdinalIgnoreCase) ||
-            html.Contains("tabindex=", StringComparison.OrdinalIgnoreCase))
+        var bodyIdx = html.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
+        if (bodyIdx < 0) return html;
+        // Scope the check to the opening tag only — attribute values elsewhere in the
+        // document can contain the substring "tabindex=" and must not trigger a false positive.
+        var tagEnd  = html.IndexOf('>', bodyIdx);
+        var openTag = tagEnd >= 0 ? html[bodyIdx..tagEnd] : html[bodyIdx..];
+        if (openTag.Contains("tabindex=", StringComparison.OrdinalIgnoreCase))
             return html;
         return SafeRegexReplace(html, "<body\\b", "<body tabindex=\"0\"", RegexOptions.IgnoreCase);
     }

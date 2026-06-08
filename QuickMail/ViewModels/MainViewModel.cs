@@ -513,19 +513,23 @@ public partial class MainViewModel : ObservableObject
 
     public void ActivateNextTab()
     {
-        if (OpenTabs.Count <= 1) return;
-        var idx = ActiveTab == null ? 0 : (OpenTabs.IndexOf(ActiveTab) + 1) % OpenTabs.Count;
-        ActiveTab = OpenTabs[idx];
-        Announce($"Tab {idx + 1} of {OpenTabs.Count}: {ActiveTab.Title}.");
+        var messageTabs = OpenTabs.OfType<MessageTabViewModel>().ToList();
+        if (messageTabs.Count == 0) return;
+        var cur = ActiveTab as MessageTabViewModel;
+        var idx = cur == null ? 0 : (messageTabs.IndexOf(cur) + 1) % messageTabs.Count;
+        ActiveTab = messageTabs[idx];
+        Announce($"Tab {idx + 1} of {messageTabs.Count}: {ActiveTab.Title}.");
     }
 
     public void ActivatePrevTab()
     {
-        if (OpenTabs.Count <= 1) return;
-        var idx = ActiveTab == null ? OpenTabs.Count - 1
-                                    : (OpenTabs.IndexOf(ActiveTab) - 1 + OpenTabs.Count) % OpenTabs.Count;
-        ActiveTab = OpenTabs[idx];
-        Announce($"Tab {idx + 1} of {OpenTabs.Count}: {ActiveTab.Title}.");
+        var messageTabs = OpenTabs.OfType<MessageTabViewModel>().ToList();
+        if (messageTabs.Count == 0) return;
+        var cur = ActiveTab as MessageTabViewModel;
+        var idx = cur == null ? messageTabs.Count - 1
+                              : (messageTabs.IndexOf(cur) - 1 + messageTabs.Count) % messageTabs.Count;
+        ActiveTab = messageTabs[idx];
+        Announce($"Tab {idx + 1} of {messageTabs.Count}: {ActiveTab.Title}.");
     }
 
     public void ActivateTabByIndex(int oneBasedIndex)
@@ -1009,7 +1013,13 @@ public partial class MainViewModel : ObservableObject
             MessageDetail = null;
         }
         if (prevMode == MessageOpenMode.Tab && MessageOpenMode != MessageOpenMode.Tab)
-            RemoveMessageListTab();
+        {
+            // Clear all tabs — both message tabs and the sentinel — so the strip
+            // is not visible in the new mode with blank, unrenderable tabs.
+            OpenTabs.Clear();
+            ActiveTab = null;
+            OnPropertyChanged(nameof(ShowTabStrip));
+        }
         else
             EnsureMessageListTab();
 

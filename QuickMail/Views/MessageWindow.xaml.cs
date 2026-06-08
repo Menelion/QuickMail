@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -28,6 +29,7 @@ public partial class MessageWindow : Window
     private int  _renderVersion;
 
     private CancellationTokenSource _loadCts = new();
+    private PropertyChangedEventHandler? _vmPropertyChangedHandler;
 
     // Services needed for loading message bodies.
     private readonly IMailService        _imap;
@@ -56,11 +58,12 @@ public partial class MessageWindow : Window
 
         vm.RequestClose            += _ => Close();
         vm.RequestMoveToMainWindow += OnMoveToMainWindowRequested;
-        vm.PropertyChanged         += async (_, e) =>
+        _vmPropertyChangedHandler   = async (_, e) =>
         {
             if (e.PropertyName == nameof(MessageWindowViewModel.SelectedMessage))
                 await LoadSelectedMessageAsync();
         };
+        vm.PropertyChanged += _vmPropertyChangedHandler;
 
         RegisterLocalCommands();
 
@@ -368,7 +371,10 @@ public partial class MessageWindow : Window
 
     private void OnClosing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // Cancel any in-flight IMAP fetch (issue 42).
+        // Unsubscribe before disposing _loadCts — a queued PropertyChanged event
+        // would otherwise call LoadSelectedMessageAsync on the disposed CTS.
+        if (_vmPropertyChangedHandler != null)
+            _vm.PropertyChanged -= _vmPropertyChangedHandler;
         _loadCts.Cancel();
         _loadCts.Dispose();
     }

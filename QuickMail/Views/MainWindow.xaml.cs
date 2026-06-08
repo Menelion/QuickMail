@@ -3430,6 +3430,8 @@ public partial class MainWindow : Window
 
     private async Task OnActiveTabChangedAsync()
     {
+        var version = Interlocked.Increment(ref _tabChangedVersion);
+
         // Capture and clear before any await so concurrent calls see a clean state.
         var closeInProgress = _tabStripCloseInProgress;
         _tabStripCloseInProgress = false;
@@ -3464,12 +3466,20 @@ public partial class MainWindow : Window
 
         // Load via SelectMessageCommand (handles SelectedMessage, IsRead, cache, etc.)
         await _vm.SelectMessageCommand.ExecuteAsync(msgTab.Summary);
-        if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+        if (version != _tabChangedVersion) return;
+
+        // Use MessageDetail directly rather than IsMessageOpen: IsMessageOpen is set by
+        // SelectMessageAsync and reflects MessageOpenMode, but tabs always need the reading
+        // pane visible regardless of the mode (e.g. a tab opened via Move to Main Window
+        // while in Window mode). Force it true whenever we have a loaded detail.
+        if (_vm.MessageDetail != null)
         {
+            _vm.IsMessageOpen = true;
             msgTab.Detail   = _vm.MessageDetail;
             msgTab.IsLoaded = true;
             await ShowMessageBodyAsync(_vm.MessageDetail);
         }
+        if (version != _tabChangedVersion) return;
 
         // When triggered by the close button, return focus to the tab strip rather than
         // leaving it in the reading pane. This await runs after ShowMessageBodyAsync has
@@ -3566,6 +3576,10 @@ public partial class MainWindow : Window
     // True when a tab was closed via its ✕ button. Causes OnActiveTabChangedAsync to
     // return focus to the tab strip instead of moving it into the reading pane or message list.
     private bool _tabStripCloseInProgress;
+
+    // Incremented at the start of every OnActiveTabChangedAsync invocation so that
+    // concurrent calls can detect they've been superseded and bail out after each await.
+    private int _tabChangedVersion;
 
     private void FocusActiveTabStripItem()
     {
