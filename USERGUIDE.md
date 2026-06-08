@@ -13,6 +13,7 @@ QuickMail is a desktop email client for Windows. It supports multiple IMAP/SMTP 
 - [Managing accounts](#managing-accounts)
 - [Settings](#settings)
 - [Reading mail](#reading-mail)
+- [Tabs and windows](#tabs-and-windows)
 - [Performance and concurrency](#performance-and-concurrency)
 - [Virtual folders](#virtual-folders)
 - [Conversation view](#conversation-view)
@@ -71,6 +72,8 @@ QuickMail uses a three-pane layout:
 | **Reading pane** | Right / bottom | The full body of the selected message, rendered as HTML when available |
 
 A toolbar at the top provides buttons for the most common actions.
+
+When the **Reading mode** setting is set to **Tab** (see [Settings](#settings) → Windowing tab), a **tab strip** appears below the toolbar. Each open message occupies a tab. The reading pane is not shown in this mode; message content lives inside the active tab instead. Messages can also be opened in standalone **message windows** using `Ctrl+Enter` or by setting Reading mode to **Window**.
 
 ---
 
@@ -155,6 +158,23 @@ Open **File → Settings** (or press `Ctrl+,`) to change application-wide prefer
 | **Show Message Status** | Whether the read/unread/replied/forwarded status indicator appears in the message list. |
 | **Initial Sync Count** | Maximum messages fetched per folder on the first sync of a newly connected account. |
 
+### Advanced tab
+
+| Setting | What it controls |
+|---------|------------------|
+| **Log Format** | How timestamps appear in the log file. **Action first** (default) — message text first, timestamp in brackets at the end of the line; easier to scan since the log is already in chronological order. **Time first** — timestamp at the start of each line, which was the original format. |
+
+### Windowing tab
+
+Controls where messages open when you select them.
+
+| Setting | What it controls |
+|---------|------------------|
+| **Reading mode** | **Reading Pane** (default) — opens messages in the reading pane inside the main window, one at a time. **Tab** — opens each message in a new tab in the main window's tab strip. **Window** — opens each message in a new standalone window. |
+| **Confirm before closing a tab** | When enabled, closing a tab that has unsaved draft changes shows a confirmation dialog before closing. |
+
+Regardless of the Reading mode setting, pressing **Ctrl+Enter** on a message always opens it in a new standalone window.
+
 ### Keyboard Shortcuts tab
 
 Assign custom key bindings to any registered command:
@@ -180,21 +200,24 @@ Custom bindings are saved to `hotkeys.json` in your AppData folder and apply imm
 
 | Action | How |
 |--------|-----|
-| Focus the account list | `Ctrl+1`, then use **Up/Down** arrow keys |
-| Focus the folder tree | `Ctrl+2` or `Ctrl+Y`, then use **Up/Down** + **Enter** |
-| Focus the message list | `Ctrl+3`, then use **Up/Down** to move between messages |
+| Focus the account list | `Ctrl+1` (or `Ctrl+Alt+1` when tabs are open), then use **Up/Down** arrow keys |
+| Focus the folder tree | `Ctrl+2` or `Ctrl+Y` (or `Ctrl+Alt+2` when tabs are open), then use **Up/Down** + **Enter** |
+| Focus the message list | `Ctrl+3` (or `Ctrl+Alt+3` when tabs are open), then use **Up/Down** to move between messages |
+| Focus the tab strip | `Ctrl+Alt+4` (when tab strip is visible) |
 | Open a message in the reading pane | Press **Enter** or select the message |
 | Move focus into the reading pane | **F6** after a message is open |
 | Return focus to the message list | **Escape** or **F6** from the reading pane |
 | Cycle focus forward through all panes | **F6** |
 | Cycle focus backward | **Shift+F6** |
-| Focus the status bar | `Ctrl+9` |
+| Focus the status bar | `Ctrl+9` (when no tabs are open) |
 | Navigate status bar regions | **Left/Right** arrow keys |
 | Activate a clickable status bar region | **Enter** or **Space** |
 
+**When tabs are open:** `Ctrl+1` through `Ctrl+8` jump to tab number N instead of focusing panes. Use `Ctrl+Alt+1`, `Ctrl+Alt+2`, or `Ctrl+Alt+3` to focus the account list, folder tree, or message list at any time regardless of how many tabs are open. `Ctrl+9` jumps to the last tab (rather than focusing the status bar) when tabs are open.
+
 ### Folder tree shortcut (Ctrl+2 / Ctrl+Y)
 
-Press `Ctrl+2` or `Ctrl+Y` to move focus to the main folder tree. Use **Up/Down** to choose a folder, **Right/Left** to expand or collapse account and folder nodes, and **Enter** to open the selected folder.
+Press `Ctrl+2` or `Ctrl+Y` to move focus to the main folder tree (when no tabs are open). Use **Up/Down** to choose a folder, **Right/Left** to expand or collapse account and folder nodes, and **Enter** to open the selected folder.
 
 ### Search folders (Ctrl+Shift+F)
 
@@ -221,6 +244,89 @@ Hold **Shift** and press **Up** or **Down** to extend your selection one message
 | **Ctrl+Shift+End** | Extend selection from the current message to the last message in the list |
 
 Once you have multiple messages selected you can act on all of them at once — for example, pressing **Delete** removes them all.
+
+## Tabs and windows
+
+QuickMail can open messages in three different ways, controlled by the **Reading mode** setting in **Settings → Windowing**:
+
+- **Reading Pane** (default) — one message at a time in the reading pane on the right side of the main window. This is the same behavior as earlier versions.
+- **Tab** — each message you open gets its own tab in a strip below the toolbar. Multiple messages can be open at the same time.
+- **Window** — each message opens in its own standalone window. You can move these windows to different monitors.
+
+Regardless of the setting, pressing **Ctrl+Enter** on a message always opens it in a new standalone window.
+
+### The tab strip
+
+When Reading mode is **Tab**, a tab strip appears below the main toolbar. Each open message appears as a tab showing the message subject. The currently active tab is highlighted.
+
+**Opening and closing tabs:**
+
+| Action | How |
+|--------|-----|
+| Open a message in a new tab | Press **Enter** on a message in the list |
+| Open a message in a new window instead | Press **Ctrl+Enter** |
+| Close the active tab | Press **Ctrl+W**, or activate the close button (✕) on the tab |
+| Close all other tabs | Use the **Close Other Tabs** command in the command palette |
+
+`Ctrl+W` works regardless of where keyboard focus is — including from inside the message body. In **Reading Pane** mode, `Ctrl+W` closes the reading pane instead of a tab.
+
+**Navigating tabs:**
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Tab` | Move to the next tab |
+| `Ctrl+Shift+Tab` | Move to the previous tab |
+| `Ctrl+1` … `Ctrl+8` | Jump to tab number N (1 = first, 8 = eighth) |
+| `Ctrl+9` | Jump to the last tab |
+| `Ctrl+Alt+4` | Move keyboard focus to the tab strip itself |
+| `Ctrl+Shift+`` (backtick)` | Open the tab list overlay |
+
+When the tab strip has focus, use **Left/Right** arrows to navigate. Each tab has two keyboard stops: the tab header (press **Enter** or **Space** to activate it) and its close button — **✕** (press **Enter** or **Space** to close the tab). Pressing **Right** from a tab header moves to that tab's close button; pressing **Right** again moves to the next tab's header.
+
+**Tab list overlay (`Ctrl+Shift+\``):**
+
+The tab list overlay shows all open tabs in a list. Use **Up/Down** arrows to move between tabs, **Enter** to activate the selected tab, and **Escape** to close the overlay without changing the active tab.
+
+**Moving and reordering tabs:**
+
+You can drag a tab header to a different position. Keyboard users can use **Move Tab Left** and **Move Tab Right** from the command palette (`Ctrl+Shift+P`).
+
+**Promoting a tab to a window:**
+
+To move a tab out of the main window and into its own standalone window, use the **Move Tab to New Window** command in the command palette. The message keeps its content — nothing is reloaded.
+
+### Message windows
+
+A message window is a standalone window that shows a single message. It has a toolbar with **Previous** and **Next** buttons for navigating among the messages in the same folder, and a **Move to Main Window** button to move the message back to the main window's tab strip.
+
+**Opening a message window:**
+
+- Press **Ctrl+Enter** on any message in the message list — this always opens a new window regardless of the Reading mode setting.
+- Set Reading mode to **Window** in Settings → Windowing, then press **Enter** on any message.
+- Use **Move Tab to New Window** from the command palette when in Tab mode.
+
+**Navigating inside a message window:**
+
+| Shortcut | Action |
+|----------|--------|
+| `F6` / `Shift+F6` | Cycle focus: toolbar → header fields → message body |
+| `Alt+Left` | Go to the previous message |
+| `Alt+Right` | Go to the next message |
+| `Ctrl+Shift+P` | Open the command palette for this window |
+| `Ctrl+W` | Close the window |
+| `Escape` | Close the window |
+
+The command palette in a message window contains **Previous Message**, **Next Message**, **Move to Main Window**, and **Close Window**.
+
+**Moving a message back to the main window:**
+
+Activate the **Move to Main Window** button in the window's toolbar, or use **Move to Main Window** from the command palette. The message opens as a new tab in the main window's tab strip and the standalone window closes.
+
+**When a message window closes:**
+
+Focus returns to the message in the main window's message list that was selected when the window was opened.
+
+---
 
 ## Performance and concurrency
 
@@ -894,22 +1000,44 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 
 ### Main window
 
+#### Pane navigation
+
 | Shortcut | Action |
 |----------|--------|
-| Ctrl+1 | Focus account list |
-| Ctrl+2 / Ctrl+Y | Focus folder tree |
-| Ctrl+3 | Focus message list / conversation tree |
+| Ctrl+1 | Focus account list (jumps to tab 1 when tabs are open) |
+| Ctrl+2 / Ctrl+Y | Focus folder tree (jumps to tab 2 when tabs are open) |
+| Ctrl+3 | Focus message list / conversation tree (jumps to tab 3 when tabs are open) |
+| Ctrl+4 … Ctrl+8 | Jump to tab N (when tabs are open) |
+| Ctrl+9 | Jump to last tab (when tabs are open) / focus status bar (when no tabs) |
+| Ctrl+Alt+1 | Focus account list (always works, even when tabs are open) |
+| Ctrl+Alt+2 | Focus folder tree (always works) |
+| Ctrl+Alt+3 | Focus message list (always works) |
+| Ctrl+Alt+4 | Focus tab strip (when tab strip is visible) |
 | Ctrl+0 | Focus toolbar |
-| Ctrl+9 | Focus status bar |
-| Left/Right | Navigate status bar regions (when status bar is focused) |
-| Enter / Space | Activate status bar button (Rules) |
 | F6 | Cycle focus forward through panes |
 | Shift+F6 | Cycle focus backward through panes |
+| Left/Right | Navigate status bar regions (when status bar is focused) |
+| Enter / Space | Activate status bar button (Rules) |
+
+#### Tab navigation
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+Tab | Next tab |
+| Ctrl+Shift+Tab | Previous tab |
+| Ctrl+W | Close active tab (Tab mode) / Close reading pane (Reading Pane mode) |
+| Ctrl+Shift+` | Open tab list overlay |
+
+#### Mail actions
+
+| Shortcut | Action |
+|----------|--------|
 | F5 | Refresh current folder |
 | Ctrl+N | New message |
 | Ctrl+R | Reply |
 | Ctrl+Shift+R | Reply All |
 | Ctrl+F | Forward |
+| Ctrl+Enter | Open selected message in a new window |
 | Delete | Delete selected message(s) |
 | Ctrl+Shift+L | Manage Rules |
 | Ctrl+Shift+T | Create Rule from Message |
@@ -931,6 +1059,17 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Shift+F10 | Open context menu for focused item |
 | Escape | Close reading pane |
 | Alt+Enter | View Properties for the selected item (message, group, folder, account, contact, or attachment) |
+
+### Message window
+
+| Shortcut | Action |
+|----------|--------|
+| F6 / Shift+F6 | Cycle focus: toolbar → header fields → message body |
+| Alt+Left | Previous message |
+| Alt+Right | Next message |
+| Ctrl+Shift+P | Open command palette |
+| Ctrl+W | Close window |
+| Escape | Close window |
 
 ### Compose window
 

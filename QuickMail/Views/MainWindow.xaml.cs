@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Globalization;
 using System.Linq;
-using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -76,6 +75,7 @@ public partial class MainWindow : Window
     private readonly IFeatureGate _featureGate;
     private readonly ICommandRegistry _registry;
     private bool _webViewReady;
+    private CoreWebView2Environment? _webViewEnvironment;
     private string _typeAheadBuffer = string.Empty;
     private DateTime _typeAheadLastInputUtc = DateTime.MinValue;
     private object? _typeAheadScope;
@@ -96,23 +96,7 @@ public partial class MainWindow : Window
     private string? _pendingSearchAnnounceText;
     private static readonly TimeSpan SearchAnnounceDebounce = TimeSpan.FromMilliseconds(300);
 
-    private const int MaxRichHtmlRenderChars = 1_000_000;
-    private const int MaxReaderTextChars = 140_000;
-    private const int MaxRichHtmlTableCount = 500;
-
-    // NOTE: order matters — fields below reference these timeouts during static init.
-    private static readonly TimeSpan HtmlRegexTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan WebViewNavigationTimeout = TimeSpan.FromSeconds(4);
-
-    // Matches an http/https/mailto URL up to the first whitespace, angle bracket,
-    // or quote. Trailing punctuation (.,;:!?)] is trimmed in the replace step
-    // because senders write things like "see https://example.com/page." or
-    // "(https://example.com)" and we shouldn't swallow the closing punctuation.
-    private static readonly Regex AutoLinkUrl = new(
-        @"\b((?:https?|mailto):[^\s<>""']+)",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        HtmlRegexTimeout);
-    private static readonly char[] AutoLinkTrailingPunct = ['.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\''];
 
     private readonly IContactService _contactService;
     private readonly IConfigService _configService;
@@ -190,6 +174,25 @@ public partial class MainWindow : Window
             win.ShowDialog();
         };
 
+        vm.TabPromoteToWindowRequested += PromoteTabToWindow;
+
+        vm.PropertyChanged += async (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.ActiveTab) && !_tabStripArrowNavInProgress)
+                await OnActiveTabChangedAsync();
+
+            if (e.PropertyName == nameof(MainViewModel.IsMessageOpen) && !_vm.IsMessageOpen && _webViewReady)
+                MessageBody.CoreWebView2.NavigateToString("<html><body></body></html>");
+
+            // Lazy-initialize the reading pane WebView2 the first time the user switches
+            // away from Window mode (the HWND was intentionally skipped at startup).
+            if (e.PropertyName == nameof(MainViewModel.MessageOpenMode)
+                && _vm.MessageOpenMode != MessageOpenMode.Window
+                && !_webViewReady
+                && _webViewEnvironment != null)
+                _ = InitReadingPaneWebViewAsync();
+        };
+
         // Re-focus the active message panel whenever the message collections are replaced
         // (happens after Refresh, Load More, folder changes, and view-mode switches).
         //
@@ -206,10 +209,10 @@ public partial class MainWindow : Window
                 {
                     LogService.Debug("[FOCUS]   → skipped (menu/toolbar has focus)");
                 }
-                else if (_vm.IsMessageOpen)
+                else if (_vm.IsMessageOpen || _vm.IsMessageOpenInWindow)
                 {
-                    // Reading pane is open — the message collection changed (e.g. folder
-                    // load or Refresh) but focus must stay in the reading pane.
+                    // Reading pane is open (or a message window is open) — the message
+                    // collection changed but focus must not move.
                     LogService.Debug("[FOCUS]   → skipped (reading pane open)");
                 }
                 else if (vm.IsConversationsView)
@@ -568,7 +571,7 @@ public partial class MainWindow : Window
             id: "contacts.grabAddresses", category: "Contacts", title: "Grab Addresses from Message",
             execute: GrabAddressesFromMessage,
             defaultKey: Key.G, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: () => _vm.IsMessageOpen));
+            isAvailable: () => _vm.IsMessageOpen || _vm.IsMessageOpenInWindow));
 
         _registry.Register(new CommandDefinition(
             id: "contacts.openAddressBook", category: "Contacts", title: "Address Book",
@@ -617,81 +620,110 @@ public partial class MainWindow : Window
                 && !(IsMessageListFocused() && MessageList.SelectedItems.Count > 1)
                 && !IsGroupTreeFocused()));
 
-        // Initialise the embedded browser.  Wire Escape before doing anything else.
+        // ── Pane navigation (Ctrl+Alt+1/2/3 — always work regardless of tab mode) ──
+        _registry.Register(new CommandDefinition(
+            id: "view.focusAccounts", category: "View", title: "Focus Account List",
+            execute: () => AccountList.Focus(),
+            defaultKey: Key.D1, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt));
+
+        _registry.Register(new CommandDefinition(
+            id: "view.focusMessages", category: "View", title: "Focus Message List",
+            execute: () =>
+            {
+                if (_vm.IsConversationsView)      ConversationTree.Focus();
+                else if (_vm.IsFromView)           SenderGroupTree.Focus();
+                else if (_vm.IsToView)             ToGroupTree.Focus();
+                else                               MessageList.Focus();
+            },
+            defaultKey: Key.D3, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt));
+
+        _registry.Register(new CommandDefinition(
+            id: "view.focusTabs", category: "View", title: "Focus Tab Strip",
+            execute: () => { if (_vm.ShowTabStrip) TabStrip.Focus(); },
+            defaultKey: Key.D4, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt,
+            isAvailable: () => _vm.ShowTabStrip));
+
+        // ── Tab & Window Management commands ─────────────────────────────────────
+        _registry.Register(new CommandDefinition(
+            id: "tabs.next", category: "View", title: "Next Tab",
+            execute: () => _vm.ActivateNextTab(),
+            defaultKey: Key.Tab, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => _vm.OpenTabs.Count > 1));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.previous", category: "View", title: "Previous Tab",
+            execute: () => _vm.ActivatePrevTab(),
+            defaultKey: Key.Tab, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => _vm.OpenTabs.Count > 1));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.close", category: "View", title: "Close Tab",
+            execute: () => { if (_vm.ActiveTab != null) _vm.CloseTab(_vm.ActiveTab); },
+            defaultKey: Key.W, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => _vm.ActiveTab is MessageTabViewModel));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.closeMessage", category: "Mail", title: "Close Message",
+            execute: CloseReadingPane,
+            defaultKey: Key.W, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => _vm.IsMessageOpen && _vm.MessageOpenMode == MessageOpenMode.ReadingPane));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.closeOthers", category: "View", title: "Close Other Tabs",
+            execute: () => _vm.CloseAllOtherTabs(),
+            isAvailable: () => _vm.OpenTabs.Count > 1));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.list", category: "View", title: "Tab List…",
+            execute: OpenTabList,
+            defaultKey: Key.OemTilde, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => _vm.OpenTabs.Count > 0));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.moveLeft", category: "View", title: "Move Tab Left",
+            execute: () => _vm.MoveTabLeft(),
+            isAvailable: () => _vm.ActiveTab != null && _vm.OpenTabs.Count > 1));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.moveRight", category: "View", title: "Move Tab Right",
+            execute: () => _vm.MoveTabRight(),
+            isAvailable: () => _vm.ActiveTab != null && _vm.OpenTabs.Count > 1));
+
+        _registry.Register(new CommandDefinition(
+            id: "tabs.promote", category: "View", title: "Move Tab to New Window",
+            execute: () => _vm.PromoteActiveTabToWindow(),
+            isAvailable: () => _vm.ActiveTab != null));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.openInNewTab", category: "Mail", title: "Open in New Tab",
+            execute: () => { if (_vm.SelectedMessage != null) _vm.OpenMessageTab(_vm.SelectedMessage); },
+            isAvailable: () => _vm.SelectedMessage != null));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.openInWindow", category: "Mail", title: "Open in New Window",
+            execute: () => { if (_vm.SelectedMessage != null) OpenMessageInNewWindow(_vm.SelectedMessage); },
+            isAvailable: () => _vm.SelectedMessage != null));
+
+        // Create the WebView2 environment — always needed, shared with MessageWindow instances.
         try
         {
             var userDataFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "QuickMail", "WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await MessageBody.EnsureCoreWebView2Async(env);
-            _webViewReady = true;
-
-            // Disable unnecessary browser chrome / context menus
-            MessageBody.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-            MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
-
-            // Inject Escape, F6, and Shift+Tab relay into every page at the host level — runs before any CSP.
-            await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                "window.addEventListener('keydown',function(e){"
-                +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
-                +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
-                +"else if(e.ctrlKey&&(e.key==='2'||e.key==='y'||e.key==='Y')){window.chrome.webview.postMessage('focus-folders');e.preventDefault();}"
-                +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
-                +"});");
-
-            // JavaScript in every page posts a message when Escape, F6, or Shift+Tab is pressed,
-            // which we relay back to WPF to move focus appropriately.
-            MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
-            {
-                var msg = args.TryGetWebMessageAsString();
-                if (msg == "escape")
-                    Dispatcher.InvokeAsync(CloseReadingPane, DispatcherPriority.Input);
-                else if (msg == "f6")
-                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
-                else if (msg == "shift-f6")
-                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
-                else if (msg == "focus-folders")
-                    Dispatcher.InvokeAsync(FocusFolderTree, DispatcherPriority.Input);
-                else if (msg == "shift-tab")
-                    Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
-            };
-
-            // Open clicked links in the user's default browser instead of replacing
-            // the reading-pane document. NavigateToString sets the document URI to
-            // "about:blank", so allow that for the initial render and block everything else.
-            // quickmail: URIs are handled internally for calendar invite actions.
-            MessageBody.CoreWebView2.NavigationStarting += (_, args) =>
-            {
-                var uri = args.Uri;
-                if (string.IsNullOrEmpty(uri) ||
-                    uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
-                    uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                    return;
-                args.Cancel = true;
-                if (uri.StartsWith("quickmail:", StringComparison.OrdinalIgnoreCase))
-                {
-                    HandleQuickMailUri(uri);
-                    return;
-                }
-                OpenExternal(uri);
-            };
-            MessageBody.CoreWebView2.NewWindowRequested += (_, args) =>
-            {
-                args.Handled = true;
-                OpenExternal(args.Uri);
-            };
-
-            // WebView2 renderer crash signal — surfaces as a blank reading pane.
-            MessageBody.CoreWebView2.ProcessFailed += (_, args) =>
-                LogService.Log($"[ERROR] WebView2 ProcessFailed kind={args.ProcessFailedKind} exit={args.ExitCode} reason={args.Reason}");
+            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
         }
         catch (Exception ex)
         {
-            LogService.Log("WebView2 init failed", ex);
-            // Continue — message body just won't show
+            LogService.Log("WebView2 environment creation failed", ex);
         }
+
+        // Initialize the reading pane WebView2 only when it will actually be used.
+        // In Window mode the reading pane is never shown, and creating the browser
+        // HWND in the main window lets screen readers enter browse mode for it —
+        // causing Down arrow to read message content instead of navigating the list.
+        // Lazy initialization fires when the user switches away from Window mode.
+        if (_vm.MessageOpenMode != MessageOpenMode.Window)
+            await InitReadingPaneWebViewAsync();
 
         var firstAccount = _vm.Accounts.FirstOrDefault();
         if (firstAccount == null)
@@ -749,24 +781,51 @@ public partial class MainWindow : Window
             switch (key)
             {
                 case Key.D0: ToolbarFirstButton.Focus(); e.Handled = true; return;
-                case Key.D1: AccountList.Focus();        e.Handled = true; return;
+
+                case Key.D1:
+                    if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(1); e.Handled = true; return; }
+                    AccountList.Focus(); e.Handled = true; return;
+
                 case Key.D2:
+                    if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(2); e.Handled = true; return; }
+                    FocusFolderTree(); e.Handled = true; return;
+
                 case Key.NumPad2:
                 case Key.Y:
-                    FocusFolderTree();
-                    e.Handled = true;
-                    return;
+                    FocusFolderTree(); e.Handled = true; return;
+
                 case Key.D3:
-                    if (_vm.IsConversationsView)
-                        ConversationTree.Focus();
-                    else if (_vm.IsFromView)
-                        SenderGroupTree.Focus();
-                    else if (_vm.IsToView)
-                        ToGroupTree.Focus();
-                    else
-                        MessageList.Focus();
-                    e.Handled = true;
-                    return;
+                    if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(3); e.Handled = true; return; }
+                    if (_vm.IsConversationsView) ConversationTree.Focus();
+                    else if (_vm.IsFromView)      SenderGroupTree.Focus();
+                    else if (_vm.IsToView)         ToGroupTree.Focus();
+                    else                           MessageList.Focus();
+                    e.Handled = true; return;
+
+                case Key.D4: if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(4); e.Handled = true; return; } break;
+                case Key.D5: if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(5); e.Handled = true; return; } break;
+                case Key.D6: if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(6); e.Handled = true; return; } break;
+                case Key.D7: if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(7); e.Handled = true; return; } break;
+                case Key.D8: if (_vm.ShowTabStrip) { _vm.ActivateTabByIndex(8); e.Handled = true; return; } break;
+
+                case Key.D9:
+                    if (_vm.ShowTabStrip) { _vm.ActivateLastTab(); e.Handled = true; return; }
+                    break; // falls through to registry (view.focusStatusBar)
+            }
+        }
+        else if (modifiers == (ModifierKeys.Control | ModifierKeys.Alt))
+        {
+            // Pane navigation via Ctrl+Alt+1/2/3 — always available regardless of tab mode.
+            switch (key)
+            {
+                case Key.D1: AccountList.Focus(); e.Handled = true; return;
+                case Key.D2: FocusFolderTree();   e.Handled = true; return;
+                case Key.D3:
+                    if (_vm.IsConversationsView) ConversationTree.Focus();
+                    else if (_vm.IsFromView)      SenderGroupTree.Focus();
+                    else if (_vm.IsToView)         ToGroupTree.Focus();
+                    else                           MessageList.Focus();
+                    e.Handled = true; return;
             }
         }
         else if (modifiers == ModifierKeys.None)
@@ -1306,18 +1365,7 @@ public partial class MainWindow : Window
     private async void MessageList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (MessageList.SelectedItem is MailMessageSummary summary)
-        {
-            if (_vm.IsSelectedFolderDrafts)
-            {
-                await _vm.OpenDraftCommand.ExecuteAsync(null);
-            }
-            else
-            {
-                await _vm.SelectMessageCommand.ExecuteAsync(summary);
-                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                    await ShowMessageBodyAsync(_vm.MessageDetail);
-            }
-        }
+            await OpenMessageFromListAsync(summary);
     }
 
     // Enter on a message: load body; Delete: delete all selected messages;
@@ -1356,16 +1404,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter && MessageList.SelectedItem is MailMessageSummary summary)
         {
             e.Handled = true;
-            if (_vm.IsSelectedFolderDrafts)
-            {
-                await _vm.OpenDraftCommand.ExecuteAsync(null);
-            }
-            else
-            {
-                await _vm.SelectMessageCommand.ExecuteAsync(summary);
-                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                    await ShowMessageBodyAsync(_vm.MessageDetail);
-            }
+            await OpenMessageFromListAsync(summary);
         }
         else if (e.Key == Key.Delete && MessageList.SelectedItems.Count > 0)
         {
@@ -1581,13 +1620,84 @@ public partial class MainWindow : Window
             category: AnnouncementCategory.Result);
     }
 
+    // One-time setup of the reading pane WebView2. Skipped at startup in Window mode;
+    // called lazily the first time the user switches to ReadingPane or Tab mode.
+    private async Task InitReadingPaneWebViewAsync()
+    {
+        if (_webViewReady || _webViewEnvironment == null) return;
+        try
+        {
+            await MessageBody.EnsureCoreWebView2Async(_webViewEnvironment);
+            _webViewReady = true;
+
+            MessageBody.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
+
+            await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                "window.addEventListener('keydown',function(e){"
+                +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
+                +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
+                +"else if(e.ctrlKey&&(e.key==='2'||e.key==='y'||e.key==='Y')){window.chrome.webview.postMessage('focus-folders');e.preventDefault();}"
+                +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
+                +"else if(e.ctrlKey&&e.key==='w'){window.chrome.webview.postMessage('ctrl-w');e.preventDefault();}"
+                +"});");
+
+            MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
+            {
+                var msg = args.TryGetWebMessageAsString();
+                if (msg == "escape")
+                    Dispatcher.InvokeAsync(CloseReadingPane, DispatcherPriority.Input);
+                else if (msg == "f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
+                else if (msg == "shift-f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
+                else if (msg == "focus-folders")
+                    Dispatcher.InvokeAsync(FocusFolderTree, DispatcherPriority.Input);
+                else if (msg == "shift-tab")
+                    Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
+                else if (msg == "ctrl-w")
+                    Dispatcher.InvokeAsync(
+                        () => _registry.FindByGesture(Key.W, ModifierKeys.Control)?.Execute(),
+                        DispatcherPriority.Input);
+            };
+
+            MessageBody.CoreWebView2.NavigationStarting += (_, args) =>
+            {
+                var uri = args.Uri;
+                if (string.IsNullOrEmpty(uri) ||
+                    uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
+                    uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    return;
+                args.Cancel = true;
+                if (uri.StartsWith("quickmail:", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleQuickMailUri(uri);
+                    return;
+                }
+                OpenExternal(uri);
+            };
+            MessageBody.CoreWebView2.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                OpenExternal(args.Uri);
+            };
+            MessageBody.CoreWebView2.ProcessFailed += (_, args) =>
+                LogService.Log($"[ERROR] WebView2 ProcessFailed kind={args.ProcessFailedKind} exit={args.ExitCode} reason={args.Reason}");
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("WebView2 reading pane init failed", ex);
+        }
+    }
+
     // Render the message body in the browser and move focus into it
     private async Task ShowMessageBodyAsync(MailMessageDetail detail)
     {
         if (!_webViewReady) return;
 
         var renderVersion = Interlocked.Increment(ref _messageBodyRenderVersion);
-        var html = await Task.Run(() => BuildMessageHtml(detail));
+        var html = await Task.Run(() => MessageBodyHtmlBuilder.BuildMessageHtml(detail));
         if (renderVersion != _messageBodyRenderVersion)
             return;
 
@@ -1721,22 +1831,6 @@ public partial class MainWindow : Window
         return $"Message body. {trimmed}";
     }
 
-    private static string BuildMessageHtml(MailMessageDetail detail)
-    {
-        var htmlBody = detail.HtmlBody ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(htmlBody) && !ShouldUseReaderMode(htmlBody))
-            return BuildSanitizedHtmlDocument(detail.Subject, htmlBody);
-
-        var text = !string.IsNullOrWhiteSpace(detail.PlainTextBody)
-            ? detail.PlainTextBody
-            : HtmlToText(htmlBody);
-
-        var note = !string.IsNullOrWhiteSpace(htmlBody)
-            ? "This message uses complex HTML, so QuickMail is showing a simplified body."
-            : null;
-        return BuildPlainTextHtmlDocument(detail.Subject, text, note);
-    }
-
     /// <summary>Injects the event card HTML just after the opening &lt;body&gt; tag.</summary>
     private static string InjectEventCard(string html, string eventCardHtml)
     {
@@ -1761,84 +1855,6 @@ public partial class MainWindow : Window
             _vm.DeclineInviteCommand.Execute(null);
     }
 
-    private static bool ShouldUseReaderMode(string html) =>
-        html.Length > MaxRichHtmlRenderChars ||
-        CountOccurrences(html, "<table") > MaxRichHtmlTableCount;
-    // data:image used to force reader mode, but <img> tags are stripped by
-    // StripHeavyHtml and blocked by CSP img-src 'none' anyway, so the size of the
-    // base64 payload doesn't actually slow rendering. Newsletter logos no longer
-    // force reader mode.
-
-    private static string BuildSanitizedHtmlDocument(string? subject, string html)
-    {
-        var body = StripHeavyHtml(html);
-        var titleTag = $"<title>{WebUtility.HtmlEncode(subject ?? string.Empty)}</title>";
-        const string cspTag =
-            "<meta http-equiv=\"Content-Security-Policy\" " +
-            "content=\"default-src 'none'; script-src 'none'; object-src 'none'; " +
-            "frame-src 'none'; img-src 'none'; media-src 'none'; connect-src 'none'; " +
-            "form-action 'none'; base-uri 'none'; style-src 'unsafe-inline';\">";
-        const string css =
-            "<style>html,body{margin:0;padding:8px 12px;font-family:Segoe UI,Arial,sans-serif;" +
-            "font-size:13px;line-height:1.45;word-break:break-word;background:Window;color:WindowText;}" +
-            "table{max-width:100%;border-collapse:collapse;}td,th{vertical-align:top;}a{color:#0645ad;}</style>";
-
-        var headIdx = body.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
-        if (headIdx >= 0)
-        {
-            body = RemoveTitle(body);
-            body = body.Insert(headIdx + 6, "<meta charset=\"utf-8\">" + titleTag + cspTag + css);
-            return EnsureBodyFocusable(body);
-        }
-
-        return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-               titleTag + cspTag + css +
-               "</head><body tabindex=\"0\">" + body + "</body></html>";
-    }
-
-    private static string BuildPlainTextHtmlDocument(string? subject, string text, string? note)
-    {
-        var clipped = Truncate(text ?? string.Empty, MaxReaderTextChars);
-        var encoded = WebUtility.HtmlEncode(clipped);
-        var linked  = AutoLinkPlainTextUrls(encoded);
-        var titleTag = $"<title>{WebUtility.HtmlEncode(subject ?? string.Empty)}</title>";
-        var noteHtml = string.IsNullOrWhiteSpace(note)
-            ? string.Empty
-            : "<p class=\"note\">" + WebUtility.HtmlEncode(note) + "</p>";
-
-        return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-               titleTag +
-               "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline';\">" +
-               "<style>html,body{margin:0;padding:8px 12px;font-family:Segoe UI,Arial,sans-serif;" +
-               "font-size:13px;white-space:pre-wrap;word-break:break-word;background:Window;color:WindowText;}" +
-               "a{color:#0645ad;}" +
-               ".note{white-space:normal;border-left:3px solid #777;padding-left:8px;margin:0 0 12px 0;color:#555;}</style>" +
-               "</head><body tabindex=\"0\">" + noteHtml + linked + "</body></html>";
-    }
-
-    // Wrap http/https/mailto runs in <a> tags so plain-text emails get clickable links.
-    // Operates on already-HTML-encoded text, so we won't double-encode the URL value.
-    private static string AutoLinkPlainTextUrls(string encoded)
-    {
-        try
-        {
-            return AutoLinkUrl.Replace(encoded, m =>
-            {
-                var url = m.Value;
-                var trailing = string.Empty;
-                while (url.Length > 0 && Array.IndexOf(AutoLinkTrailingPunct, url[^1]) >= 0)
-                {
-                    trailing = url[^1] + trailing;
-                    url = url[..^1];
-                }
-                if (url.Length == 0) return m.Value;
-                // url is already HTML-encoded so it's safe to put it in href and as text
-                return $"<a href=\"{url}\" rel=\"nofollow noreferrer\">{url}</a>{trailing}";
-            });
-        }
-        catch (RegexMatchTimeoutException) { return encoded; }
-    }
-
     private static void OpenExternal(string uri)
     {
         if (string.IsNullOrWhiteSpace(uri)) return;
@@ -1850,74 +1866,6 @@ public partial class MainWindow : Window
         {
             LogService.Log($"OpenExternal {uri}", ex);
         }
-    }
-
-    private static string StripHeavyHtml(string html)
-    {
-        var body = html;
-        body = SafeRegexReplace(body, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "<script\\b.*?</script>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "<style\\b.*?</style>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "<svg\\b.*?</svg>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "<(iframe|object|embed|video|audio|canvas|form)\\b.*?</\\1>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "<(img|link|base|input|button|meta)\\b[^>]*>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        body = SafeRegexReplace(body, "\\s(on\\w+|style|src|srcset|background)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        return body;
-    }
-
-    private static string RemoveTitle(string html) =>
-        SafeRegexReplace(html, "<title[^>]*>.*?</title>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-    private static string EnsureBodyFocusable(string html)
-    {
-        if (!html.Contains("<body", StringComparison.OrdinalIgnoreCase) ||
-            html.Contains("tabindex=", StringComparison.OrdinalIgnoreCase))
-            return html;
-
-        return SafeRegexReplace(html, "<body\\b", "<body tabindex=\"0\"", RegexOptions.IgnoreCase);
-    }
-
-    private static string HtmlToText(string html)
-    {
-        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
-        var text = StripHeavyHtml(html);
-        text = SafeRegexReplace(text, "<br\\s*/?>", "\n", RegexOptions.IgnoreCase);
-        text = SafeRegexReplace(text, "</(p|div|tr|li|h[1-6])>", "\n", RegexOptions.IgnoreCase);
-        text = SafeRegexReplace(text, "<[^>]+>", " ", RegexOptions.Singleline);
-        text = WebUtility.HtmlDecode(text);
-        text = SafeRegexReplace(text, "[ \\t\\r\\f\\v]+", " ", RegexOptions.None);
-        text = SafeRegexReplace(text, "\\n\\s+|\\s+\\n", "\n", RegexOptions.None);
-        text = SafeRegexReplace(text, "\\n{3,}", "\n\n", RegexOptions.None);
-        return text.Trim();
-    }
-
-    private static string SafeRegexReplace(string input, string pattern, string replacement, RegexOptions options)
-    {
-        try { return Regex.Replace(input, pattern, replacement, options, HtmlRegexTimeout); }
-        catch (RegexMatchTimeoutException)
-        {
-            LogService.Log($"HTML cleanup timed out for pattern: {pattern}");
-            return input;
-        }
-    }
-
-    private static string Truncate(string value, int maxChars)
-    {
-        if (value.Length <= maxChars) return value;
-        return value[..maxChars] + "\n\n[Message truncated for display.]";
-    }
-
-    private static int CountOccurrences(
-        string value, string needle, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
-    {
-        var count = 0;
-        var index = 0;
-        while ((index = value.IndexOf(needle, index, comparison)) >= 0)
-        {
-            count++;
-            index += needle.Length;
-        }
-        return count;
     }
 
     // When the WebView2 host receives WPF keyboard focus (e.g. Tab from a header field),
@@ -2260,6 +2208,7 @@ public partial class MainWindow : Window
         if (FolderList.IsKeyboardFocusWithin)   return 2;
         if (SearchBox.IsKeyboardFocusWithin)    return 6;
         if (MessageList.IsKeyboardFocusWithin || ConversationTree.IsKeyboardFocusWithin || SenderGroupTree.IsKeyboardFocusWithin || ToGroupTree.IsKeyboardFocusWithin) return 3;
+        if (TabStrip.IsKeyboardFocusWithin)     return 7; // between message list and reading pane
         if (MessageBody.IsKeyboardFocusWithin)  return 4;
         if (MainStatusBar.IsKeyboardFocusWithin) return 5;
         return 0;
@@ -2275,6 +2224,7 @@ public partial class MainWindow : Window
             case 2: FolderList.Focus(); break;
             case 6: SearchBox.Focus(); break;
             case 3: FocusActiveMessagePanel(); break;
+            case 7: TabStrip.Focus(); break;
             case 4:
                 if (_vm.IsMessageOpen && _webViewReady)
                 {
@@ -2290,6 +2240,7 @@ public partial class MainWindow : Window
     }
 
     // Cycles keyboard focus forward (F6) or backward (Shift+F6) through the pane ring.
+    // The tab strip (index 7) is included when visible, between message list and reading pane.
     // The reading pane (index 4) is included only when a message is open.
     // StatusBar (index 5) is always the last stop before wrapping back to Toolbar.
     private async Task CycleFocusAsync(bool forward)
@@ -2298,6 +2249,7 @@ public partial class MainWindow : Window
         var panes = new System.Collections.Generic.List<int> { 0, 1, 2 };
         if (_vm.IsSearchActive) panes.Add(6); // search box between folder tree and message list
         panes.Add(3);
+        if (_vm.ShowTabStrip) panes.Add(7);   // tab strip between message list and reading pane
         if (_vm.IsMessageOpen && _webViewReady) panes.Add(4);
         panes.Add(5); // StatusBar always included
 
@@ -2424,17 +2376,7 @@ public partial class MainWindow : Window
             if (ConversationTree.SelectedItem is MailMessageSummary msg)
             {
                 e.Handled = true;
-                if (_vm.IsSelectedFolderDrafts)
-                {
-                    _vm.SelectedMessage = msg;
-                    await _vm.OpenDraftCommand.ExecuteAsync(null);
-                }
-                else
-                {
-                    await _vm.SelectMessageCommand.ExecuteAsync(msg);
-                    if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                        await ShowMessageBodyAsync(_vm.MessageDetail);
-                }
+                await OpenMessageFromListAsync(msg);
             }
             else if (ConversationTree.SelectedItem is ConversationGroup group)
             {
@@ -2443,16 +2385,7 @@ public partial class MainWindow : Window
                 {
                     var singleMsg = group.Messages[0];
                     _vm.SelectedMessage = singleMsg;
-                    if (_vm.IsSelectedFolderDrafts)
-                    {
-                        await _vm.OpenDraftCommand.ExecuteAsync(null);
-                    }
-                    else
-                    {
-                        await _vm.SelectMessageCommand.ExecuteAsync(singleMsg);
-                        if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                            await ShowMessageBodyAsync(_vm.MessageDetail);
-                    }
+                    await OpenMessageFromListAsync(singleMsg);
                 }
                 else
                 {
@@ -3000,17 +2933,7 @@ public partial class MainWindow : Window
             if (SenderGroupTree.SelectedItem is MailMessageSummary msg)
             {
                 e.Handled = true;
-                if (_vm.IsSelectedFolderDrafts)
-                {
-                    _vm.SelectedMessage = msg;
-                    await _vm.OpenDraftCommand.ExecuteAsync(null);
-                }
-                else
-                {
-                    await _vm.SelectMessageCommand.ExecuteAsync(msg);
-                    if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                        await ShowMessageBodyAsync(_vm.MessageDetail);
-                }
+                await OpenMessageFromListAsync(msg);
             }
             else if (SenderGroupTree.SelectedItem is SenderGroup group)
             {
@@ -3019,16 +2942,7 @@ public partial class MainWindow : Window
                 {
                     var singleMsg = group.Messages[0];
                     _vm.SelectedMessage = singleMsg;
-                    if (_vm.IsSelectedFolderDrafts)
-                    {
-                        await _vm.OpenDraftCommand.ExecuteAsync(null);
-                    }
-                    else
-                    {
-                        await _vm.SelectMessageCommand.ExecuteAsync(singleMsg);
-                        if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                            await ShowMessageBodyAsync(_vm.MessageDetail);
-                    }
+                    await OpenMessageFromListAsync(singleMsg);
                 }
                 else
                 {
@@ -3163,17 +3077,7 @@ public partial class MainWindow : Window
             if (ToGroupTree.SelectedItem is MailMessageSummary msg)
             {
                 e.Handled = true;
-                if (_vm.IsSelectedFolderDrafts)
-                {
-                    _vm.SelectedMessage = msg;
-                    await _vm.OpenDraftCommand.ExecuteAsync(null);
-                }
-                else
-                {
-                    await _vm.SelectMessageCommand.ExecuteAsync(msg);
-                    if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                        await ShowMessageBodyAsync(_vm.MessageDetail);
-                }
+                await OpenMessageFromListAsync(msg);
             }
             else if (ToGroupTree.SelectedItem is SenderGroup group)
             {
@@ -3182,16 +3086,7 @@ public partial class MainWindow : Window
                 {
                     var singleMsg = group.Messages[0];
                     _vm.SelectedMessage = singleMsg;
-                    if (_vm.IsSelectedFolderDrafts)
-                    {
-                        await _vm.OpenDraftCommand.ExecuteAsync(null);
-                    }
-                    else
-                    {
-                        await _vm.SelectMessageCommand.ExecuteAsync(singleMsg);
-                        if (_vm.IsMessageOpen && _vm.MessageDetail != null)
-                            await ShowMessageBodyAsync(_vm.MessageDetail);
-                    }
+                    await OpenMessageFromListAsync(singleMsg);
                 }
                 else
                 {
@@ -3307,6 +3202,339 @@ public partial class MainWindow : Window
         accountVm.SelectedAccount = accountVm.Accounts.FirstOrDefault(a => a.Id == account.Id);
         if (dialog.ShowDialog() == true)
             _vm.RefreshAccountList();
+    }
+
+    // ── Tab & Window Management handlers ────────────────────────────────────────
+
+    /// <summary>
+    /// Routes message opening based on the configured MessageOpenMode.
+    /// Drafts always open in a compose window regardless of mode.
+    /// </summary>
+    private async Task OpenMessageFromListAsync(MailMessageSummary summary)
+    {
+        if (_vm.IsSelectedFolderDrafts)
+        {
+            await _vm.OpenDraftCommand.ExecuteAsync(null);
+            return;
+        }
+
+        switch (_vm.MessageOpenMode)
+        {
+            case MessageOpenMode.Tab:
+                _vm.OpenMessageTab(summary);
+                break;
+
+            case MessageOpenMode.Window:
+                OpenMessageInNewWindow(summary);
+                break;
+
+            default: // ReadingPane
+                await _vm.SelectMessageCommand.ExecuteAsync(summary);
+                if (_vm.IsMessageOpen && _vm.MessageDetail != null)
+                    await ShowMessageBodyAsync(_vm.MessageDetail);
+                break;
+        }
+    }
+
+    private void TabCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: TabSessionViewModel tab }) return;
+        _tabStripCloseInProgress = true;
+        _vm.CloseTab(tab);
+    }
+
+    private void TabStrip_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // Selection changes from two sources:
+        // 1. User clicks a tab → ListBox updates SelectedItem → binding updates _vm.ActiveTab
+        // 2. VM updates _vm.ActiveTab (Ctrl+Tab etc) → binding updates ListBox.SelectedItem
+        // In both cases the binding fires OnActiveTabChangedAsync via PropertyChanged.
+        // Nothing extra needed here; the handler is wired for drag/drop future use.
+    }
+
+    private async Task OnActiveTabChangedAsync()
+    {
+        var version = Interlocked.Increment(ref _tabChangedVersion);
+
+        // Capture and clear before any await so concurrent calls see a clean state.
+        var closeInProgress = _tabStripCloseInProgress;
+        _tabStripCloseInProgress = false;
+
+        var tab = _vm.ActiveTab;
+        if (tab == null)
+        {
+            _vm.IsMessageOpen = false;
+            return;
+        }
+
+        // Message-list tab: show the list, hide reading pane, done.
+        if (tab is MessageListTabViewModel)
+        {
+            _vm.IsMessageOpen = false;
+            _vm.MessageDetail = null;
+            if (closeInProgress)
+                await Dispatcher.InvokeAsync(FocusActiveTabStripItem, DispatcherPriority.Input);
+            else
+                FocusActiveMessagePanel();
+            return;
+        }
+
+        if (tab is not MessageTabViewModel msgTab) return;
+
+        // Scroll active tab into view in the strip (fire-and-forget).
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            if (TabStrip.SelectedItem != null)
+                TabStrip.ScrollIntoView(TabStrip.SelectedItem);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+        // Load via SelectMessageCommand (handles SelectedMessage, IsRead, cache, etc.)
+        await _vm.SelectMessageCommand.ExecuteAsync(msgTab.Summary);
+        if (version != _tabChangedVersion) return;
+
+        // Use MessageDetail directly rather than IsMessageOpen: IsMessageOpen is set by
+        // SelectMessageAsync and reflects MessageOpenMode, but tabs always need the reading
+        // pane visible regardless of the mode (e.g. a tab opened via Move to Main Window
+        // while in Window mode). Force it true whenever we have a loaded detail.
+        if (_vm.MessageDetail != null)
+        {
+            _vm.IsMessageOpen = true;
+            msgTab.Detail   = _vm.MessageDetail;
+            msgTab.IsLoaded = true;
+            await ShowMessageBodyAsync(_vm.MessageDetail);
+        }
+        if (version != _tabChangedVersion) return;
+
+        // When triggered by the close button, return focus to the tab strip rather than
+        // leaving it in the reading pane. This await runs after ShowMessageBodyAsync has
+        // already dispatched its own Input-priority focus calls, so it wins.
+        if (closeInProgress)
+            await Dispatcher.InvokeAsync(FocusActiveTabStripItem, DispatcherPriority.Input);
+    }
+
+    private void OpenTabList()
+    {
+        var tabListWindow = new TabListWindow(_vm);
+        tabListWindow.Owner = this;
+
+        // Position the overlay near the centre/top of the main window.
+        tabListWindow.Left = Left + (ActualWidth  - tabListWindow.Width)  / 2;
+        tabListWindow.Top  = Top  + (ActualHeight - 400) / 3;
+
+        tabListWindow.ShowDialog();
+
+        // If the user activated a tab, load its message.
+        if (tabListWindow.DialogResult == true)
+            _ = OnActiveTabChangedAsync();
+    }
+
+    private void OpenMessageInNewWindow(MailMessageSummary summary)
+    {
+        var winVm = new MessageWindowViewModel
+        {
+            OriginalSummary = summary,
+            SelectedMessage = summary,
+        };
+
+        // Populate the surrounding message list so Prev/Next navigation works (issue 41).
+        foreach (var msg in _vm.Messages)
+            winVm.MessageList.Add(msg);
+
+        // Pre-populate detail if already loaded in the reading pane (issue 48).
+        if (_vm.SelectedMessage?.MessageId == summary.MessageId && _vm.MessageDetail != null)
+            winVm.MessageDetail = _vm.MessageDetail;
+
+        // The reading pane must not show while the message is in a separate window.
+        _vm.IsMessageOpen = false;
+
+        // Track that a message window is open so sync guards and commands work (issue 43).
+        _vm.IsMessageOpenInWindow = true;
+
+        // Capture the originating message list item for focus restoration on close (issue 46).
+        var originatingIndex = _vm.Messages.IndexOf(summary);
+
+        // Do NOT set Owner = this. Owned windows share the main window's HWND context,
+        // which causes screen readers to keep browse mode active for the message window's
+        // WebView2 even after the user alt-tabs back to the main window. As an independent
+        // window, the AT cleanly exits browse mode when focus leaves the message window.
+        var win = new MessageWindow(winVm, _imap, _localStore, _webViewEnvironment);
+        win.MoveToMainWindowRequested += (_, vm) =>
+        {
+            if (vm.OriginalSummary != null)
+                _vm.OpenMessageTab(vm.OriginalSummary);
+        };
+        win.Closed += (_, _) =>
+        {
+            _vm.IsMessageOpenInWindow =
+                Application.Current.Windows.OfType<MessageWindow>().Any();
+
+            // Restore focus to the originating message list item (issue 46).
+            Dispatcher.InvokeAsync(() =>
+            {
+                FocusActiveMessagePanel();
+                if (originatingIndex >= 0 && originatingIndex < MessageList.Items.Count)
+                    MessageList.ScrollIntoView(MessageList.Items[originatingIndex]);
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        };
+
+        // Offset from previous windows so they don't stack exactly.
+        var offset = Application.Current.Windows.OfType<MessageWindow>().Count() * 24;
+        win.Left = Left + 60 + offset;
+        win.Top  = Top  + 40 + offset;
+
+        win.Show();
+    }
+
+    private void PromoteTabToWindow(MessageTabViewModel tab)
+    {
+        _vm.CloseTab(tab);
+        OpenMessageInNewWindow(tab.Summary);
+    }
+
+    // ── Tab strip keyboard navigation (issue 52 Bug 1) ─────────────────────────
+
+    // True while the user is arrowing through the tab strip without activating a tab.
+    // Prevents PropertyChanged on ActiveTab from loading the message body during navigation.
+    private bool _tabStripArrowNavInProgress;
+
+    // True when a tab was closed via its ✕ button. Causes OnActiveTabChangedAsync to
+    // return focus to the tab strip instead of moving it into the reading pane or message list.
+    private bool _tabStripCloseInProgress;
+
+    // Incremented at the start of every OnActiveTabChangedAsync invocation so that
+    // concurrent calls can detect they've been superseded and bail out after each await.
+    private int _tabChangedVersion;
+
+    private void FocusActiveTabStripItem()
+    {
+        var idx = TabStrip.SelectedIndex;
+        if (idx < 0 || idx >= TabStrip.Items.Count) return;
+        if (TabStrip.ItemContainerGenerator.ContainerFromIndex(idx) is ListBoxItem item)
+        {
+            TabStrip.ScrollIntoView(TabStrip.Items[idx]);
+            item.Focus();
+        }
+    }
+
+    private void TabStrip_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        switch (key)
+        {
+            case Key.Left:
+                _tabStripArrowNavInProgress = true;
+                SelectAdjacentTab(-1);
+                e.Handled = true;
+                break;
+            case Key.Right:
+                _tabStripArrowNavInProgress = true;
+                SelectAdjacentTab(+1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+            case Key.Down:
+                _tabStripArrowNavInProgress = true;
+                e.Handled = true;
+                break;
+            case Key.Return:
+            case Key.Space:
+                _tabStripArrowNavInProgress = false;
+                _ = OnActiveTabChangedAsync();
+                e.Handled = true;
+                break;
+            default:
+                _tabStripArrowNavInProgress = false;
+                break;
+        }
+    }
+
+    // Arrow navigation within the tab strip. Stops are: tab item, close button (if visible), next tab item, ...
+    // PreviewKeyDown fires on the ListBox even when focus is inside a child (e.g. the close button),
+    // so this method handles both cases.
+    private void SelectAdjacentTab(int delta)
+    {
+        var focused = Keyboard.FocusedElement as UIElement;
+        var isOnClose = focused is Button;
+
+        // Find the ListBoxItem that currently owns focus.
+        DependencyObject? walk = focused;
+        ListBoxItem? currentItem = null;
+        while (walk != null)
+        {
+            if (walk is ListBoxItem lbi) { currentItem = lbi; break; }
+            walk = System.Windows.Media.VisualTreeHelper.GetParent(walk);
+        }
+        var currentIdx = currentItem != null
+            ? TabStrip.ItemContainerGenerator.IndexFromContainer(currentItem)
+            : TabStrip.SelectedIndex;
+        if (currentIdx < 0) return;
+
+        if (delta > 0) // Right
+        {
+            if (!isOnClose)
+            {
+                // Try the close button of the current tab first.
+                var closeBtn = FindTabCloseButton(currentIdx);
+                if (closeBtn != null) { closeBtn.Focus(); return; }
+            }
+            // Move to the next tab item.
+            var nextIdx = currentIdx + 1;
+            if (nextIdx >= TabStrip.Items.Count) return;
+            TabStrip.SelectedIndex = nextIdx;
+            (TabStrip.ItemContainerGenerator.ContainerFromIndex(nextIdx) as ListBoxItem)?.Focus();
+        }
+        else // Left
+        {
+            if (isOnClose)
+            {
+                // Back to the tab item itself.
+                currentItem?.Focus();
+                return;
+            }
+            // Move to the previous tab. Land on its close button if it has one.
+            var prevIdx = currentIdx - 1;
+            if (prevIdx < 0) return;
+            TabStrip.SelectedIndex = prevIdx;
+            var prevItem = TabStrip.ItemContainerGenerator.ContainerFromIndex(prevIdx) as ListBoxItem;
+            var prevClose = prevItem != null ? FindTabCloseButton(prevIdx) : null;
+            if (prevClose != null) prevClose.Focus();
+            else prevItem?.Focus();
+        }
+    }
+
+    private Button? FindTabCloseButton(int tabIndex)
+    {
+        if (TabStrip.ItemContainerGenerator.ContainerFromIndex(tabIndex) is not ListBoxItem item)
+            return null;
+        return FindVisualDescendant<Button>(item, b => b.IsVisible);
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject parent, Func<T, bool>? predicate = null)
+        where T : DependencyObject
+    {
+        int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T match && (predicate == null || predicate(match))) return match;
+            var found = FindVisualDescendant<T>(child, predicate);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private void TabStrip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        => _tabStripArrowNavInProgress = false;
+
+    private void TabStrip_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        => _tabStripArrowNavInProgress = false;
+
+    private void TabStrip_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        AccessibilityHelper.Announce(
+            this,
+            "Ctrl+Tab for next tab, Ctrl+Shift+Tab for previous, Ctrl+W to close.",
+            category: AnnouncementCategory.Hint);
     }
 
     // ── Folder context menu handlers ─────────────────────────────────────────

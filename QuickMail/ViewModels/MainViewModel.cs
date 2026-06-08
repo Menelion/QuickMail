@@ -250,6 +250,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private bool _isMessageOpen;
 
+
     [ObservableProperty]
     private ViewMode _viewMode = ViewMode.Messages;
 
@@ -416,6 +417,204 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    // ── Tab & Window Management (Phase 6) ────────────────────────────────────────
+
+    [ObservableProperty]
+    private BatchObservableCollection<TabSessionViewModel> _openTabs = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReadingPaneVisible))]
+    private TabSessionViewModel? _activeTab;
+
+    /// <summary>
+    /// True when a message is open in a standalone MessageWindow (Window mode).
+    /// Used to suppress background-sync focus interruptions and gate commands
+    /// (e.g. Grab Addresses) while the main window's reading pane is empty.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isMessageOpenInWindow;
+
+    /// <summary>True when the tab strip should be visible.</summary>
+    public bool ShowTabStrip => OpenTabs.Count > 0 || MessageOpenMode == MessageOpenMode.Tab;
+
+    /// <summary>
+    /// True when the inline reading pane should be shown.
+    /// In ReadingPane mode this is driven by IsMessageOpen.
+    /// In Tab/Window mode the reading pane is driven by the active tab, but the
+    /// existing IsMessageOpen flag is still used as the gate (it is set when
+    /// the active tab activates its message).
+    /// </summary>
+    public bool ReadingPaneVisible => IsMessageOpen;
+
+    /// <summary>Current message open mode, read from config on startup.</summary>
+    public MessageOpenMode MessageOpenMode { get; private set; } = MessageOpenMode.ReadingPane;
+
+    // ── Tab commands ──────────────────────────────────────────────────────────────
+
+    public void OpenMessageTab(MailMessageSummary summary)
+    {
+        EnsureMessageListTab(); // no-op unless Tab mode is active
+
+        // Duplicate: activate the existing tab if already open.
+        var existing = OpenTabs.OfType<MessageTabViewModel>()
+                               .FirstOrDefault(t => t.Summary.MessageId == summary.MessageId
+                                                 && t.Summary.AccountId == summary.AccountId);
+        if (existing != null)
+        {
+            ActiveTab = existing;
+            return;
+        }
+
+        var tab = new MessageTabViewModel(summary)
+        {
+            SourceFolderName = summary.FolderName,
+            AccountId        = summary.AccountId,
+        };
+        tab.CloseRequested += t => CloseTab(t);
+        OpenTabs.Add(tab);
+        ActiveTab = tab;
+        OnPropertyChanged(nameof(ShowTabStrip));
+        var msgTabCount = OpenTabs.OfType<MessageTabViewModel>().Count();
+        Announce($"Opened tab: {tab.Title}. {msgTabCount} tab{(msgTabCount == 1 ? "" : "s")} open.");
+    }
+
+    public void CloseTab(TabSessionViewModel tab)
+    {
+        if (tab is MessageListTabViewModel) return; // permanent tab, never closed by user
+
+        var idx = OpenTabs.IndexOf(tab);
+        if (idx < 0) return;
+
+        OpenTabs.Remove(tab);
+        OnPropertyChanged(nameof(ShowTabStrip));
+
+        var remaining = OpenTabs.OfType<MessageTabViewModel>().Count();
+        Announce($"Closed tab: {tab.Title}. {remaining} tab{(remaining == 1 ? "" : "s")} remaining.");
+
+        if (ActiveTab == tab)
+        {
+            var msgListTab = OpenTabs.OfType<MessageListTabViewModel>().FirstOrDefault();
+            if (OpenTabs.Count == 0 || (msgListTab != null && OpenTabs.Count == 1))
+            {
+                // Only the message list tab (or nothing) remains.
+                ActiveTab     = msgListTab;
+                IsMessageOpen = false;
+                MessageDetail = null;
+            }
+            else
+            {
+                // Activate the tab at the same position, or the last one.
+                ActiveTab = OpenTabs[Math.Min(idx, OpenTabs.Count - 1)];
+            }
+        }
+    }
+
+    public void ActivateNextTab()
+    {
+        var messageTabs = OpenTabs.OfType<MessageTabViewModel>().ToList();
+        if (messageTabs.Count == 0) return;
+        var cur = ActiveTab as MessageTabViewModel;
+        var idx = cur == null ? 0 : (messageTabs.IndexOf(cur) + 1) % messageTabs.Count;
+        ActiveTab = messageTabs[idx];
+        Announce($"Tab {idx + 1} of {messageTabs.Count}: {ActiveTab.Title}.");
+    }
+
+    public void ActivatePrevTab()
+    {
+        var messageTabs = OpenTabs.OfType<MessageTabViewModel>().ToList();
+        if (messageTabs.Count == 0) return;
+        var cur = ActiveTab as MessageTabViewModel;
+        var idx = cur == null ? messageTabs.Count - 1
+                              : (messageTabs.IndexOf(cur) - 1 + messageTabs.Count) % messageTabs.Count;
+        ActiveTab = messageTabs[idx];
+        Announce($"Tab {idx + 1} of {messageTabs.Count}: {ActiveTab.Title}.");
+    }
+
+    public void ActivateTabByIndex(int oneBasedIndex)
+    {
+        if (oneBasedIndex < 1 || oneBasedIndex > OpenTabs.Count) return;
+        ActiveTab = OpenTabs[oneBasedIndex - 1];
+    }
+
+    public void ActivateLastTab()
+    {
+        if (OpenTabs.Count == 0) return;
+        ActiveTab = OpenTabs[^1];
+    }
+
+    public void MoveTabLeft()
+    {
+        if (ActiveTab is not MessageTabViewModel) return;
+        var idx = OpenTabs.IndexOf(ActiveTab);
+        // Don't move before the message list tab (always index 0 in Tab mode).
+        var minIdx = OpenTabs.OfType<MessageListTabViewModel>().Any() ? 1 : 0;
+        if (idx <= minIdx) return;
+        OpenTabs.Move(idx, idx - 1);
+        Announce($"Tab moved to position {idx}.");
+    }
+
+    public void MoveTabRight()
+    {
+        if (ActiveTab is not MessageTabViewModel) return;
+        var idx = OpenTabs.IndexOf(ActiveTab);
+        if (idx < 0 || idx >= OpenTabs.Count - 1) return;
+        OpenTabs.Move(idx, idx + 1);
+        Announce($"Tab moved to position {idx + 2}.");
+    }
+
+    public void CloseAllOtherTabs()
+    {
+        if (ActiveTab == null || OpenTabs.Count <= 1) return;
+        var toClose = OpenTabs.Where(t => t != ActiveTab && t is not MessageListTabViewModel).ToList();
+        if (toClose.Count == 0) return;
+        using (OpenTabs.BeginBatchScope())
+            foreach (var t in toClose) OpenTabs.Remove(t);
+        OnPropertyChanged(nameof(ShowTabStrip));
+    }
+
+    /// <summary>
+    /// Raised to ask MainWindow to promote the given tab to a new MessageWindow.
+    /// </summary>
+    public event Action<MessageTabViewModel>? TabPromoteToWindowRequested;
+
+    public void PromoteActiveTabToWindow()
+    {
+        if (ActiveTab is not MessageTabViewModel msgTab) return;
+        TabPromoteToWindowRequested?.Invoke(msgTab);
+    }
+
+    // ── Message-list tab (Tab mode) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Ensures the permanent message-list tab is first in OpenTabs when Tab mode is active.
+    /// No-op in ReadingPane or Window mode, and no-op if the tab already exists.
+    /// </summary>
+    public void EnsureMessageListTab()
+    {
+        if (MessageOpenMode != MessageOpenMode.Tab) return;
+        if (OpenTabs.OfType<MessageListTabViewModel>().Any()) return;
+
+        var tab = new MessageListTabViewModel();
+        OpenTabs.Insert(0, tab);
+        if (ActiveTab == null) ActiveTab = tab;
+        OnPropertyChanged(nameof(ShowTabStrip));
+    }
+
+    /// <summary>Removes the message-list tab when leaving Tab mode.</summary>
+    private void RemoveMessageListTab()
+    {
+        var tab = OpenTabs.OfType<MessageListTabViewModel>().FirstOrDefault();
+        if (tab == null) return;
+        OpenTabs.Remove(tab);
+        if (ActiveTab == tab)
+        {
+            ActiveTab     = OpenTabs.Count > 0 ? OpenTabs[0] : null;
+            IsMessageOpen = false;
+            MessageDetail = null;
+        }
+        OnPropertyChanged(nameof(ShowTabStrip));
+    }
+
     /// <summary>When true the app was launched with --online: all folder/message data is fetched
     /// live from IMAP and nothing is read from or written to the local SQLite cache.</summary>
     public bool OnlineMode { get; }
@@ -453,6 +652,8 @@ public partial class MainViewModel : ObservableObject
         _showPreview = _previewLines > 0;
         _syncDays = cfg.SyncDays;
         _viewMode = ConfigModel.ParseViewMode(cfg.ViewMode);
+        MessageOpenMode = cfg.Windowing.MessageOpenMode;
+        EnsureMessageListTab();
         _activeSort = ConfigModel.ParseSort(cfg.Sort);
 
         _syncService.FolderSynced    += OnFolderSynced;
@@ -802,6 +1003,25 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(SyncRangeLabel));
 
         ActiveSort = ConfigModel.ParseSort(cfg.Sort);
+
+        var prevMode    = MessageOpenMode;
+        MessageOpenMode = cfg.Windowing.MessageOpenMode;
+        if (prevMode != MessageOpenMode && MessageOpenMode != MessageOpenMode.ReadingPane)
+        {
+            // Switched away from Reading Pane — hide the inline reading pane.
+            IsMessageOpen = false;
+            MessageDetail = null;
+        }
+        if (prevMode == MessageOpenMode.Tab && MessageOpenMode != MessageOpenMode.Tab)
+        {
+            // Clear all tabs — both message tabs and the sentinel — so the strip
+            // is not visible in the new mode with blank, unrenderable tabs.
+            OpenTabs.Clear();
+            ActiveTab = null;
+            OnPropertyChanged(nameof(ShowTabStrip));
+        }
+        else
+            EnsureMessageListTab();
 
         if (_syncDays != prevSyncDays)
             _ = RefreshAsync();
@@ -2079,7 +2299,8 @@ public partial class MainViewModel : ObservableObject
                 return;
 
             MessageDetail = detail;
-            IsMessageOpen = true;
+            // Window mode shows messages in standalone windows; never open the reading pane there.
+            IsMessageOpen = MessageOpenMode != MessageOpenMode.Window;
             summary.IsRead = true;
             summary.HasAttachments = detail.Attachments.Count > 0;
             if (!OnlineMode)
@@ -3012,6 +3233,7 @@ public partial class MainViewModel : ObservableObject
 
             var model = new ComposeModel
             {
+                Kind            = ComposeKind.EditDraft,
                 AccountId       = summary.AccountId,
                 To              = detail.To,
                 Cc              = detail.Cc,
