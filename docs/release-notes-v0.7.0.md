@@ -79,21 +79,37 @@ With `Ctrl+1`–`8` now doing double duty (pane focus when no tabs are open; tab
 
 ## Bug Fixes
 
+### Tabs and windows
+
 - **Message window Previous/Next navigation was always disabled.** The message list was not being populated when a window opened, so the navigation buttons had nothing to navigate. The window now receives the full message list from the originating folder.
 - **Message window re-fetched the message body even when it was already loaded.** Opening a window from the main reading pane now reuses the already-loaded message detail instead of making a redundant IMAP request.
 - **Message window did not cancel in-flight IMAP loads when closed or navigated.** A `CancellationTokenSource` now cancels any active fetch when the window closes or when the user navigates to a different message.
-- **Arrow keys in the tab strip activated a message load.** Moving between tabs with the keyboard triggered `OnActiveTabChangedAsync`, which loaded the message body and moved focus away from the tab strip. Arrow-key navigation now only highlights tabs; focus on the message loads when Enter or Space is pressed.
+- **Blank message tab when using Move to Main Window.** Using "Move to Main Window" in Window mode opened a tab that appeared empty. Fixed by correcting the condition that gates message rendering in tabs.
+- **Arrow keys in the tab strip activated a message load.** Moving between tabs with the keyboard triggered `OnActiveTabChangedAsync`, which loaded the message body and moved focus away from the tab strip. Arrow-key navigation now only highlights tabs; the message loads when Enter or Space is pressed.
+- **Rapid tab switching could show stale message content.** A version stamp on tab activation prevents a slower IMAP load started for an earlier tab from overwriting the content of a tab the user has already moved on from.
+- **`Ctrl+Tab` could land on the permanent Messages tab.** Cycling through tabs now skips the non-closeable Messages sentinel and wraps through message tabs only.
+- **Switching from Tab mode left orphaned tabs visible.** Changing Reading mode to Reading Pane or Window now clears all open message tabs, not just the sentinel, preventing a visible tab strip with unrenderable entries.
 - **Focus was not restored to the message list when a message window closed.** The main window now scrolls back to the row that was selected when the window opened.
 - **Sync guards and address-grab availability did not account for messages open in windows.** Commands that should remain available while reading a message (`Grab Addresses`, sync-related guards) now check whether a message is open in a window, not only whether the reading pane is visible.
-- **MessageListTabViewModel sentinel tab** was missing. In Tab mode, the tab strip was hidden when no message tabs were open, stranding keyboard focus. A non-closeable "Messages" sentinel tab is now always present in Tab mode so the strip stays visible and the focus cycle remains intact.
+- **MessageListTabViewModel sentinel tab was missing.** In Tab mode, the tab strip was hidden when no message tabs were open, stranding keyboard focus. A non-closeable "Messages" sentinel tab is now always present in Tab mode so the strip stays visible and the focus cycle remains intact.
 - **Reading pane stayed visible when a message opened in Window mode.** When Reading mode was set to Window, the reading pane was not always cleared before the new window opened, leaving the previous message visible in the background.
 - **Deferred selection update could reopen the reading pane in Window mode.** A background `SelectMessageAsync` completion could arrive after a Window-mode open was already in progress and re-show the reading pane. Async version stamps now discard these stale completions.
 - **Closing a tab moved focus to the reading pane instead of the tab strip.** After the active tab closed, focus jumped to the message list or reading pane. Focus now stays on the tab strip, landing on the next logical tab.
+
+### IMAP compatibility
+
+- **Delete and Empty Trash now work on Courier IMAP.** Special-use folder attributes (`\Trash`, `\Sent`, etc.) are not advertised by all IMAP servers. A name-based fallback now classifies folders named "Trash", "Sent", etc. correctly without the attributes, fixing folder detection, All Mail exclusion, delete, and Empty Trash on Courier and other servers that omit these attributes.
+- **Messages with malformed MIME parts now open.** HTML and plain-text body fetches now use separate try/catch scopes so a message with malformed MIME entity headers opens with whatever body parts could be fetched rather than failing to open entirely.
+
+### Startup
+
+- **Default saved view now appears at startup, not after sync.** When a default saved view is set, the app previously loaded all mail into the All Mail view first, then switched to the default view only after the full background sync completed (~20–40 seconds). The default view is now applied as soon as connections are established (~4 seconds), so the correct view is shown throughout the sync period.
 
 ---
 
 ## Internal
 
+- **Database schema migration to v2.** The `unique_id` column (previously INTEGER) is now stored as TEXT throughout the SQLite schema, making message identifiers backend-agnostic. The migration runs automatically at first launch and creates a backup of `mail.db` as `mail.db.pre-v2` before migrating. The backup is safe to delete once you have verified the app is working correctly.
 - `MessageBodyHtmlBuilder` — new shared static class extracts all HTML rendering helpers (reader-mode detection, sanitization, plain-text auto-linking, heavy-HTML stripping) from both `MainWindow.xaml.cs` and `MessageWindow.xaml.cs`. Previously the ~150-line render pipeline was duplicated verbatim in both files.
 - `MessageListTabViewModel` — new sentinel VM for the non-closeable "Messages" tab in Tab mode; extends `TabSessionViewModel` with `CanClose = false`.
 - `TabSessionModel.TabKind` gains a `MessageList` variant for the sentinel tab.
