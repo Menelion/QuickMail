@@ -127,6 +127,8 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 - [sofquipeut](https://github.com/sofquipeut)
 - [taylorarndt](https://github.com/taylorarndt)
 
+Note: Others have made contributions through various social media platforms that are not listed here yet.
+
 ---
 
 ## Internal
