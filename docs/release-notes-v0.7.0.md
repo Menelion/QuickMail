@@ -107,6 +107,28 @@ With `Ctrl+1`–`8` now doing double duty (pane focus when no tabs are open; tab
 
 ---
 
+## Thank You to Contributors
+
+Thank you to everyone who has contributed to QuickMail through code, bug reports, feature suggestions, and other feedback. Your contributions make the project better for everyone.
+
+**Code contributions:**
+- [CityDweller](https://github.com/CityDweller) — Microsoft Graph backend groundwork: IMailService refactoring, string MessageId migration, backend router and feature gate scaffolding
+- [Menelion](https://github.com/Menelion) — Windows installer (Inno Setup)
+- [serrebidev](https://github.com/serrebidev) — Pooled IMAP connections, virtualized folder picker, HTML rendering improvements
+
+**Issues and feedback:**
+- [CityDweller](https://github.com/CityDweller)
+- [Dennisl123](https://github.com/Dennisl123)
+- [jaybird110127](https://github.com/jaybird110127)
+- [KE8UPE](https://github.com/KE8UPE)
+- [paoscripts](https://github.com/paoscripts)
+- [serrebidev](https://github.com/serrebidev)
+- [slannon97](https://github.com/slannon97)
+- [sofquipeut](https://github.com/sofquipeut)
+- [taylorarndt](https://github.com/taylorarndt)
+
+---
+
 ## Internal
 
 - `MessageBodyHtmlBuilder` — new shared static class extracts all HTML rendering helpers (reader-mode detection, sanitization, plain-text auto-linking, heavy-HTML stripping) from both `MainWindow.xaml.cs` and `MessageWindow.xaml.cs`. Previously the ~150-line render pipeline was duplicated verbatim in both files.
