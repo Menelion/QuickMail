@@ -420,9 +420,7 @@ public partial class MainViewModel : ObservableObject
     // ── Tab & Window Management (Phase 6) ────────────────────────────────────────
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowTabStrip))]
-    [NotifyPropertyChangedFor(nameof(ReadingPaneVisible))]
-    private ObservableCollection<TabSessionViewModel> _openTabs = [];
+    private BatchObservableCollection<TabSessionViewModel> _openTabs = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReadingPaneVisible))]
@@ -568,7 +566,9 @@ public partial class MainViewModel : ObservableObject
     {
         if (ActiveTab == null || OpenTabs.Count <= 1) return;
         var toClose = OpenTabs.Where(t => t != ActiveTab && t is not MessageListTabViewModel).ToList();
-        foreach (var t in toClose) OpenTabs.Remove(t);
+        if (toClose.Count == 0) return;
+        using (OpenTabs.BeginBatchScope())
+            foreach (var t in toClose) OpenTabs.Remove(t);
         OnPropertyChanged(nameof(ShowTabStrip));
     }
 

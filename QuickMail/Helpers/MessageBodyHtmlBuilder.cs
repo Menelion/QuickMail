@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Text.RegularExpressions;
 using QuickMail.Models;
+using QuickMail.Services;
 
 namespace QuickMail.Helpers;
 
@@ -157,7 +158,11 @@ public static class MessageBodyHtmlBuilder
     public static string SafeRegexReplace(string input, string pattern, string replacement, RegexOptions options)
     {
         try { return Regex.Replace(input, pattern, replacement, options, HtmlRegexTimeout); }
-        catch (RegexMatchTimeoutException) { return input; }
+        catch (RegexMatchTimeoutException)
+        {
+            LogService.Log($"HTML cleanup timed out for pattern: {pattern}");
+            return input;
+        }
     }
 
     public static string Truncate(string value, int maxChars)
