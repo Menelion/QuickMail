@@ -195,11 +195,16 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.ActiveTab) && !_tabStripArrowNavInProgress)
                 await OnActiveTabChangedAsync();
 
-            // WebView2 is a Win32 HWND and remains accessible to screen readers even when
-            // its WPF container is Visibility=Collapsed. Clear the document when the reading
-            // pane closes so AT browse-mode has no stale message content to navigate into.
             if (e.PropertyName == nameof(MainViewModel.IsMessageOpen) && !_vm.IsMessageOpen && _webViewReady)
                 MessageBody.CoreWebView2.NavigateToString("<html><body></body></html>");
+
+            // Lazy-initialize the reading pane WebView2 the first time the user switches
+            // away from Window mode (the HWND was intentionally skipped at startup).
+            if (e.PropertyName == nameof(MainViewModel.MessageOpenMode)
+                && _vm.MessageOpenMode != MessageOpenMode.Window
+                && !_webViewReady
+                && _webViewEnvironment != null)
+                _ = InitReadingPaneWebViewAsync();
         };
 
         // Re-focus the active message panel whenever the message collections are replaced
@@ -707,81 +712,26 @@ public partial class MainWindow : Window
             execute: () => { if (_vm.SelectedMessage != null) OpenMessageInNewWindow(_vm.SelectedMessage); },
             isAvailable: () => _vm.SelectedMessage != null));
 
-        // Initialise the embedded browser.  Wire Escape before doing anything else.
+        // Create the WebView2 environment — always needed, shared with MessageWindow instances.
         try
         {
             var userDataFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "QuickMail", "WebView2");
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await MessageBody.EnsureCoreWebView2Async(_webViewEnvironment);
-            _webViewReady = true;
-
-            // Disable unnecessary browser chrome / context menus
-            MessageBody.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-            MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
-
-            // Inject Escape, F6, and Shift+Tab relay into every page at the host level — runs before any CSP.
-            await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                "window.addEventListener('keydown',function(e){"
-                +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
-                +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
-                +"else if(e.ctrlKey&&(e.key==='2'||e.key==='y'||e.key==='Y')){window.chrome.webview.postMessage('focus-folders');e.preventDefault();}"
-                +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
-                +"});");
-
-            // JavaScript in every page posts a message when Escape, F6, or Shift+Tab is pressed,
-            // which we relay back to WPF to move focus appropriately.
-            MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
-            {
-                var msg = args.TryGetWebMessageAsString();
-                if (msg == "escape")
-                    Dispatcher.InvokeAsync(CloseReadingPane, DispatcherPriority.Input);
-                else if (msg == "f6")
-                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
-                else if (msg == "shift-f6")
-                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
-                else if (msg == "focus-folders")
-                    Dispatcher.InvokeAsync(FocusFolderTree, DispatcherPriority.Input);
-                else if (msg == "shift-tab")
-                    Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
-            };
-
-            // Open clicked links in the user's default browser instead of replacing
-            // the reading-pane document. NavigateToString sets the document URI to
-            // "about:blank", so allow that for the initial render and block everything else.
-            // quickmail: URIs are handled internally for calendar invite actions.
-            MessageBody.CoreWebView2.NavigationStarting += (_, args) =>
-            {
-                var uri = args.Uri;
-                if (string.IsNullOrEmpty(uri) ||
-                    uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
-                    uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                    return;
-                args.Cancel = true;
-                if (uri.StartsWith("quickmail:", StringComparison.OrdinalIgnoreCase))
-                {
-                    HandleQuickMailUri(uri);
-                    return;
-                }
-                OpenExternal(uri);
-            };
-            MessageBody.CoreWebView2.NewWindowRequested += (_, args) =>
-            {
-                args.Handled = true;
-                OpenExternal(args.Uri);
-            };
-
-            // WebView2 renderer crash signal — surfaces as a blank reading pane.
-            MessageBody.CoreWebView2.ProcessFailed += (_, args) =>
-                LogService.Log($"[ERROR] WebView2 ProcessFailed kind={args.ProcessFailedKind} exit={args.ExitCode} reason={args.Reason}");
         }
         catch (Exception ex)
         {
-            LogService.Log("WebView2 init failed", ex);
-            // Continue — message body just won't show
+            LogService.Log("WebView2 environment creation failed", ex);
         }
+
+        // Initialize the reading pane WebView2 only when it will actually be used.
+        // In Window mode the reading pane is never shown, and creating the browser
+        // HWND in the main window lets screen readers enter browse mode for it —
+        // causing Down arrow to read message content instead of navigating the list.
+        // Lazy initialization fires when the user switches away from Window mode.
+        if (_vm.MessageOpenMode != MessageOpenMode.Window)
+            await InitReadingPaneWebViewAsync();
 
         var firstAccount = _vm.Accounts.FirstOrDefault();
         if (firstAccount == null)
@@ -1676,6 +1626,72 @@ public partial class MainWindow : Window
         AccessibilityHelper.Announce(this,
             $"{count} message{(count == 1 ? "" : "s")} selected.",
             category: AnnouncementCategory.Result);
+    }
+
+    // One-time setup of the reading pane WebView2. Skipped at startup in Window mode;
+    // called lazily the first time the user switches to ReadingPane or Tab mode.
+    private async Task InitReadingPaneWebViewAsync()
+    {
+        if (_webViewReady || _webViewEnvironment == null) return;
+        try
+        {
+            await MessageBody.EnsureCoreWebView2Async(_webViewEnvironment);
+            _webViewReady = true;
+
+            MessageBody.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            MessageBody.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            MessageBody.CoreWebView2.Settings.IsStatusBarEnabled = false;
+
+            await MessageBody.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                "window.addEventListener('keydown',function(e){"
+                +"if(e.key==='Escape'){window.chrome.webview.postMessage('escape');e.preventDefault();}"
+                +"else if(e.key==='F6'){window.chrome.webview.postMessage(e.shiftKey?'shift-f6':'f6');e.preventDefault();}"
+                +"else if(e.ctrlKey&&(e.key==='2'||e.key==='y'||e.key==='Y')){window.chrome.webview.postMessage('focus-folders');e.preventDefault();}"
+                +"else if(e.key==='Tab'&&e.shiftKey){window.chrome.webview.postMessage('shift-tab');e.preventDefault();}"
+                +"});");
+
+            MessageBody.CoreWebView2.WebMessageReceived += (_, args) =>
+            {
+                var msg = args.TryGetWebMessageAsString();
+                if (msg == "escape")
+                    Dispatcher.InvokeAsync(CloseReadingPane, DispatcherPriority.Input);
+                else if (msg == "f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(true), DispatcherPriority.Input);
+                else if (msg == "shift-f6")
+                    Dispatcher.InvokeAsync(() => _ = CycleFocusAsync(false), DispatcherPriority.Input);
+                else if (msg == "focus-folders")
+                    Dispatcher.InvokeAsync(FocusFolderTree, DispatcherPriority.Input);
+                else if (msg == "shift-tab")
+                    Dispatcher.InvokeAsync(FocusLastHeaderField, DispatcherPriority.Input);
+            };
+
+            MessageBody.CoreWebView2.NavigationStarting += (_, args) =>
+            {
+                var uri = args.Uri;
+                if (string.IsNullOrEmpty(uri) ||
+                    uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
+                    uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    return;
+                args.Cancel = true;
+                if (uri.StartsWith("quickmail:", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleQuickMailUri(uri);
+                    return;
+                }
+                OpenExternal(uri);
+            };
+            MessageBody.CoreWebView2.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                OpenExternal(args.Uri);
+            };
+            MessageBody.CoreWebView2.ProcessFailed += (_, args) =>
+                LogService.Log($"[ERROR] WebView2 ProcessFailed kind={args.ProcessFailedKind} exit={args.ExitCode} reason={args.Reason}");
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("WebView2 reading pane init failed", ex);
+        }
     }
 
     // Render the message body in the browser and move focus into it
@@ -3478,7 +3494,11 @@ public partial class MainWindow : Window
         // Capture the originating message list item for focus restoration on close (issue 46).
         var originatingIndex = _vm.Messages.IndexOf(summary);
 
-        var win = new MessageWindow(winVm, _imap, _localStore, _webViewEnvironment) { Owner = this };
+        // Do NOT set Owner = this. Owned windows share the main window's HWND context,
+        // which causes screen readers to keep browse mode active for the message window's
+        // WebView2 even after the user alt-tabs back to the main window. As an independent
+        // window, the AT cleanly exits browse mode when focus leaves the message window.
+        var win = new MessageWindow(winVm, _imap, _localStore, _webViewEnvironment);
         win.MoveToMainWindowRequested += (_, vm) =>
         {
             if (vm.OriginalSummary != null)
