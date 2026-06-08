@@ -674,7 +674,13 @@ public partial class MainWindow : Window
             id: "tabs.close", category: "View", title: "Close Tab",
             execute: () => { if (_vm.ActiveTab != null) _vm.CloseTab(_vm.ActiveTab); },
             defaultKey: Key.W, defaultModifiers: ModifierKeys.Control,
-            isAvailable: () => _vm.ActiveTab != null));
+            isAvailable: () => _vm.ActiveTab is MessageTabViewModel));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.closeMessage", category: "Mail", title: "Close Message",
+            execute: CloseReadingPane,
+            defaultKey: Key.W, defaultModifiers: ModifierKeys.Control,
+            isAvailable: () => _vm.IsMessageOpen && _vm.MessageOpenMode == MessageOpenMode.ReadingPane));
 
         _registry.Register(new CommandDefinition(
             id: "tabs.closeOthers", category: "View", title: "Close Other Tabs",
@@ -3403,8 +3409,9 @@ public partial class MainWindow : Window
 
     private void TabCloseButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button { Tag: TabSessionViewModel tab })
-            _vm.CloseTab(tab);
+        if (sender is not System.Windows.Controls.Button { Tag: TabSessionViewModel tab }) return;
+        _tabStripCloseInProgress = true;
+        _vm.CloseTab(tab);
     }
 
     private void TabStrip_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -3418,6 +3425,10 @@ public partial class MainWindow : Window
 
     private async Task OnActiveTabChangedAsync()
     {
+        // Capture and clear before any await so concurrent calls see a clean state.
+        var closeInProgress = _tabStripCloseInProgress;
+        _tabStripCloseInProgress = false;
+
         var tab = _vm.ActiveTab;
         if (tab == null)
         {
@@ -3430,7 +3441,10 @@ public partial class MainWindow : Window
         {
             _vm.IsMessageOpen = false;
             _vm.MessageDetail = null;
-            FocusActiveMessagePanel();
+            if (closeInProgress)
+                await Dispatcher.InvokeAsync(FocusActiveTabStripItem, DispatcherPriority.Input);
+            else
+                FocusActiveMessagePanel();
             return;
         }
 
@@ -3451,6 +3465,12 @@ public partial class MainWindow : Window
             msgTab.IsLoaded = true;
             await ShowMessageBodyAsync(_vm.MessageDetail);
         }
+
+        // When triggered by the close button, return focus to the tab strip rather than
+        // leaving it in the reading pane. This await runs after ShowMessageBodyAsync has
+        // already dispatched its own Input-priority focus calls, so it wins.
+        if (closeInProgress)
+            await Dispatcher.InvokeAsync(FocusActiveTabStripItem, DispatcherPriority.Input);
     }
 
     private void OpenTabList()
@@ -3538,16 +3558,40 @@ public partial class MainWindow : Window
     // Prevents PropertyChanged on ActiveTab from loading the message body during navigation.
     private bool _tabStripArrowNavInProgress;
 
+    // True when a tab was closed via its ✕ button. Causes OnActiveTabChangedAsync to
+    // return focus to the tab strip instead of moving it into the reading pane or message list.
+    private bool _tabStripCloseInProgress;
+
+    private void FocusActiveTabStripItem()
+    {
+        var idx = TabStrip.SelectedIndex;
+        if (idx < 0 || idx >= TabStrip.Items.Count) return;
+        if (TabStrip.ItemContainerGenerator.ContainerFromIndex(idx) is ListBoxItem item)
+        {
+            TabStrip.ScrollIntoView(TabStrip.Items[idx]);
+            item.Focus();
+        }
+    }
+
     private void TabStrip_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         switch (key)
         {
             case Key.Left:
+                _tabStripArrowNavInProgress = true;
+                SelectAdjacentTab(-1);
+                e.Handled = true;
+                break;
             case Key.Right:
+                _tabStripArrowNavInProgress = true;
+                SelectAdjacentTab(+1);
+                e.Handled = true;
+                break;
             case Key.Up:
             case Key.Down:
                 _tabStripArrowNavInProgress = true;
+                e.Handled = true;
                 break;
             case Key.Return:
             case Key.Space:
@@ -3559,6 +3603,81 @@ public partial class MainWindow : Window
                 _tabStripArrowNavInProgress = false;
                 break;
         }
+    }
+
+    // Arrow navigation within the tab strip. Stops are: tab item, close button (if visible), next tab item, ...
+    // PreviewKeyDown fires on the ListBox even when focus is inside a child (e.g. the close button),
+    // so this method handles both cases.
+    private void SelectAdjacentTab(int delta)
+    {
+        var focused = Keyboard.FocusedElement as UIElement;
+        var isOnClose = focused is Button;
+
+        // Find the ListBoxItem that currently owns focus.
+        DependencyObject? walk = focused;
+        ListBoxItem? currentItem = null;
+        while (walk != null)
+        {
+            if (walk is ListBoxItem lbi) { currentItem = lbi; break; }
+            walk = System.Windows.Media.VisualTreeHelper.GetParent(walk);
+        }
+        var currentIdx = currentItem != null
+            ? TabStrip.ItemContainerGenerator.IndexFromContainer(currentItem)
+            : TabStrip.SelectedIndex;
+        if (currentIdx < 0) return;
+
+        if (delta > 0) // Right
+        {
+            if (!isOnClose)
+            {
+                // Try the close button of the current tab first.
+                var closeBtn = FindTabCloseButton(currentIdx);
+                if (closeBtn != null) { closeBtn.Focus(); return; }
+            }
+            // Move to the next tab item.
+            var nextIdx = currentIdx + 1;
+            if (nextIdx >= TabStrip.Items.Count) return;
+            TabStrip.SelectedIndex = nextIdx;
+            (TabStrip.ItemContainerGenerator.ContainerFromIndex(nextIdx) as ListBoxItem)?.Focus();
+        }
+        else // Left
+        {
+            if (isOnClose)
+            {
+                // Back to the tab item itself.
+                currentItem?.Focus();
+                return;
+            }
+            // Move to the previous tab. Land on its close button if it has one.
+            var prevIdx = currentIdx - 1;
+            if (prevIdx < 0) return;
+            TabStrip.SelectedIndex = prevIdx;
+            var prevItem = TabStrip.ItemContainerGenerator.ContainerFromIndex(prevIdx) as ListBoxItem;
+            var prevClose = prevItem != null ? FindTabCloseButton(prevIdx) : null;
+            if (prevClose != null) prevClose.Focus();
+            else prevItem?.Focus();
+        }
+    }
+
+    private Button? FindTabCloseButton(int tabIndex)
+    {
+        if (TabStrip.ItemContainerGenerator.ContainerFromIndex(tabIndex) is not ListBoxItem item)
+            return null;
+        return FindVisualDescendant<Button>(item, b => b.IsVisible);
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject parent, Func<T, bool>? predicate = null)
+        where T : DependencyObject
+    {
+        int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T match && (predicate == null || predicate(match))) return match;
+            var found = FindVisualDescendant<T>(child, predicate);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private void TabStrip_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)

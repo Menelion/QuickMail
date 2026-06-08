@@ -85,7 +85,8 @@ public partial class MessageWindow : Window
 
         _localRegistry.Register(new CommandDefinition(
             id: "window.close", category: "View", title: "Close Window",
-            execute: Close));
+            execute: Close,
+            defaultKey: Key.W, defaultModifiers: ModifierKeys.Control));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -325,7 +326,7 @@ public partial class MessageWindow : Window
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var mod = Keyboard.Modifiers;
 
-        if (key == Key.Escape)
+        if (key == Key.Escape || (key == Key.W && mod == ModifierKeys.Control))
         {
             Close();
             e.Handled = true;
