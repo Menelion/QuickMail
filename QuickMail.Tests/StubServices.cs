@@ -105,6 +105,7 @@ sealed class StubContactService : IContactService
     public Task<List<ContactModel>> SearchContactsAsync(string prefix, CancellationToken ct = default) => Task.FromResult(new List<ContactModel>());
     public Task<List<ContactModel>> LoadAllContactsAsync() => Task.FromResult(new List<ContactModel>());
     public Task DeleteContactAsync(int id) => Task.CompletedTask;
+    public Task<bool> UpdateContactAsync(int id, string displayName, string emailAddress) => Task.FromResult(true);
 
     // Groups — no-op stubs. Tests that need real group behaviour construct
     // a real ContactService pointed at a temp directory.

@@ -14,6 +14,7 @@
         PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style x:Key="InsertRow" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed"/>
             <Style.Triggers>
@@ -64,61 +65,110 @@
                                 MinWidth="50" TabIndex="3"/>
                     </StackPanel>
 
-                    <!-- Add-contact form + action buttons -->
+                    <!-- Contact detail fields + action buttons -->
                     <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                        <Label Grid.Column="0"
-                               x:Name="NewNameLabel"
-                               Content="_Name:"
-                               Target="{Binding ElementName=NewNameBox}"
-                               VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1"
-                                 x:Name="NewNameBox"
-                                 Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.LabeledBy="{Binding ElementName=NewNameLabel}"
-                                 TextChanged="NewNameBox_TextChanged"
-                                 Margin="4,0" TabIndex="5"/>
+                        <!-- Row 0: Name + Email (always visible, readonly unless editing) -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                        <Label Grid.Column="2"
-                               x:Name="NewEmailLabel"
-                               Content="_Email:"
-                               Target="{Binding ElementName=NewEmailBox}"
-                               VerticalAlignment="Center"
-                               Margin="8,0,0,0"/>
-                        <TextBox Grid.Column="3"
-                                 x:Name="NewEmailBox"
-                                 Text="{Binding NewEmail, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.LabeledBy="{Binding ElementName=NewEmailLabel}"
-                                 TextChanged="NewEmailBox_TextChanged"
-                                 Margin="4,0" TabIndex="6"
-                                 PreviewKeyDown="NewEmailBox_PreviewKeyDown"/>
+                            <Label Grid.Column="0"
+                                   x:Name="ContactNameLabel"
+                                   Content="_Name:"
+                                   Target="{Binding ElementName=ContactNameBox}"
+                                   VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     x:Name="ContactNameBox"
+                                     Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.LabeledBy="{Binding ElementName=ContactNameLabel}"
+                                     AutomationProperties.Name="Contact name"
+                                     PreviewKeyDown="ContactFieldBox_PreviewKeyDown"
+                                     Margin="4,0" TabIndex="5"/>
 
-                        <Button Grid.Column="4"
-                                Content="_Add"
-                                Command="{Binding AddContactCommand}"
-                                AutomationProperties.Name="Add contact"
-                                Margin="8,0,0,0" MinWidth="60" TabIndex="7"/>
-                        <Button Grid.Column="5"
-                                Content="_Delete"
-                                Click="DeleteButton_Click"
-                                AutomationProperties.Name="Delete selected contact"
-                                IsEnabled="{Binding HasSelectedContact}"
-                                Margin="4,0,0,0" MinWidth="60" TabIndex="8"/>
-                        <Button Grid.Column="6"
-                                Content="Close"
-                                IsCancel="True"
-                                AutomationProperties.Name="Close address book"
-                                Margin="12,0,0,0" MinWidth="60" TabIndex="9"
-                                Click="Close_Click"/>
+                            <Label Grid.Column="2"
+                                   x:Name="ContactEmailLabel"
+                                   Content="_Email:"
+                                   Target="{Binding ElementName=ContactEmailBox}"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"/>
+                            <TextBox Grid.Column="3"
+                                     x:Name="ContactEmailBox"
+                                     Text="{Binding EditEmail, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.LabeledBy="{Binding ElementName=ContactEmailLabel}"
+                                     AutomationProperties.Name="Contact email"
+                                     PreviewKeyDown="ContactFieldBox_PreviewKeyDown"
+                                     Margin="4,0" TabIndex="6"/>
+                        </Grid>
+
+                        <!-- Row 1: Action buttons (two sets, toggled by IsEditingContact) -->
+                        <!-- Display mode buttons -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                                    Visibility="{Binding IsContactReadOnly, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,4,0,0">
+                            <Button Content="_Add"
+                                    Command="{Binding BeginAddContactCommand}"
+                                    AutomationProperties.Name="Add contact"
+                                    MinWidth="60" Margin="0,0,4,0" TabIndex="7"/>
+                            <Button Content="_Edit"
+                                    Command="{Binding BeginEditContactCommand}"
+                                    AutomationProperties.Name="Edit contact"
+                                    IsEnabled="{Binding CanEditContact}"
+                                    MinWidth="60" Margin="0,0,4,0" TabIndex="8"/>
+                            <Button Content="_Delete"
+                                    Click="DeleteButton_Click"
+                                    AutomationProperties.Name="Delete selected contact"
+                                    IsEnabled="{Binding CanDeleteContact}"
+                                    MinWidth="60" Margin="0,0,4,0" TabIndex="9"/>
+                            <Border Margin="0,0,4,0"/>
+                            <Button Content="Close"
+                                    AutomationProperties.Name="Close address book"
+                                    MinWidth="60" TabIndex="10"
+                                    Click="Close_Click"/>
+                        </StackPanel>
+
+                        <!-- Edit mode buttons -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                                    Visibility="{Binding IsEditingContact, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,4,0,0">
+                            <Button Content="_Save"
+                                    Command="{Binding SaveContactCommand}"
+                                    AutomationProperties.Name="Save contact"
+                                    MinWidth="60" Margin="0,0,4,0" TabIndex="7"/>
+                            <Button Content="Cancel"
+                                    Command="{Binding CancelEditCommand}"
+                                    AutomationProperties.Name="Cancel edit"
+                                    MinWidth="60" Margin="0,0,4,0" TabIndex="8"/>
+                            <Border Margin="0,0,4,0"/>
+                            <Button Content="Close"
+                                    AutomationProperties.Name="Close address book"
+                                    MinWidth="60" TabIndex="9"
+                                    Click="Close_Click"/>
+                        </StackPanel>
+
+                        <!-- Row 2: Error message (shown only when non-empty) -->
+                        <TextBlock Grid.Row="2" Text="{Binding ContactError}"
+                                   Foreground="Red" Margin="0,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ContactError}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </Grid>
 
                     <!-- Contact list -->

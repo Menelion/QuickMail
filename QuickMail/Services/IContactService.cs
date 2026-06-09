@@ -13,6 +13,13 @@ public interface IContactService
     Task<List<ContactModel>> LoadAllContactsAsync();
     Task DeleteContactAsync(int id);
 
+    /// <summary>
+    /// Updates an existing contact's name and email. Returns false if a different
+    /// contact already owns the target email address. Throws InvalidOperationException
+    /// if no contact with the given id exists.
+    /// </summary>
+    Task<bool> UpdateContactAsync(int id, string displayName, string emailAddress);
+
     // ── Groups ───────────────────────────────────────────────────────────────
     // All group operations share the same _loadLock as contact operations so
     // the picker dialog can interleave reads and writes safely (see CLAUDE.md

@@ -48,30 +48,51 @@ public partial class AddressBookWindow : Window
             vm.PropertiesRequested  -= OnPropertiesRequested;
         };
 
+        // When edit mode is activated, focus the name field and select it
         vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(vm.SelectedContact))
+            if (e.PropertyName == nameof(vm.IsEditingContact) && vm.IsEditingContact)
             {
-                if (vm.SelectedContact != null)
-                {
-                    vm.NewName = vm.SelectedContact.DisplayName;
-                    vm.NewEmail = vm.SelectedContact.EmailAddress;
-                }
-                else
-                {
-                    vm.NewName = string.Empty;
-                    vm.NewEmail = string.Empty;
-                }
+                ContactNameBox.Focus();
+                ContactNameBox.SelectAll();
             }
         };
     }
 
     private void RegisterCommands()
     {
-        // The group-related commands are registered here so they appear in the
+        // The contact and group commands are registered here so they appear in the
         // address book's own command palette (Ctrl+Shift+P) and can be rebound
         // from the Settings dialog.  They follow the same pattern as main-window
         // commands in MainWindow.OnLoaded.
+
+        // ── Contacts tab commands ────────────────────────────────────────────
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.add", category: "Contacts", title: "Add Contact",
+            defaultKey: Key.None, defaultModifiers: ModifierKeys.None,
+            execute: () => _vm.BeginAddContactCommand.Execute(null),
+            isAvailable: () => MainTabs.SelectedIndex == 0 && !_vm.IsEditingContact));
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.edit", category: "Contacts", title: "Edit Contact",
+            defaultKey: Key.F2, defaultModifiers: ModifierKeys.None,
+            execute: () => _vm.BeginEditContactCommand.Execute(null),
+            isAvailable: () => MainTabs.SelectedIndex == 0 && _vm.CanEditContact));
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.save", category: "Contacts", title: "Save Contact",
+            defaultKey: Key.None, defaultModifiers: ModifierKeys.None,
+            execute: () => _ = _vm.SaveContactCommand.ExecuteAsync(null),
+            isAvailable: () => MainTabs.SelectedIndex == 0 && _vm.IsEditingContact));
+
+        _registry.Register(new CommandDefinition(
+            id: "contacts.cancelEdit", category: "Contacts", title: "Cancel Edit",
+            defaultKey: Key.Escape, defaultModifiers: ModifierKeys.None,
+            execute: () => _vm.CancelEditCommand.Execute(null),
+            isAvailable: () => MainTabs.SelectedIndex == 0 && _vm.IsEditingContact));
+
+        // ── Groups tab commands ──────────────────────────────────────────────
 
         // Ctrl+Shift+N: switch to Groups tab and show the name entry area in create mode.
         _registry.Register(new CommandDefinition(
@@ -102,7 +123,7 @@ public partial class AddressBookWindow : Window
                 if (_vm.SelectedGroup is { } g)
                     ShowGroupNameEntry(g.Name);
             },
-            isAvailable: () => _vm.HasSelectedGroup));
+            isAvailable: () => _vm.HasSelectedGroup && MainTabs.SelectedIndex == 1));
 
         _registry.Register(new CommandDefinition(
             id: "contacts.focusGroupsPane", category: "Contacts", title: "Focus Groups Pane",
@@ -160,6 +181,13 @@ public partial class AddressBookWindow : Window
             if (GroupNameEntryPanel.Visibility == Visibility.Visible)
             {
                 HideGroupNameEntry();
+                e.Handled = true;
+                return;
+            }
+            // If editing a contact, Escape cancels the edit.
+            if (_vm.IsEditingContact)
+            {
+                _vm.CancelEditCommand.Execute(null);
                 e.Handled = true;
                 return;
             }
@@ -292,6 +320,14 @@ public partial class AddressBookWindow : Window
             return;
         }
 
+        // F2 — edit the selected contact
+        if (e.Key == Key.F2 && _vm.CanEditContact)
+        {
+            _vm.BeginEditContactCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Delete && ContactList.SelectedItems.Count > 0)
         {
             await DeleteSelectedContactsAsync();
@@ -299,11 +335,39 @@ public partial class AddressBookWindow : Window
         }
     }
 
-    private void NewEmailBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void ContactFieldBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // When readonly (not editing), allow navigation and selection only
+        if (_vm.IsContactReadOnly)
+        {
+            // Allow cursor movement and selection navigation
+            if (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Home ||
+                e.Key == Key.End || e.Key == Key.Up || e.Key == Key.Down ||
+                e.Key == Key.Tab)
+            {
+                e.Handled = false;
+                return;
+            }
+            // Allow select-all in readonly mode
+            if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = false;
+                return;
+            }
+            // Block all other keys (typing, backspace, delete, paste, etc.)
+            e.Handled = true;
+            return;
+        }
+
+        // When editing, handle Enter and Escape
         if (e.Key == Key.Return)
         {
-            _vm.AddContactCommand.Execute(null);
+            _ = _vm.SaveContactCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            _vm.CancelEditCommand.Execute(null);
             e.Handled = true;
         }
     }
@@ -428,20 +492,6 @@ public partial class AddressBookWindow : Window
     {
         if (_vm.SelectedGroup is { } g)
             ShowGroupNameEntry(g.Name);
-    }
-
-    private void NewNameBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-    {
-        // If user edits the name field and a contact is selected, deselect it to allow adding new contact
-        if (_vm.SelectedContact != null && NewNameBox.Text != _vm.SelectedContact.DisplayName)
-            _vm.SelectedContact = null;
-    }
-
-    private void NewEmailBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-    {
-        // If user edits the email field and a contact is selected, deselect it to allow adding new contact
-        if (_vm.SelectedContact != null && NewEmailBox.Text != _vm.SelectedContact.EmailAddress)
-            _vm.SelectedContact = null;
     }
 
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)

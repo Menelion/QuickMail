@@ -88,6 +88,8 @@ public partial class AddressBookViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedContact))]
+    [NotifyPropertyChangedFor(nameof(CanEditContact))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteContact))]
     private ContactModel? _selectedContact;
 
     public bool HasSelectedContact => SelectedContact != null;
@@ -101,11 +103,42 @@ public partial class AddressBookViewModel : ObservableObject
     [ObservableProperty]
     private string _searchText = string.Empty;
 
-    [ObservableProperty]
-    private string _newName = string.Empty;
+    // ── Contact editing ──────────────────────────────────────────────────────
 
     [ObservableProperty]
-    private string _newEmail = string.Empty;
+    private string _editName = string.Empty;
+
+    [ObservableProperty]
+    private string _editEmail = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsContactReadOnly))]
+    [NotifyPropertyChangedFor(nameof(CanEditContact))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteContact))]
+    private bool _isEditingContact;
+
+    private enum ContactEditMode { None, Adding, Editing }
+    private ContactEditMode _contactEditMode = ContactEditMode.None;
+    private int _editingContactId;
+
+    public bool IsContactReadOnly => !IsEditingContact;
+    public bool CanEditContact    => HasSelectedContact && !IsEditingContact;
+    public bool CanDeleteContact  => HasSelectedContact && !IsEditingContact;
+
+    [ObservableProperty]
+    private string _contactError = string.Empty;
+
+    partial void OnSelectedContactChanged(ContactModel? value)
+    {
+        if (!IsEditingContact)
+        {
+            EditName     = value?.DisplayName  ?? string.Empty;
+            EditEmail    = value?.EmailAddress ?? string.Empty;
+            ContactError = string.Empty;
+        }
+    }
+
+    // ── Group editing ────────────────────────────────────────────────────────
 
     /// <summary>
     /// Name typed into the "New group" textbox at the bottom of the Groups
@@ -128,18 +161,95 @@ public partial class AddressBookViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task AddContactAsync()
+    private void BeginAddContact()
     {
-        if (string.IsNullOrWhiteSpace(NewEmail)) return;
-        await _contactService.UpsertContactAsync(new ContactModel
+        EditName           = string.Empty;
+        EditEmail          = string.Empty;
+        ContactError       = string.Empty;
+        IsEditingContact   = true;
+        _contactEditMode   = ContactEditMode.Adding;
+        Announce("Add contact", AnnouncementCategory.Result);
+    }
+
+    [RelayCommand]
+    private void BeginEditContact()
+    {
+        if (SelectedContact is not { } c) return;
+        _editingContactId = c.Id;
+        IsEditingContact  = true;
+        _contactEditMode  = ContactEditMode.Editing;
+        ContactError      = string.Empty;
+        Announce($"Edit {c.DisplayName}", AnnouncementCategory.Result);
+    }
+
+    [RelayCommand]
+    private void CancelEdit()
+    {
+        IsEditingContact = false;
+        _contactEditMode = ContactEditMode.None;
+        if (SelectedContact is { } c)
         {
-            DisplayName   = NewName.Trim(),
-            EmailAddress  = NewEmail.Trim(),
-            LastUsedTicks = DateTimeOffset.UtcNow.UtcTicks,
-        });
-        NewName  = string.Empty;
-        NewEmail = string.Empty;
-        await LoadAsync();
+            EditName  = c.DisplayName;
+            EditEmail = c.EmailAddress;
+        }
+        else
+        {
+            EditName  = string.Empty;
+            EditEmail = string.Empty;
+        }
+        ContactError = string.Empty;
+        Announce("Edit cancelled", AnnouncementCategory.Result);
+    }
+
+    [RelayCommand]
+    private async Task SaveContactAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EditEmail))
+        {
+            ContactError = "Email address required";
+            return;
+        }
+
+        if (_contactEditMode == ContactEditMode.Adding)
+        {
+            await _contactService.UpsertContactAsync(new ContactModel
+            {
+                DisplayName   = EditName.Trim(),
+                EmailAddress  = EditEmail.Trim(),
+                LastUsedTicks = DateTimeOffset.UtcNow.UtcTicks,
+            });
+            var addedName = EditName.Trim();
+            IsEditingContact = false;
+            _contactEditMode = ContactEditMode.None;
+            await LoadAsync();
+            // Select the newly added contact by email
+            var added = _allContacts.FirstOrDefault(c =>
+                c.EmailAddress.Equals(EditEmail.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (added is not null) SelectedContact = added;
+            Announce($"{addedName} added", AnnouncementCategory.Result);
+        }
+        else if (_contactEditMode == ContactEditMode.Editing)
+        {
+            var success = await _contactService.UpdateContactAsync(
+                _editingContactId,
+                EditName.Trim(),
+                EditEmail.Trim());
+
+            if (!success)
+            {
+                ContactError = "Email address is already used by another contact";
+                Announce("Email address is already used by another contact", AnnouncementCategory.Result);
+                return;
+            }
+
+            var updatedName = EditName.Trim();
+            IsEditingContact = false;
+            _contactEditMode = ContactEditMode.None;
+            await LoadAsync();
+            // Restore selection by id
+            SelectedContact = _allContacts.FirstOrDefault(c => c.Id == _editingContactId);
+            Announce($"{updatedName} updated", AnnouncementCategory.Result);
+        }
     }
 
     [RelayCommand]

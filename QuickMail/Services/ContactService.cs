@@ -114,6 +114,37 @@ public class ContactService : IContactService
         }
     }
 
+    public async Task<bool> UpdateContactAsync(int id, string displayName, string emailAddress)
+    {
+        await EnsureLoadedAsync();
+        await _loadLock.WaitAsync();
+        try
+        {
+            var contact = _contactsCache.FirstOrDefault(c => c.Id == id)
+                ?? throw new InvalidOperationException($"Contact with id {id} not found.");
+
+            // If email changed, check for conflict with another contact
+            if (!contact.EmailAddress.Equals(emailAddress, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_contactsCache.Any(c => c.Id != id &&
+                    c.EmailAddress.Equals(emailAddress, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;  // Email already owned by another contact
+                }
+            }
+
+            contact.DisplayName   = displayName;
+            contact.EmailAddress  = emailAddress;
+            contact.LastUsedTicks = DateTimeOffset.UtcNow.UtcTicks;
+            await SaveContactsAsyncLocked();
+            return true;
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
+    }
+
     // ── Groups ───────────────────────────────────────────────────────────────
 
     public async Task<List<GroupModel>> LoadAllGroupsAsync()

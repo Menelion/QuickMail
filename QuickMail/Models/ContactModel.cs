@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace QuickMail.Models;
 
 public class ContactModel
@@ -7,6 +9,7 @@ public class ContactModel
     public string EmailAddress  { get; set; } = string.Empty;
     public long   LastUsedTicks { get; set; }
 
+    [JsonIgnore]
     public string Display => string.IsNullOrWhiteSpace(DisplayName)
         ? EmailAddress
         : $"{DisplayName} <{EmailAddress}>";
