@@ -118,6 +118,31 @@ QuickMail now implements robust connection recovery and failure verification to 
 - **No way to discover how to edit a contact.** There were no visible affordances (buttons, menu options, keyboard shortcuts) for editing. Now **Edit** is a prominent button and a registered keyboard command.
 - **Readonly TextBox behavior was unintuitive for screen reader users.** The previous `IsReadOnly="True"` binding prevented cursor navigation entirely. Fields now allow full keyboard navigation while preventing text modification.
 - **Contact.Display property was serialized to JSON redundantly.** The computed `Display` property (formatted as "Name <email>") was being written to `contacts.json` alongside the authoritative `DisplayName` and `EmailAddress` fields, creating noise in the file. The property is now marked `[JsonIgnore]`.
+- **Cache statistics queries used wrong column names.** The queries backing the new "Messages in cache" and "Oldest cached" fields in Account Properties referenced stale column names from the pre-migration schema. The queries now use the correct column names and return accurate results.
+
+---
+
+## Thank You to Contributors
+
+Thank you to everyone who has contributed to QuickMail through code, bug reports, feature suggestions, and other feedback. Your contributions make the project better for everyone.
+
+**Code contributions:**
+- [CityDweller](https://github.com/CityDweller) — Microsoft Graph backend groundwork: IMailService refactoring, string MessageId migration, backend router and feature gate scaffolding
+- [Menelion](https://github.com/Menelion) — Windows installer (Inno Setup)
+- [serrebidev](https://github.com/serrebidev) — Pooled IMAP connections, virtualized folder picker, HTML rendering improvements
+
+**Issues and feedback:**
+- [CityDweller](https://github.com/CityDweller)
+- [Dennisl123](https://github.com/Dennisl123)
+- [jaybird110127](https://github.com/jaybird110127)
+- [KE8UPE](https://github.com/KE8UPE)
+- [paoscripts](https://github.com/paoscripts)
+- [serrebidev](https://github.com/serrebidev)
+- [slannon97](https://github.com/slannon97)
+- [sofquipeut](https://github.com/sofquipeut)
+- [taylorarndt](https://github.com/taylorarndt)
+
+Note: Others have made contributions through various social media platforms that are not listed here yet.
 
 ---
 
