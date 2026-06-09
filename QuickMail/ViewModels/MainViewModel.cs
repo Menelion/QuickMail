@@ -1187,6 +1187,7 @@ public partial class MainViewModel : ObservableObject
     public async Task InitialLoadAsync()
     {
         SelectedFolder = AllMailFolder;
+        LastSyncText = "Never synced";  // Ensure sync time is visible in status bar
         if (OnlineMode)
         {
             StatusText = "Online mode — connecting…";
