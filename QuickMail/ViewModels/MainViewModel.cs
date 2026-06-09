@@ -1294,6 +1294,7 @@ public partial class MainViewModel : ObservableObject
         {
             LogService.Log("BackgroundSync", ex);
             StatusText = $"Sync error: {ex.Message}";
+            Announce($"Sync error: {ex.Message}", AnnouncementCategory.Status);
             // Only set "Connection error" if no accounts connected at all.
             if (_cachedFolders.Count == 0)
                 ConnectionStatusText = "Connection error";
@@ -2178,6 +2179,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusText = $"Connection failed: {ex.Message}";
+            Announce($"Connection failed: {ex.Message}", AnnouncementCategory.Status);
             LogService.Log("SelectAccount", ex);
         }
         finally
@@ -3062,6 +3064,7 @@ public partial class MainViewModel : ObservableObject
         {
             // Honest uncertainty message — the delete may have partially or fully succeeded.
             StatusText = "Delete may not have completed — refreshing.";
+            Announce("Delete may not have completed — refreshing.", AnnouncementCategory.Result);
             LogService.Log("DeleteMessages", ex);
 
             // Schedule targeted sync of affected folders to reconcile the UI with server state.
@@ -3494,7 +3497,10 @@ public partial class MainViewModel : ObservableObject
 
             // If not verified as empty, report the error
             if (!trashEmptied)
+            {
                 StatusText = $"Empty trash failed: {ex.Message}";
+                Announce($"Empty trash failed: {ex.Message}", AnnouncementCategory.Result);
+            }
         }
         finally
         {
