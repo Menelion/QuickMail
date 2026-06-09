@@ -1358,6 +1358,9 @@ public partial class MainViewModel : ObservableObject
         // screen readers don't re-announce the focused message on every insert.
         if (_suppressFolderSyncUpdates) return;
 
+        // Update sync time whenever any folder syncs (targeted IDLE syncs, manual refreshes, etc.)
+        LastSyncText = $"Synced {DateTime.Now:t}";
+
         var selected = SelectedFolder;
         if (selected == null) return;
 
