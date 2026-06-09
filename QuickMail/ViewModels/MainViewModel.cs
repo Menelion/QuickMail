@@ -371,7 +371,7 @@ public partial class MainViewModel : ObservableObject
     private string _connectionStatusText = "Offline";
 
     [ObservableProperty]
-    private string _lastSyncText = string.Empty;
+    private string _lastSyncText = "Never synced";
 
     [ObservableProperty]
     private bool _isBusy;

@@ -1468,10 +1468,9 @@
                            Text="{Binding StatusText, Mode=OneWay}"/>
             </StatusBarItem>
 
-            <!-- Region 1b: Last sync time (informational) -->
+            <!-- Region 1b: Last sync time (always present for consistent screen reader structure) -->
             <StatusBarItem x:Name="LastSyncTextItem"
-                           KeyboardNavigation.IsTabStop="False"
-                           Visibility="{Binding LastSyncText, Converter={StaticResource StringToVisibilityConverter}, Mode=OneWay}">
+                           KeyboardNavigation.IsTabStop="False">
                 <TextBlock x:Name="LastSyncTextBox"
                            Style="{StaticResource StatusTextBlockStyle}"
                            Text="{Binding LastSyncText, Mode=OneWay}"
