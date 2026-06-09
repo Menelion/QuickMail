@@ -142,6 +142,20 @@ Your Microsoft password is never seen or stored by QuickMail — only an encrypt
 - Activate **Remove Account** to delete an account. You will be asked to confirm before anything is removed.
 - Changes take effect after you activate **Save** and close the dialog.
 
+### Account Properties
+
+Press **Alt+Enter** or right-click an account to view its properties. Properties show:
+
+| Section | Shows |
+|---------|-------|
+| **Identity** | Display name and email address |
+| **Incoming (IMAP)** | Server, port, security method, and username |
+| **Outgoing (SMTP)** | Server, port, security method, and username |
+| **Authentication** | Authentication method (Password or OAuth2) |
+| **Sync** | Cache statistics — messages in local cache, oldest cached message date, sync window setting |
+
+The **Sync** section is useful for understanding what mail is stored locally. If you delete the cache and re-sync, watching the message count grow in this section gives you confidence that the sync is progressing.
+
 ---
 
 ## Settings
@@ -195,6 +209,17 @@ Custom bindings are saved to `hotkeys.json` in your AppData folder and apply imm
 - Press **F5** or activate **Refresh** in the toolbar to fetch new messages.
 - If a saved view is active, **F5 refreshes the view** — not just the underlying folder. This means you stay in your view and see the latest messages that belong to it.
 - QuickMail also checks for new mail automatically in the background while the app is running. When your mail server supports IMAP IDLE, new messages in your inboxes are detected in real time without polling — QuickMail keeps a persistent connection that the server notifies the moment a message arrives. When a new message is detected, a targeted sync runs for that inbox and the message list updates automatically.
+
+### Connection recovery
+
+QuickMail is designed to maintain reliable connections even on unstable networks:
+
+- **Automatic startup retry:** If accounts fail to connect on launch, QuickMail automatically retries up to 3 times with increasing delays (15 seconds, then 30 seconds, then 60 seconds).
+- **Connection monitoring:** The app continuously monitors IMAP connections. If a connection drops, QuickMail detects it and automatically reconnects with exponential backoff (30 seconds, 60 seconds, up to 120 seconds).
+- **Connection status:** The status bar shows your connection state — "Connecting…" during startup, "N accounts connected" when ready, or an error message if all connections fail.
+- **Periodic heartbeat:** Every 10 minutes, QuickMail sends a keep-alive command to prevent idle connection timeouts on slow networks.
+
+If you experience frequent connection errors, check your network, firewall, and mail server settings. QuickMail will keep retrying until the connection is restored.
 
 ### Navigating the panes
 
@@ -333,6 +358,8 @@ Focus returns to the message in the main window's message list that was selected
 QuickMail uses a small IMAP connection pool for each account. Message opening, background sync, preview fetching, attachment downloads, and move/copy/delete actions lease separate connections when one is available, so opening a message should not fail just because another IMAP command is already running.
 
 By default, QuickMail uses up to **6 simultaneous IMAP connections per account**. Foreground work such as opening a message or downloading an attachment gets reserved capacity; background sync and preview fetching are limited below the full pool. Advanced users can change the limit in `%AppData%\QuickMail\config.ini` with `MaxImapConnectionsPerAccount`; changes take effect after restarting QuickMail.
+
+**Connection health:** Each account has a dedicated watcher that monitors connection health. If a connection fails, the watcher automatically attempts to reconnect. The connection state is reflected in the status bar and connection errors are announced to screen readers. See [Connection recovery](#connection-recovery) above for details.
 
 Some marketing or financial messages contain very large HTML layouts. QuickMail may show those messages in a simplified reader mode so the reading pane remains responsive.
 
@@ -508,17 +535,29 @@ The status bar has four regions that you can explore with the keyboard:
 
 | Region | Shows | Interactive |
 |--------|-------|-------------|
-| **Status** | Current status (message counts, sync progress, etc.) | No |
-| **Connection** | Connection state — "Offline", "Connecting…", or "N accounts connected" | No |
+| **Status** | Message count and sync state — e.g., "7,326 messages. Synced 9:48 AM" or "Syncing… (5 of 20 folders). Never synced" | No |
+| **Connection** | Connection state — "Connecting…" (during startup), "N accounts connected" (ready), or an error message | No |
 | **Rules** | Summary of active/disabled rules and last run time | Yes — **Enter** or **Space** opens the Rules Manager |
 | **Sync progress** | A progress bar shown during mail sync | No |
 
+**Status region details:**
+- **Message count:** Total messages in the current view or folder.
+- **Sync state:** One of:
+  - **"Synced HH:MM"** — Last successful sync time (e.g., "Synced 9:48 AM")
+  - **"Never synced"** — No sync has completed yet (shown on first launch before sync finishes)
+  - **"In progress"** — Sync is currently running
+  - **During sync:** "Syncing… (X of Y folders)" shows folder-by-folder progress
+
+**Navigation:**
 - Press `Ctrl+9` or cycle through panes with **F6** to reach the status bar.
 - Use **Left** and **Right** arrow keys to move between regions.
 - Press **Tab** to exit the status bar and move to the next pane.
 - The Sync progress region only appears while mail is syncing and is skipped when hidden.
 
-Screen readers that support reading a status bar directly can usually do so with a dedicated keyboard command — consult your screen reader's documentation for details.
+**Screen reader usage:**
+- Screen readers that support reading a status bar directly can usually do so with a dedicated keyboard command — consult your screen reader's documentation for details.
+- When reading the full status bar, you hear all text in the Status region together: "7,326 messages. Synced 9:48 AM"
+- When navigating with arrow keys to the Status region, the entire Status content is available for screen reader text navigation.
 
 ---
 
