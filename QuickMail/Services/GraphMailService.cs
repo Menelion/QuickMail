@@ -23,6 +23,22 @@ public class GraphMailService : IMailService
     // accountId -> the connected AccountModel, so per-accountId calls can acquire the right token.
     private readonly ConcurrentDictionary<Guid, AccountModel> _accounts = new();
 
+    // accountId -> { folder id -> special kind }, resolved at connect from Graph's well-known folder
+    // names so special-folder detection is locale- and rename-proof (see Issue #61).
+    private readonly ConcurrentDictionary<Guid, Dictionary<string, SpecialFolderKind>> _wellKnownFolders = new();
+
+    private static readonly Dictionary<string, SpecialFolderKind> EmptyWellKnown = new();
+
+    // Graph well-known folder names (stable across locales) -> our SpecialFolderKind.
+    private static readonly (string Name, SpecialFolderKind Kind)[] WellKnownFolders =
+    {
+        ("inbox",        SpecialFolderKind.Inbox),
+        ("sentitems",    SpecialFolderKind.Sent),
+        ("drafts",       SpecialFolderKind.Drafts),
+        ("deleteditems", SpecialFolderKind.Trash),
+        ("junkemail",    SpecialFolderKind.Junk),
+    };
+
     public GraphMailService(IOAuthService oauth, IConfigService? config = null, HttpClient? http = null)
     {
         _client = new GraphClient(oauth, http);
@@ -46,7 +62,35 @@ public class GraphMailService : IMailService
             LogService.Log($"GraphMailService: token UPN {me.UserPrincipalName} differs from account.Username {account.Username}; updating.");
             account.Username = me.UserPrincipalName;
         }
+        _wellKnownFolders[account.Id] = await ResolveWellKnownFolderIdsAsync(account, ct);
         LogService.Log($"GraphMailService: connected for {account.AccountLabel} ({account.Username}).");
+    }
+
+    /// <summary>
+    /// Resolves the stable IDs of the well-known folders (Inbox, Sent, Drafts, Deleted, Junk) by
+    /// their Graph well-known names, so detection survives localized display names and user renames.
+    /// A folder that doesn't exist (e.g. no Junk) is simply skipped.
+    /// </summary>
+    private async Task<Dictionary<string, SpecialFolderKind>> ResolveWellKnownFolderIdsAsync(AccountModel account, CancellationToken ct)
+    {
+        var lookups = WellKnownFolders.Select(async wk =>
+        {
+            try
+            {
+                var f = await _client.GetAsync<GraphMailFolder>(account, $"/me/mailFolders/{wk.Name}?$select=id", ct);
+                return (Id: f?.Id, wk.Kind);
+            }
+            catch (Exception ex)
+            {
+                LogService.Debug($"GraphMailService: well-known folder '{wk.Name}' not resolved: {ex.Message}");
+                return (Id: (string?)null, wk.Kind);
+            }
+        });
+
+        var map = new Dictionary<string, SpecialFolderKind>();
+        foreach (var (id, kind) in await Task.WhenAll(lookups))
+            if (!string.IsNullOrEmpty(id)) map[id] = kind;
+        return map;
     }
 
     public Task DisconnectAsync(Guid accountId, CancellationToken ct = default) => Task.CompletedTask;
@@ -63,15 +107,23 @@ public class GraphMailService : IMailService
             Account(accountId),
             "/me/mailFolders?$top=100&$select=id,displayName,parentFolderId,totalItemCount,unreadItemCount", ct);
 
-        return folders.Select(f => new MailFolderModel
+        var wellKnown = _wellKnownFolders.TryGetValue(accountId, out var map) ? map : EmptyWellKnown;
+
+        return folders.Select(f =>
         {
-            AccountId = accountId,
-            FullName = f.Id,                 // Graph uses opaque folder IDs as the "folder name"
-            DisplayName = f.DisplayName,
-            UnreadCount = f.UnreadItemCount,
-            MessageCount = f.TotalItemCount,
-            Kind = MapWellKnownFolder(f.DisplayName),
-            ExcludeFromAllMail = ShouldExcludeFromAll(f.DisplayName),
+            // Prefer the well-known folder ID resolved at connect (locale- and rename-proof);
+            // fall back to display-name matching for anything not resolved.
+            var kind = wellKnown.TryGetValue(f.Id, out var k) ? k : MapWellKnownFolder(f.DisplayName);
+            return new MailFolderModel
+            {
+                AccountId = accountId,
+                FullName = f.Id,             // Graph uses opaque folder IDs as the "folder name"
+                DisplayName = f.DisplayName,
+                UnreadCount = f.UnreadItemCount,
+                MessageCount = f.TotalItemCount,
+                Kind = kind,
+                ExcludeFromAllMail = IsExcludedKind(kind),
+            };
         }).ToList();
     }
 
@@ -253,7 +305,7 @@ public class GraphMailService : IMailService
         _ => SpecialFolderKind.None,
     };
 
-    private static bool ShouldExcludeFromAll(string displayName)
-        => MapWellKnownFolder(displayName) is SpecialFolderKind.Sent or SpecialFolderKind.Drafts
+    private static bool IsExcludedKind(SpecialFolderKind kind)
+        => kind is SpecialFolderKind.Sent or SpecialFolderKind.Drafts
             or SpecialFolderKind.Trash or SpecialFolderKind.Junk;
 }

@@ -97,6 +97,41 @@ public class GraphMailServiceTests
     }
 
     [Fact]
+    public async Task GetFoldersAsync_DetectsSpecialFoldersById_EvenWithLocalizedNames()
+    {
+        // German display names; detection must come from the well-known folder IDs resolved at connect.
+        const string listJson = """
+            {"value":[
+              {"id":"F-INBOX","displayName":"Posteingang","totalItemCount":5,"unreadItemCount":2},
+              {"id":"F-SENT","displayName":"Gesendete Elemente","totalItemCount":3,"unreadItemCount":0},
+              {"id":"F-OTHER","displayName":"Projekte","totalItemCount":1,"unreadItemCount":1}
+            ]}
+            """;
+        var (svc, _) = Make(url =>
+              url.Contains("/mailFolders/inbox")        ? (HttpStatusCode.OK, """{"id":"F-INBOX"}""")
+            : url.Contains("/mailFolders/sentitems")    ? (HttpStatusCode.OK, """{"id":"F-SENT"}""")
+            : url.Contains("/mailFolders/drafts")       ? (HttpStatusCode.OK, """{"id":"F-DRAFTS"}""")
+            : url.Contains("/mailFolders/deleteditems") ? (HttpStatusCode.OK, """{"id":"F-TRASH"}""")
+            : url.Contains("/mailFolders/junkemail")    ? (HttpStatusCode.OK, """{"id":"F-JUNK"}""")
+            : url.Contains("/me/mailFolders?")          ? (HttpStatusCode.OK, listJson)
+            : (HttpStatusCode.OK, MeJson));
+
+        var account = GraphAccount();
+        await svc.ConnectAsync(account);
+        var folders = await svc.GetFoldersAsync(account.Id);
+
+        var inbox = folders.Single(f => f.FullName == "F-INBOX");
+        Assert.Equal(SpecialFolderKind.Inbox, inbox.Kind);  // by ID, despite "Posteingang"
+        Assert.False(inbox.ExcludeFromAllMail);
+
+        var sent = folders.Single(f => f.FullName == "F-SENT");
+        Assert.Equal(SpecialFolderKind.Sent, sent.Kind);    // by ID, despite "Gesendete Elemente"
+        Assert.True(sent.ExcludeFromAllMail);
+
+        Assert.Equal(SpecialFolderKind.None, folders.Single(f => f.FullName == "F-OTHER").Kind);
+    }
+
+    [Fact]
     public async Task GetMessageSummariesAsync_MapsFields()
     {
         const string msgs = """
@@ -176,6 +211,17 @@ public class GraphMailServiceTests
         Assert.Throws<NotImplementedException>(() => { _ = svc.MoveToTrashAsync(Guid.NewGuid(), "inbox", "m1"); });
         Assert.Throws<NotImplementedException>(() => { _ = svc.AppendToSentAsync(Guid.NewGuid(), new ComposeModel()); });
         Assert.Throws<NotImplementedException>(() => { _ = svc.CreateFolderAsync(Guid.NewGuid(), null, "New"); });
+    }
+
+    [Fact]
+    public void GraphMailService_HasNoLocalStoreDependency_SoOnlineModeWorks()
+    {
+        // --online mode leaves the SQLite schema uncreated; any ILocalStoreService call would throw.
+        // GraphMailService must read straight from Graph, so it must not take a local store at all.
+        var ctorParamTypes = typeof(GraphMailService).GetConstructors()
+            .SelectMany(c => c.GetParameters())
+            .Select(p => p.ParameterType);
+        Assert.DoesNotContain(typeof(ILocalStoreService), ctorParamTypes);
     }
 
     [Fact]

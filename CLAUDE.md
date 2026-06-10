@@ -112,8 +112,10 @@ QuickMail has startup flags that alter which services are available. New code th
 | Flag | Effect on services |
 |---|---|
 | *(normal)* | All services available. SQLite schema fully created. `LocalStoreService` returns cached data. |
-| `--online` | SQLite schema is **not created**. `LocalStoreService` methods will throw `SqliteException` on any call. All data must come from IMAP. |
+| `--online` | SQLite schema is **not created**. `LocalStoreService` methods will throw `SqliteException` on any call. All data must come from the backend (IMAP or Graph). |
 | `--profileDir <path>` | All file-based services use the alternate path. No effect on availability. |
+
+**Graph accounts in `--online` mode:** fully supported, no behavioral difference. `GraphMailService` has **no `ILocalStoreService` dependency** — every read goes straight to the Graph REST API, so the uncreated SQLite schema never matters. (`GraphMailServiceTests.GraphMailService_HasNoLocalStoreDependency_SoOnlineModeWorks` guards this structurally.) The local-store-first / backend-fallback pattern below lives in `MainViewModel`, which dispatches the fallback through the `MailServiceRouter` to whichever backend owns the account.
 
 **The standard fetch pattern for message bodies** — used wherever a message detail is needed:
 
