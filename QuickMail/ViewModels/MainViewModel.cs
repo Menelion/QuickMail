@@ -1243,26 +1243,24 @@ public partial class MainViewModel : ObservableObject
         };
 
         // Subscribe to sync progress updates.
-        // Update status and announce every 10 folders to avoid excessive screen reader chatter.
-        int lastUpdatedAt = 0;
+        // Announce every 10 folders to avoid excessive screen reader chatter.
+        int lastAnnouncedAt = 0;
         _syncService.SyncProgressChanged += (done, total) =>
         {
             if (total > 0)
             {
-                // Update StatusText only every 10 folders or at the end to avoid constant screen reader announcements.
-                if (done % 10 == 0 && done > lastUpdatedAt || done == total)
+                // Announce progress every 10 folders or at the end.
+                // Do not update StatusText here — it would trigger automatic screen reader
+                // announcements in addition to the explicit Announce() calls, creating duplicates.
+                if (done % 10 == 0 && done > lastAnnouncedAt)
                 {
-                    StatusText = $"Syncing… ({done} of {total} folders)";
-                    lastUpdatedAt = done;
-
-                    if (done == total)
-                    {
-                        Announce($"Sync complete.", AnnouncementCategory.Status);
-                    }
-                    else
-                    {
-                        Announce($"Synced {done} of {total} folders.", AnnouncementCategory.Status);
-                    }
+                    Announce($"Synced {done} of {total} folders.", AnnouncementCategory.Status);
+                    lastAnnouncedAt = done;
+                }
+                else if (done == total && done > lastAnnouncedAt)
+                {
+                    Announce($"Sync complete.", AnnouncementCategory.Status);
+                    lastAnnouncedAt = done;
                 }
             }
         };
