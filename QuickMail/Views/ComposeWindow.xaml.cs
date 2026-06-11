@@ -1392,7 +1392,7 @@ public partial class ComposeWindow : Window
         return value is TextDecorationCollection c && c.Any(d => d.Location == location);
     }
 
-    /// <summary>Toggles a heading on the caret paragraph. Applying the same level again returns to normal text.</summary>
+    /// <summary>Toggles a heading on all paragraphs touched by the current selection. Applying the same level again returns to normal text.</summary>
     private void ApplyHeading(int level)
     {
         if (_vm.CurrentMode == ComposeMode.Markdown)
@@ -1404,25 +1404,79 @@ public partial class ComposeWindow : Window
         }
 
         EnsureRichEditorFocused();
-        var paragraph = RichBodyBox.CaretPosition.Paragraph;
-        if (paragraph == null) return;
+        var paragraphs = GetSelectedParagraphs();
+        if (paragraphs.Count == 0) return;
 
         var tag = "H" + level;
-        if (paragraph.Tag as string == tag)
+        bool turnOff = paragraphs.All(p => p.Tag as string == tag);
+
+        foreach (var paragraph in paragraphs)
         {
-            paragraph.Tag = null;
-            paragraph.ClearValue(TextElement.FontSizeProperty);
-            paragraph.ClearValue(TextElement.FontWeightProperty);
-            AnnounceFormatting("Normal text");
+            if (turnOff)
+            {
+                paragraph.Tag = null;
+                paragraph.ClearValue(TextElement.FontSizeProperty);
+                paragraph.ClearValue(TextElement.FontWeightProperty);
+            }
+            else
+            {
+                paragraph.Tag = tag;
+                paragraph.FontSize = RichTextDocumentConverter.HeadingFontSize(level);
+                paragraph.FontWeight = FontWeights.Bold;
+            }
         }
-        else
-        {
-            paragraph.Tag = tag;
-            paragraph.FontSize = RichTextDocumentConverter.HeadingFontSize(level);
-            paragraph.FontWeight = FontWeights.Bold;
-            AnnounceFormatting($"Heading {level}");
-        }
+
+        AnnounceFormatting(turnOff ? "Normal text" : $"Heading {level}");
         _vm.MarkBodyDirty();
+    }
+
+    /// <summary>
+    /// Returns all Paragraphs touched by the current RichBodyBox selection.
+    /// When the caret has no selection this is the single caret paragraph.
+    /// When the selection ends exactly at a paragraph boundary (e.g. Shift+End
+    /// selected to the paragraph break but not into the next paragraph) that
+    /// trailing paragraph is excluded.
+    /// </summary>
+    private List<Paragraph> GetSelectedParagraphs()
+    {
+        var sel = RichBodyBox.Selection;
+        var startPara = sel.Start.Paragraph;
+        if (startPara == null) return [];
+
+        var endPara = sel.End.Paragraph;
+
+        // Selection entirely within one paragraph, or no selection.
+        if (endPara == null || startPara == endPara)
+            return [startPara];
+
+        // If the selection ends exactly at the start of the end paragraph, the user
+        // selected up to the paragraph break but didn't intend to include the next line.
+        if (sel.End.CompareTo(endPara.ContentStart) == 0)
+            return [startPara];
+
+        // Collect all paragraphs from startPara through endPara in document order.
+        var result = new List<Paragraph>();
+        bool inRange = false;
+        foreach (var block in EnumerateDocumentBlocks(RichBodyBox.Document))
+        {
+            if (block == startPara) inRange = true;
+            if (inRange && block is Paragraph p) result.Add(p);
+            if (block == endPara) break;
+        }
+        return result.Count > 0 ? result : [startPara];
+    }
+
+    /// <summary>Flattens top-level blocks and one level of List → ListItem → Block nesting.</summary>
+    private static IEnumerable<Block> EnumerateDocumentBlocks(FlowDocument doc)
+    {
+        foreach (var block in doc.Blocks)
+        {
+            yield return block;
+            if (block is System.Windows.Documents.List list)
+                foreach (var item in list.ListItems)
+                    foreach (var inner in item.Blocks)
+                        yield return inner;
+        }
     }
 
     private void ToggleList(bool ordered)
