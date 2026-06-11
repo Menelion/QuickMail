@@ -1449,9 +1449,12 @@ public partial class ComposeWindow : Window
         if (endPara == null || startPara == endPara)
             return [startPara];
 
-        // If the selection ends exactly at the start of the end paragraph, the user
-        // selected up to the paragraph break but didn't intend to include the next line.
-        if (sel.End.CompareTo(endPara.ContentStart) == 0)
+        // If the selection ends at or before the content start of the end paragraph,
+        // the user selected up to the paragraph break but didn't intend to include
+        // the next line. WPF places element-boundary positions between paragraphs,
+        // so sel.End can land in that structural gap (< 0) rather than exactly at
+        // ContentStart (== 0); both cases mean the end paragraph was not selected.
+        if (sel.End.CompareTo(endPara.ContentStart) <= 0)
             return [startPara];
 
         // Collect all paragraphs from startPara through endPara in document order.
