@@ -916,12 +916,26 @@ public partial class ComposeWindow : Window
             {
                 if (BodyBox.GetSpellingError(i) != null) { foundIndex = i; break; }
             }
+            if (foundIndex < 0 && start > 0)
+            {
+                for (int i = 0; i < start; i++)
+                {
+                    if (BodyBox.GetSpellingError(i) != null) { foundIndex = i; break; }
+                }
+            }
         }
         else
         {
             for (int i = Math.Min(start - 1, text.Length - 1); i >= 0; i--)
             {
                 if (BodyBox.GetSpellingError(i) != null) { foundIndex = i; break; }
+            }
+            if (foundIndex < 0)
+            {
+                for (int i = text.Length - 1; i >= start; i--)
+                {
+                    if (BodyBox.GetSpellingError(i) != null) { foundIndex = i; break; }
+                }
             }
         }
 
@@ -952,7 +966,7 @@ public partial class ComposeWindow : Window
         else
         {
             ClearSpellingContext();
-            AccessibilityHelper.Announce(this, "No more misspellings found.",
+            AccessibilityHelper.Announce(this, "No misspellings found.",
                 category: AnnouncementCategory.Result);
         }
     }
