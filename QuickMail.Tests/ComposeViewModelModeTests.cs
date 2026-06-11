@@ -220,4 +220,41 @@ public class ComposeViewModelModeTests
         var model = vm.BuildComposeModel(Guid.NewGuid());
         Assert.Null(model.HtmlBody);
     }
+
+    // ── Window title: subject + mode, shown in the taskbar and Alt+Tab ───────
+
+    [Fact]
+    public void WindowTitle_NoSubject_ShowsKindModeAndApp()
+    {
+        var vm = MakeVm();
+        Assert.Equal("New Message - Plain Text - QuickMail", vm.WindowTitle);
+    }
+
+    [Fact]
+    public void WindowTitle_WithSubject_LeadsWithSubject()
+    {
+        var vm = MakeVm();
+        vm.Subject = "Lunch on Friday";
+        Assert.Equal("Lunch on Friday - Plain Text - QuickMail", vm.WindowTitle);
+    }
+
+    [Fact]
+    public void WindowTitle_ReflectsModeChanges()
+    {
+        var vm = MakeVm();
+        vm.Subject = "Lunch on Friday";
+
+        var titleChanges = 0;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.WindowTitle)) titleChanges++;
+        };
+
+        vm.SetMode(ComposeMode.Html);
+        Assert.Equal("Lunch on Friday - HTML - QuickMail", vm.WindowTitle);
+        Assert.True(titleChanges > 0, "mode change must notify WindowTitle so the taskbar updates");
+
+        vm.SetMode(ComposeMode.Markdown);
+        Assert.Equal("Lunch on Friday - Markdown - QuickMail", vm.WindowTitle);
+    }
 }

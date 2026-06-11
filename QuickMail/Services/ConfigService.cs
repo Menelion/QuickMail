@@ -233,6 +233,13 @@ public class ConfigService : IConfigService
                             _          => Models.ComposeMode.PlainText,
                         };
                         break;
+                    case "autosavedrafts":
+                        config.AutoSaveDrafts = ParseBool(value);
+                        break;
+                    case "autosaveintervalseconds":
+                        if (int.TryParse(value, out var asi))
+                            config.AutoSaveIntervalSeconds = Math.Clamp(asi, 30, 600);
+                        break;
                 }
             }
             else if (section == "windowing")
@@ -387,6 +394,16 @@ public class ConfigService : IConfigService
         sb.AppendLine("# Editing mode new compose windows start in.");
         sb.AppendLine("# Drafts and templates always reopen in plain text.");
         sb.AppendLine("# Values: plain, markdown, html.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AutoSaveDrafts = {(config.AutoSaveDrafts ? "on" : "off")}");
+        sb.AppendLine("# Automatically save the message as a draft while composing.");
+        sb.AppendLine("# Auto-save is quiet: success shows in the compose status row without an announcement;");
+        sb.AppendLine("# a failure is announced once. Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AutoSaveIntervalSeconds = {Math.Clamp(config.AutoSaveIntervalSeconds, 30, 600)}");
+        sb.AppendLine("# Seconds between automatic draft saves. Values: 30-600.");
         sb.AppendLine();
 
         // ── [windowing] ──────────────────────────────────────────────────────────

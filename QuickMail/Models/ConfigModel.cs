@@ -69,6 +69,12 @@ public class ConfigModel
     /// <summary>Editing mode new compose windows start in. Drafts and templates always reopen in plain text.</summary>
     public ComposeMode DefaultComposeMode { get; set; } = ComposeMode.PlainText;
 
+    /// <summary>Automatically save composes as drafts while editing.</summary>
+    public bool AutoSaveDrafts { get; set; } = true;
+
+    /// <summary>Seconds between automatic draft saves. Clamped to 30–600.</summary>
+    public int AutoSaveIntervalSeconds { get; set; } = 120;
+
     // ── Advanced ──────────────────────────────────────────────────────────────────
 
     /// <summary>

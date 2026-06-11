@@ -33,21 +33,59 @@ public partial class ComposeViewModel : ObservableObject
     /// <summary>What kind of composition this is; drives the window title prefix.</summary>
     public ComposeKind ComposeKind { get; private set; } = ComposeKind.NewMessage;
 
-    /// <summary>Dynamic window title: "{prefix} — {subject or Untitled}".</summary>
-    public string WindowTitle => ComposeKind switch
+    /// <summary>
+    /// Dynamic window title: "{subject or kind} - {mode} - QuickMail".
+    /// The subject leads so the taskbar and Alt+Tab identify the message; the
+    /// compose mode follows so the editing format is always visible.
+    /// </summary>
+    public string WindowTitle
     {
-        ComposeKind.Reply        => "Reply",
-        ComposeKind.ReplyAll     => "Reply All",
-        ComposeKind.Forward      => "Forward",
-        ComposeKind.EditDraft    => "Draft",
-        ComposeKind.NewDraft     => "Draft",
-        ComposeKind.EditTemplate => "Edit Template",
-        _                        => "Compose",
-    } + " — " + (string.IsNullOrWhiteSpace(Subject) ? "Untitled" : Subject.Trim());
+        get
+        {
+            var kindLabel = ComposeKind switch
+            {
+                ComposeKind.Reply        => "Reply",
+                ComposeKind.ReplyAll     => "Reply All",
+                ComposeKind.Forward      => "Forward",
+                ComposeKind.EditDraft    => "Draft",
+                ComposeKind.NewDraft     => "Draft",
+                ComposeKind.EditTemplate => "Edit Template",
+                _                        => "New Message",
+            };
+            var lead = string.IsNullOrWhiteSpace(Subject) ? kindLabel : Subject.Trim();
+            var mode = CurrentMode switch
+            {
+                ComposeMode.Markdown => "Markdown",
+                ComposeMode.Html     => "HTML",
+                _                    => "Plain Text",
+            };
+            return $"{lead} - {mode} - QuickMail";
+        }
+    }
     [ObservableProperty] private string _body = string.Empty;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ModeDisplay))]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyPropertyChangedFor(nameof(IsHtmlMode))]
+    [NotifyPropertyChangedFor(nameof(IsMarkdownMode))]
+    [NotifyPropertyChangedFor(nameof(IsFormattingAvailable))]
+    [NotifyPropertyChangedFor(nameof(IsSpellNavAvailable))]
     private ComposeMode _currentMode = ComposeMode.PlainText;
+
+    /// <summary>True in HTML mode — some formatting (underline) is HTML-only.</summary>
+    public bool IsHtmlMode => CurrentMode == ComposeMode.Html;
+
+    /// <summary>True in Markdown mode — drives preview availability.</summary>
+    public bool IsMarkdownMode => CurrentMode == ComposeMode.Markdown;
+
+    /// <summary>
+    /// Formatting commands work in both rich modes: HTML applies real formatting,
+    /// Markdown inserts the equivalent syntax. Only Plain Text has none.
+    /// </summary>
+    public bool IsFormattingAvailable => CurrentMode != ComposeMode.PlainText;
+
+    /// <summary>Spelling navigation reads the plain TextBox, which is hidden in HTML mode.</summary>
+    public bool IsSpellNavAvailable => CurrentMode != ComposeMode.Html;
     [ObservableProperty] private bool _isPreviewVisible;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy = false;
@@ -157,19 +195,12 @@ public partial class ComposeViewModel : ObservableObject
         StatusText = "Saving draft…";
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-
-            _draftFolderName ??= await _imap.FindDraftsFolderNameAsync(account.Id, cts.Token);
-            if (_draftFolderName == null)
-            {
-                StatusText = "No Drafts folder found on this account.";
-                return;
-            }
-
-            var compose = BuildComposeModel(account.Id);
-            _draftMessageId = await _imap.AppendDraftAsync(account.Id, compose, _draftMessageId, cts.Token);
-            _isDirty = false;
+            await SaveDraftCoreAsync(account);
             StatusText = "Draft saved.";
+        }
+        catch (DraftFolderMissingException)
+        {
+            StatusText = "No Drafts folder found on this account.";
         }
         catch (Exception ex)
         {
@@ -179,6 +210,85 @@ public partial class ComposeViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>Uploads the current compose state as a draft, replacing any previous draft.</summary>
+    private async Task SaveDraftCoreAsync(AccountModel account)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        _draftFolderName ??= await _imap.FindDraftsFolderNameAsync(account.Id, cts.Token);
+        if (_draftFolderName == null)
+            throw new DraftFolderMissingException();
+
+        var compose = BuildComposeModel(account.Id);
+        _draftMessageId = await _imap.AppendDraftAsync(account.Id, compose, _draftMessageId, cts.Token);
+        _isDirty = false;
+    }
+
+    private sealed class DraftFolderMissingException : Exception { }
+
+    // ── Auto-save ──────────────────────────────────────────────────────────────
+
+    /// <summary>Visual status-row text, e.g. "Auto-saved 3:42 PM". Never announced on success.</summary>
+    [ObservableProperty] private string _autoSaveText = string.Empty;
+
+    /// <summary>True once a failed auto-save has been announced; reset by the next success.</summary>
+    private bool _autoSaveFailureAnnounced;
+
+    /// <summary>
+    /// Raised when an auto-save fails for the first time since the last success,
+    /// so the View can announce it once instead of nagging every interval.
+    /// </summary>
+    public event Action<string>? AutoSaveFailed;
+
+    /// <summary>
+    /// Periodic background draft save. Quiet by design: success only updates
+    /// <see cref="AutoSaveText"/> (visual status), and failures are announced once.
+    /// Skips templates (saving a template edit as a mail draft would be wrong),
+    /// untouched composes, and composes with no content worth keeping.
+    /// </summary>
+    public async Task AutoSaveAsync()
+    {
+        if (!_isDirty || _isSent || IsBusy) return;
+        if (ComposeKind == ComposeKind.EditTemplate) return;
+        var account = SenderAccount;
+        if (account == null) return;
+        if (!HasAutoSavableContent()) return;
+
+        IsBusy = true;
+        try
+        {
+            await SaveDraftCoreAsync(account);
+            AutoSaveText = $"Auto-saved {DateTime.Now:t}";
+            _autoSaveFailureAnnounced = false;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("AutoSaveAsync: draft auto-save failed", ex);
+            AutoSaveText = "Auto-save failed";
+            if (!_autoSaveFailureAnnounced)
+            {
+                _autoSaveFailureAnnounced = true;
+                AutoSaveFailed?.Invoke("Auto-save failed. Your draft is not saved to the server.");
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Something worth keeping: any recipient, subject, body text, or attachment.</summary>
+    private bool HasAutoSavableContent()
+    {
+        if (!string.IsNullOrWhiteSpace(To) || !string.IsNullOrWhiteSpace(Cc) || !string.IsNullOrWhiteSpace(Bcc))
+            return true;
+        if (!string.IsNullOrWhiteSpace(Subject)) return true;
+        if (Attachments.Count > 0) return true;
+        if (CurrentMode == ComposeMode.Html)
+            return !(RichBodyProvider?.Invoke() ?? RichBodySnapshot.Empty).IsEmpty;
+        return !string.IsNullOrWhiteSpace(Body);
     }
 
     [RelayCommand]

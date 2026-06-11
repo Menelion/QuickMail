@@ -172,6 +172,14 @@ Open **File → Settings** (or press `Ctrl+,`) to change application-wide prefer
 | **Show Message Status** | Whether the read/unread/replied/forwarded status indicator appears in the message list. |
 | **Initial Sync Count** | Maximum messages fetched per folder on the first sync of a newly connected account. |
 
+The **Composing** group on the General tab controls the compose window:
+
+| Setting | What it controls |
+|---------|------------------|
+| **Automatically save drafts while composing** | On by default. Quietly saves your message as a server draft while you write — see [Automatic draft saving](#automatic-draft-saving). |
+| **Auto-save interval** | How often auto-save runs: 30 seconds to 10 minutes (default 2 minutes). |
+| **Default compose mode** | The editing mode new messages start in: Plain Text, Markdown, or HTML — see [Compose modes](#compose-modes-plain-text-markdown-and-html). Drafts and templates always reopen in Plain Text. |
+
 ### Advanced tab
 
 | Setting | What it controls |
@@ -808,6 +816,89 @@ Common actions available through context menus:
 - Press `Ctrl+N`, or activate **New** in the toolbar.
 - The compose window opens. If you have more than one account, the **From** field lets you choose which account to send from.
 
+### The compose window
+
+From top to bottom, the compose window contains:
+
+1. A **menu bar** (File, Edit, View, Format, Tools) — press **Alt** or **F10** to reach it.
+2. A **formatting toolbar**, shown in Markdown and HTML modes.
+3. The **From, To, Cc, Bcc, and Subject** fields.
+4. The **attachment** controls and list.
+5. The **message body** editor.
+6. A **status row** with the compose mode selector, the auto-save status, the send status, and the Send / Insert Template / Save as Template / Save Draft / Cancel buttons.
+
+The window title leads with your subject and the editing mode — for example, "Lunch Friday - HTML - QuickMail" — so the taskbar and Alt+Tab identify each message. Until you enter a subject, the title shows the kind of message instead ("New Message", "Reply", "Draft").
+
+### Compose menu bar
+
+Every compose action is available from the menu bar, with its keyboard shortcut shown next to the item:
+
+| Menu | Contains |
+|------|----------|
+| **File** | Send, Save Draft, Insert Template, Save as Template, Add Attachments, Close |
+| **Edit** | Undo, Redo, Cut, Copy, Paste, Select All, Next/Previous Misspelling |
+| **View** | Plain Text / Markdown / HTML mode (the active mode is checked), Markdown Preview |
+| **Format** | Bold, Italic, Underline, Strikethrough, Headings 1–3, Bullet/Numbered List, Insert Link, Clear Formatting, Announce Formatting, Show Formatting |
+| **Tools** | Address Book, Check Addresses, Toggle Spelling Announcements, Command Palette |
+
+Format menu items are unavailable in Plain Text mode and shown grayed. Opening the Format menu in Plain Text mode announces why: formatting requires Markdown or HTML mode. Menu items whose action cannot apply right now — like Cut with nothing selected — are also grayed, following standard Windows behavior.
+
+### Compose modes: Plain Text, Markdown, and HTML
+
+Every message can be written in one of three modes:
+
+- **Plain Text** (the default) — no formatting; exactly what you type is sent.
+- **Markdown** — write Markdown syntax in the regular text editor (for example `**bold**`, `# Heading`, `- list item`). When the message is sent, QuickMail renders the Markdown to formatted HTML. Recipients see the formatting; recipients whose mail app prefers plain text see your readable Markdown source.
+- **HTML** — a rich text editor with real formatting. For screen reader users this is a native edit control, not an embedded web page: your normal edit cursor works exactly as in any text field, with no virtual cursor or browse mode.
+
+**Switching modes:**
+
+| Method | How |
+|--------|-----|
+| Keyboard | `Ctrl+Shift+1` (Plain Text), `Ctrl+Shift+2` (Markdown), `Ctrl+Shift+3` (HTML) |
+| Menu | **View → Plain Text / Markdown / HTML** — the active mode is checked |
+| Status row | The compose mode selector at the bottom left of the window |
+
+Your content converts automatically when you switch — Markdown becomes formatted content when entering HTML mode, formatted content becomes Markdown syntax when leaving it. Switching down to Plain Text discards formatting, so QuickMail asks for confirmation first. Each switch is confirmed aloud ("Switched to Markdown mode.").
+
+The mode new messages start in is set under **Settings → General → Composing → Default compose mode**. Drafts and templates always reopen in Plain Text regardless of this setting.
+
+### Formatting (Markdown and HTML modes)
+
+The same formatting commands work in both rich modes. In HTML mode they apply real formatting; in Markdown mode they insert the equivalent Markdown syntax at the cursor or around the selected text. Every command confirms its result aloud — "Bold on", "Heading 2", "Bullet list off":
+
+| Command | Shortcut | In Markdown mode inserts |
+|---------|----------|--------------------------|
+| Bold | `Ctrl+B` | `**` around the selection |
+| Italic | `Ctrl+I` | `*` around the selection |
+| Underline | `Ctrl+U` | HTML mode only — see note below |
+| Strikethrough | `Ctrl+Shift+X` | `~~` around the selection |
+| Heading 1 / 2 / 3 | `Ctrl+Alt+1/2/3` | `#` / `##` / `###` at the start of the line |
+| Bullet list | `Ctrl+Shift+L` | `- ` at the start of each selected line |
+| Numbered list | `Ctrl+Shift+N` | `1. `, `2. `, … at the start of each selected line |
+| Insert link | `Ctrl+L` | `[text](address)` via a small dialog |
+| Clear formatting | `Ctrl+Space` | Removes markers and prefixes from the selection |
+
+Tips:
+
+- With text selected, a command wraps (or unwraps) the selection. With no selection, it inserts an empty marker pair and places the cursor inside, ready to type — invoke it again to toggle off.
+- Applying the same heading level twice returns the line to normal text.
+- Markdown has no underline syntax, so underline works in HTML mode only. Invoking it in Markdown explains this aloud.
+- The same commands are on the **Format** menu and the formatting toolbar.
+
+### Checking formatting at the cursor
+
+Two commands report the formatting in effect where your cursor is. Both work in Markdown and HTML modes:
+
+- **Announce Formatting (`Ctrl+T`)** speaks a one-line summary — for example, "Heading 2. Bold on, Italic off, Underline off, Strikethrough off."
+- **Show Formatting (`Ctrl+Shift+T`)** opens a small window listing the same facts one per row — the block type first ("Heading 2"), then each attribute ("Bold on", "Italic off", …). Arrow through the entries at your own pace; press **Escape** or **Enter** to close and return to the editor exactly where you were.
+
+### Markdown preview (F8)
+
+In Markdown mode, press **F8** to open a visual preview of the rendered result below the editor. The preview refreshes as you type, after a brief pause.
+
+The preview is a visual aid only: it is deliberately not focusable, so keyboard focus can never be trapped in it, and it is not exposed for review. Press **F8** again to hide it.
+
 ### Address fields (To, Cc, Bcc)
 
 The **To**, **Cc**, and **Bcc** fields keep each confirmed address separate. When you finish typing an address it becomes its own button — showing the contact's name, or the email address if no name is known. Each button can be navigated to, removed, or copied independently. Multiple addresses appear as a row of buttons before the text cursor.
@@ -899,6 +990,16 @@ These are also available as buttons in the toolbar.
 | Alt+U | Jump to the Subject field |
 | Alt+M | Jump to the From (account) field |
 | Alt+Y | Jump to the message body |
+| Ctrl+Shift+1 / 2 / 3 | Switch to Plain Text / Markdown / HTML mode |
+| Ctrl+B / Ctrl+I / Ctrl+U | Bold / Italic / Underline (rich modes) |
+| Ctrl+Shift+X | Strikethrough (rich modes) |
+| Ctrl+Alt+1 / 2 / 3 | Heading 1 / 2 / 3 (rich modes) |
+| Ctrl+Shift+L / Ctrl+Shift+N | Bullet list / Numbered list (rich modes) |
+| Ctrl+L | Insert link (rich modes) |
+| Ctrl+Space | Clear formatting (rich modes) |
+| Ctrl+T | Announce formatting at the cursor (rich modes) |
+| Ctrl+Shift+T | Show formatting at the cursor in a list (rich modes) |
+| F8 | Show or hide the Markdown preview (Markdown mode) |
 | F7 | Jump to next misspelling |
 | Shift+F7 | Jump to previous misspelling |
 | Alt+F7 | Repeat spelling announcement for current word |
@@ -925,6 +1026,17 @@ Drafts are saved to the **Drafts folder on your mail server**, so they are acces
 - The draft is uploaded to the server immediately. The status bar shows **"Draft saved."** when it is done.
 - You can save as many times as you like — each save replaces the previous version.
 
+### Automatic draft saving
+
+QuickMail also saves your message as a draft automatically while you compose. This is on by default, every 2 minutes, and is designed to stay out of your way:
+
+- A successful auto-save quietly updates the status row ("Auto-saved 3:42 PM") with **no announcement**, so your writing is never interrupted.
+- If an auto-save fails, it is announced **once** — "Auto-save failed. Your draft is not saved to the server." — and then stays quiet until a save succeeds again.
+- To hear when the last auto-save happened, open the compose command palette (**Ctrl+Shift+P**) and run **Announce Last Auto-Save**.
+- Auto-save skips messages you have not changed, completely empty messages, and template editing. Like manual saves, each auto-save replaces the previous server draft.
+
+Turn auto-save off or change the interval (30 seconds to 10 minutes) under **Settings → General → Composing**.
+
 ### Closing with unsaved changes
 
 If you close the compose window after making changes that have not been sent or saved, QuickMail will ask:
@@ -941,6 +1053,8 @@ If you close the compose window after making changes that have not been sent or 
 4. Make your edits, then send with `Alt+S` or save again with `Ctrl+S`.
 
 When you send a draft, it is automatically removed from the Drafts folder.
+
+**Note:** drafts always reopen in Plain Text mode, regardless of the mode they were written in. The editing mode is not yet stored with the draft on the server.
 
 ---
 
@@ -1121,6 +1235,17 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Alt+U | Jump to Subject field |
 | Alt+M | Jump to From (account) field |
 | Alt+Y | Jump to message body |
+| Alt or F10 | Activate the menu bar |
+| Ctrl+Shift+1 / 2 / 3 | Plain Text / Markdown / HTML mode |
+| Ctrl+B / Ctrl+I / Ctrl+U | Bold / Italic / Underline (rich modes) |
+| Ctrl+Shift+X | Strikethrough (rich modes) |
+| Ctrl+Alt+1 / 2 / 3 | Heading 1 / 2 / 3 (rich modes) |
+| Ctrl+Shift+L / Ctrl+Shift+N | Bullet / Numbered list (rich modes) |
+| Ctrl+L | Insert link (rich modes) |
+| Ctrl+Space | Clear formatting (rich modes) |
+| Ctrl+T | Announce formatting at the cursor (rich modes) |
+| Ctrl+Shift+T | Show formatting at the cursor in a list (rich modes) |
+| F8 | Toggle Markdown preview (Markdown mode) |
 | Left / Right arrow (on an address) | Move between addresses |
 | Delete / Backspace (on an address) | Remove focused address |
 | Delete / Backspace (with chips selected) | Remove all selected addresses |
@@ -1173,6 +1298,9 @@ Lines starting with `#` are comments and are ignored. The file uses a simple `ke
 | `SyncDays` | integer >= `0` | `30` | How many days back to look for messages when syncing. Set to `0` to fetch all messages (may be slow on large mailboxes). |
 | `InitialSyncCount` | integer >= `0` | `500` | Maximum number of messages fetched per folder on the very first sync of a newly connected account. |
 | `MaxImapConnectionsPerAccount` | `1`–`15` | `6` | Maximum simultaneous IMAP connections QuickMail may open for each account. Background work is capped below this value so opening messages keeps reserved capacity. Higher values can make large accounts more responsive, but only raise this if your mail provider allows it. |
+| `DefaultComposeMode` | `plain` / `markdown` / `html` | `plain` | The editing mode new compose windows start in. Drafts and templates always reopen in plain text. Also available in Settings → General → Composing. |
+| `AutoSaveDrafts` | `on` / `off` | `on` | Automatically save the message as a server draft while composing. Also available in Settings → General → Composing. |
+| `AutoSaveIntervalSeconds` | `30`–`600` | `120` | Seconds between automatic draft saves. Also available in Settings → General → Composing. |
 
 ### `[account:<guid>]` overrides
 

@@ -15,6 +15,60 @@ Both downloads include the .NET 8 runtime — you do not need to install .NET se
 
 ## New Features
 
+### Rich Compose: Plain Text, Markdown, and HTML Modes
+
+Composing email gets its largest update yet. Every compose window now offers three editing modes:
+
+- **Plain Text** — the classic experience, unchanged.
+- **Markdown** — write Markdown source in the familiar text editor; QuickMail renders it to formatted HTML when the message is sent. A live visual preview is available on **F8**.
+- **HTML** — a rich text editor with real formatting: bold, italic, underline, strikethrough, three heading levels, bullet and numbered lists, and links.
+
+Switch modes at any time with **Ctrl+Shift+1/2/3**, the **View** menu, or the mode selector in the compose status row. Content converts between modes automatically; switching from a rich mode down to Plain Text asks for confirmation first, because formatting would be lost. Messages composed in Markdown or HTML are sent with both a formatted HTML part and a plain text part, so every recipient's mail app can display them.
+
+**Accessibility was the design constraint, not an afterthought.** The HTML editor is a native Windows rich edit control, not an embedded browser — screen readers stay in their normal edit cursor with no virtual cursor or browse mode. The Markdown preview is deliberately not focusable, so keyboard focus can never be trapped in it.
+
+### Formatting Commands
+
+Formatting works in both rich modes — in HTML mode the commands apply real formatting; in Markdown mode they insert the equivalent Markdown syntax at the cursor or around the selection. Each command confirms its result aloud ("Bold on", "Heading 2", "Bullet list off"):
+
+| Command | Shortcut |
+|---------|----------|
+| Bold / Italic / Underline | `Ctrl+B` / `Ctrl+I` / `Ctrl+U` |
+| Strikethrough | `Ctrl+Shift+X` |
+| Heading 1 / 2 / 3 | `Ctrl+Alt+1/2/3` |
+| Bullet list / Numbered list | `Ctrl+Shift+L` / `Ctrl+Shift+N` |
+| Insert link | `Ctrl+L` |
+| Clear formatting | `Ctrl+Space` |
+| Announce formatting state | `Ctrl+T` |
+| Show formatting list | `Ctrl+Shift+T` |
+| Toggle Markdown preview | `F8` (Markdown mode) |
+
+One exception: Markdown has no underline syntax, so underline is available in HTML mode only — invoking it in Markdown explains this aloud.
+
+**Two ways to check formatting at the cursor:**
+
+- **Announce Formatting (`Ctrl+T`)** speaks a one-line summary, for example "Heading 2. Bold on, Italic off, Underline off, Strikethrough off."
+- **Show Formatting (`Ctrl+Shift+T`)** opens a small window listing the same facts one per row, so you can arrow through them at your own pace. **Escape** or **Enter** closes it and returns focus to the editor.
+
+### Compose Menu Bar
+
+The compose window now has a full menu bar — **File, Edit, View, Format, and Tools** — so every compose action is discoverable without memorizing shortcuts. Press **Alt** or **F10** to reach it; every item shows its keyboard shortcut. The Format menu's items gray out in Plain Text mode, and opening it there explains that formatting requires Markdown or HTML mode. Following Windows convention, top-level menus are never skipped during arrow navigation.
+
+### Automatic Draft Saving
+
+QuickMail now saves your message as a draft automatically while you compose — on by default, every 2 minutes. Auto-save is deliberately quiet:
+
+- A successful save updates a small status ("Auto-saved 3:42 PM") in the compose status row **without any announcement**, so it never interrupts your writing.
+- A failed save is announced **once**, then stays quiet until a save succeeds again.
+- The command palette includes **Announce Last Auto-Save** to hear the last save time on demand.
+- Auto-save skips untouched composes, empty composes, and template editing, and repeated saves replace the previous server draft rather than piling up copies.
+
+Control it under **Settings → General → Composing**: turn auto-save off, choose an interval from 30 seconds to 10 minutes, and pick the **default compose mode** new messages start in.
+
+### Compose Window Titles
+
+The compose window title now leads with your subject and editing mode — for example, "Lunch Friday - HTML - QuickMail" — so the taskbar and Alt+Tab identify each message at a glance. The title updates live as you type the subject or switch modes.
+
 ### Microsoft Graph Backend (Preview)
 
 QuickMail now includes a read-only Microsoft Graph backend alongside IMAP, enabling support for Microsoft 365 and Outlook.com accounts. This is a foundation for future Microsoft account support; full sync and compose features for Graph accounts are coming in future releases.
@@ -47,12 +101,16 @@ Screen reader users will experience significantly quieter sync progress announce
 - "Synced 40 of 45 folders."
 - "Sync complete."
 
-The status bar continues to show "Syncing mail…" for sighted users without duplicating announcements through the screen reader.
+The status bar continues to show "Syncing mail…" without duplicating announcements through the screen reader.
 
 ---
 
 ## Bug Fixes
 
+- **HTML compose mode was silent to screen readers.** Entering HTML mode replaced the rich editor's document, which permanently disconnected the text from the UI Automation layer — screen readers read nothing of what was actually in the editor. The editor now keeps one document for its lifetime and loads content into it in place, with an automated regression test asserting what assistive technology actually receives across mode switches.
+- **Markdown preview could steal keyboard focus.** Opening the preview (F8) initializes an embedded web view, which could silently move focus into the invisible preview surface — keystrokes and screen reader navigation went nowhere. Focus is now restored to the editor after the preview loads.
+- **Escape closed the whole compose window from open menus and dropdowns.** Escape now closes the open menu, combo dropdown, or address autocomplete first; only when nothing transient is open does it close the window.
+- **Formatting announcements were silenced by focus changes.** Invoking a formatting command from the menu restored focus to the editor, and the focus speech overrode the result announcement — all you heard was "message body." Formatting feedback is now timed to land after focus settles.
 - **Duplicate sync progress announcements.** The status bar text and explicit screen reader announcements were both being read aloud during sync, creating redundant chatter. Now only the explicit announcements (which respect user settings) are spoken, eliminating duplicates.
 
 ---
@@ -64,6 +122,16 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 ---
 
 ## Internal
+
+### Rich Compose
+
+- `ComposeMode` (PlainText / Markdown / Html) on `ComposeModel`; rich messages are sent as `multipart/alternative` by `MimeMessageBuilder` whenever `HtmlBody` is present
+- `MarkdownService` (Markdig) renders Markdown to HTML; `RichTextDocumentConverter` converts FlowDocument ↔ HTML/Markdown with block kinds tracked via `Paragraph.Tag`
+- `MarkdownEditing` — pure, unit-tested text operations behind the Markdown formatting commands, applied through `TextBox.SelectedText` so each toggle is one undo unit
+- **Never replace `RichTextBox.Document`** — WPF's automation peer binds to the original document's text container and never rebinds; all loads go through `RichTextDocumentConverter.LoadInto`. Guarded by `ComposeUiaTextPatternTests`, which asserts UIA TextPattern content through real mode switches
+- `FormattingListWindow` — the Show Formatting list; shares its state-reading code with the spoken announcement
+- Auto-save: `ComposeViewModel.AutoSaveAsync` driven by a `DispatcherTimer`; config keys `AutoSaveDrafts` and `AutoSaveIntervalSeconds` (clamped 30–600); failure announcements arm once per failure streak
+- New Settings → General → Composing group (auto-save toggle, interval, `DefaultComposeMode`)
 
 ### Microsoft Graph Support
 
@@ -81,6 +149,12 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 ---
 
 ## Known Limitations
+
+### Rich Compose
+
+- **Drafts and templates always reopen in Plain Text.** The editing mode is not yet round-tripped through the mail server, so a draft written in HTML reopens as plain text (the formatted content is preserved in the sent form, but further editing starts from the text representation).
+- **No underline in Markdown mode.** Markdown has no underline syntax; use HTML mode when underline matters.
+- **Images, tables, fonts, and colors** are not yet available in the HTML editor.
 
 ### Microsoft Graph Backend
 

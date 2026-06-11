@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -162,7 +162,25 @@ public partial class ComposeWindow : Window
         };
         BodyBox.SelectionChanged += BodyBox_SelectionChanged;
         Closing += OnWindowClosing;
+
+        // Auto-save: quiet periodic draft saves. Success shows in the status row
+        // only; a failure is announced once (Status category) by the VM event.
+        vm.AutoSaveFailed += message =>
+            AccessibilityHelper.Announce(this, message, category: AnnouncementCategory.Status);
+        var cfg = _configService.Load();
+        if (cfg.AutoSaveDrafts)
+        {
+            _autoSaveTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(Math.Clamp(cfg.AutoSaveIntervalSeconds, 30, 600)),
+            };
+            _autoSaveTimer.Tick += (_, _) => _ = _vm.AutoSaveAsync();
+            _autoSaveTimer.Start();
+            Closed += (_, _) => _autoSaveTimer.Stop();
+        }
     }
+
+    private DispatcherTimer? _autoSaveTimer;
 
     // ── Autocomplete ─────────────────────────────────────────────────────────
 
@@ -557,8 +575,18 @@ public partial class ComposeWindow : Window
 
         if (e.Key == Key.Escape)
         {
+            // Transient UI consumes Escape itself: an open menu (focus sits on a
+            // MenuItem) or an open combo dropdown must close without closing the
+            // whole compose window. This preview handler tunnels ahead of them,
+            // so step aside instead of cancelling.
+            if (Keyboard.FocusedElement is MenuItem
+                || FromCombo.IsDropDownOpen
+                || ModeSelector.IsDropDownOpen
+                || AutoCompletePopup.IsOpen)
+                return;
             _vm.CancelCommand.Execute(null);
             e.Handled = true;
+            return;
         }
         else if (e.SystemKey == Key.U && (Keyboard.Modifiers & ModifierKeys.Alt) != 0)
         {
@@ -579,6 +607,7 @@ public partial class ComposeWindow : Window
         }
 
         // ── Registry-based compose commands ──────────────────────────────────
+        if (e.Handled) return;  // already dispatched above — don't double-execute
         var key = e.Key == Key.System ? e.SystemKey
             : e.Key == Key.ImeProcessed ? e.ImeProcessedKey
             : e.Key;
@@ -822,6 +851,12 @@ public partial class ComposeWindow : Window
             id: "compose.openAddressBook", category: "Compose", title: "Address Book",
             execute: OpenAddressBook,
             defaultKey: Key.B, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift));
+
+        _registry.Register(new CommandDefinition(
+            id: "compose.announceAutoSave", category: "Compose", title: "Announce Last Auto-Save",
+            execute: () => AccessibilityHelper.Announce(this,
+                string.IsNullOrEmpty(_vm.AutoSaveText) ? "Not auto-saved yet." : _vm.AutoSaveText + ".",
+                category: AnnouncementCategory.Result)));
     }
 
     private void OpenAddressBook()
@@ -940,11 +975,21 @@ public partial class ComposeWindow : Window
     {
         _vm.RichBodyProvider = () => RichTextDocumentConverter.Snapshot(RichBodyBox.Document);
 
+        // The editor keeps its original FlowDocument for the window's lifetime.
+        // Replacing RichTextBox.Document breaks UIA: the automation peer stays
+        // bound to the first document's text container, so screen readers would
+        // permanently read the stale (empty) document. All loads mutate Blocks
+        // in place via LoadInto instead.
+        RichBodyBox.Document.FontFamily = new FontFamily("Segoe UI");
+        RichBodyBox.Document.FontSize = 13;
+        RichBodyBox.Document.PagePadding = new Thickness(4);
+
         _vm.LoadHtmlIntoEditorRequested += html =>
         {
             // Programmatic load is not a user edit — don't mark the draft dirty.
             _suppressRichTextChanged = true;
-            RichBodyBox.Document = RichTextDocumentConverter.FromHtml(html);
+            RichTextDocumentConverter.LoadInto(RichBodyBox.Document, html);
+            RichBodyBox.CaretPosition = RichBodyBox.Document.ContentStart;
             _suppressRichTextChanged = false;
         };
 
@@ -1022,7 +1067,46 @@ public partial class ComposeWindow : Window
             _                    => 0,
         };
         _syncingModeSelector = false;
+
+        // Radio-style check marks on the View menu's mode items.
+        MenuModePlain.IsChecked    = _vm.CurrentMode == ComposeMode.PlainText;
+        MenuModeMarkdown.IsChecked = _vm.CurrentMode == ComposeMode.Markdown;
+        MenuModeHtml.IsChecked     = _vm.CurrentMode == ComposeMode.Html;
     }
+
+    // ── Menu bar handlers (same dispatch as the equivalent shortcuts) ─────────
+
+    private void MenuSend_Click(object sender, RoutedEventArgs e)
+    {
+        CommitAllAddressInputs();
+        _vm.SendCommand.Execute(null);
+    }
+
+    private void MenuModePlain_Click(object sender, RoutedEventArgs e)    => _vm.SetMode(ComposeMode.PlainText);
+    private void MenuModeMarkdown_Click(object sender, RoutedEventArgs e) => _vm.SetMode(ComposeMode.Markdown);
+    private void MenuModeHtml_Click(object sender, RoutedEventArgs e)     => _vm.SetMode(ComposeMode.Html);
+
+    /// <summary>
+    /// WPF skips disabled menu items during arrow navigation, so when every
+    /// Format item is grayed (Plain Text mode) an opened Format menu would be
+    /// silent dead air. Announce why the items are unavailable instead.
+    /// </summary>
+    private void FormatMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (_vm.CurrentMode == ComposeMode.PlainText)
+            AccessibilityHelper.Announce(this,
+                "Formatting commands require Markdown or HTML mode.",
+                category: AnnouncementCategory.Hint);
+    }
+
+    private void MenuNextMisspelling_Click(object sender, RoutedEventArgs e) => NavigateSpellingError(forward: true);
+    private void MenuPrevMisspelling_Click(object sender, RoutedEventArgs e) => NavigateSpellingError(forward: false);
+    private void MenuAnnounceFormatting_Click(object sender, RoutedEventArgs e) => AnnounceFormattingState();
+    private void MenuShowFormatting_Click(object sender, RoutedEventArgs e)     => ShowFormatting();
+    private void MenuAddressBook_Click(object sender, RoutedEventArgs e)     => OpenAddressBook();
+    private void MenuCheckAddresses_Click(object sender, RoutedEventArgs e)  => CheckAddresses();
+    private void MenuToggleSpelling_Click(object sender, RoutedEventArgs e)  => ToggleSpellingAnnouncements();
+    private void MenuCommandPalette_Click(object sender, RoutedEventArgs e)  => OpenCommandPalette();
 
     private void ModeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1040,7 +1124,9 @@ public partial class ComposeWindow : Window
 
     private void RegisterRichComposeCommands()
     {
-        bool InHtmlMode() => _vm.CurrentMode == ComposeMode.Html;
+        // Formatting works in both rich modes: HTML applies real formatting,
+        // Markdown inserts the equivalent syntax.
+        bool InRichMode() => _vm.CurrentMode != ComposeMode.PlainText;
         bool InMarkdownMode() => _vm.CurrentMode == ComposeMode.Markdown;
 
         _registry.Register(new CommandDefinition(
@@ -1062,73 +1148,79 @@ public partial class ComposeWindow : Window
             id: "compose.toggleBold", category: "Compose", title: "Bold",
             execute: ToggleBold,
             defaultKey: Key.B, defaultModifiers: ModifierKeys.Control,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.toggleItalic", category: "Compose", title: "Italic",
             execute: ToggleItalic,
             defaultKey: Key.I, defaultModifiers: ModifierKeys.Control,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.toggleUnderline", category: "Compose", title: "Underline",
             execute: ToggleUnderline,
             defaultKey: Key.U, defaultModifiers: ModifierKeys.Control,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.toggleStrikethrough", category: "Compose", title: "Strikethrough",
             execute: ToggleStrikethrough,
             defaultKey: Key.X, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.heading1", category: "Compose", title: "Heading 1",
             execute: () => ApplyHeading(1),
             defaultKey: Key.D1, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.heading2", category: "Compose", title: "Heading 2",
             execute: () => ApplyHeading(2),
             defaultKey: Key.D2, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.heading3", category: "Compose", title: "Heading 3",
             execute: () => ApplyHeading(3),
             defaultKey: Key.D3, defaultModifiers: ModifierKeys.Control | ModifierKeys.Alt,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.bulletList", category: "Compose", title: "Bullet List",
             execute: () => ToggleList(ordered: false),
             defaultKey: Key.L, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.numberedList", category: "Compose", title: "Numbered List",
             execute: () => ToggleList(ordered: true),
             defaultKey: Key.N, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.insertLink", category: "Compose", title: "Insert Link…",
             execute: InsertLink,
             defaultKey: Key.L, defaultModifiers: ModifierKeys.Control,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.clearFormatting", category: "Compose", title: "Clear Formatting",
             execute: ClearFormatting,
             defaultKey: Key.Space, defaultModifiers: ModifierKeys.Control,
-            isAvailable: InHtmlMode));
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.queryFormatting", category: "Compose", title: "Announce Formatting State",
             execute: AnnounceFormattingState,
-            defaultKey: Key.Space, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
-            isAvailable: InHtmlMode));
+            defaultKey: Key.T, defaultModifiers: ModifierKeys.Control,
+            isAvailable: InRichMode));
+
+        _registry.Register(new CommandDefinition(
+            id: "compose.showFormatting", category: "Compose", title: "Show Formatting…",
+            execute: ShowFormatting,
+            defaultKey: Key.T, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
             id: "compose.togglePreview", category: "Compose", title: "Toggle Markdown Preview",
@@ -1137,7 +1229,23 @@ public partial class ComposeWindow : Window
             isAvailable: InMarkdownMode));
     }
 
-    // ── Formatting commands (HTML mode) ──────────────────────────────────────
+    // ── Formatting commands (HTML and Markdown modes) ─────────────────────────
+    //
+    // Every command dispatches by mode: HTML applies real formatting to the
+    // RichTextBox; Markdown inserts the equivalent syntax into BodyBox through
+    // MarkdownEditing (pure text operations, applied via SelectedText so each
+    // toggle is one undo unit).
+
+    /// <summary>
+    /// Formatting feedback is announced deferred (ApplicationIdle) with
+    /// interrupt. Menu invocations close the menu and restore focus to the
+    /// editor, and the screen reader's focus speech ("Message body, edit")
+    /// otherwise lands after — and silences — an immediate announcement.
+    /// </summary>
+    private void AnnounceFormatting(string text) =>
+        Dispatcher.InvokeAsync(
+            () => AccessibilityHelper.Announce(this, text, interrupt: true, category: AnnouncementCategory.Result),
+            DispatcherPriority.ApplicationIdle);
 
     /// <summary>
     /// EditingCommands and selection formatting need the editor focused — palette
@@ -1149,32 +1257,60 @@ public partial class ComposeWindow : Window
             RichBodyBox.Focus();
     }
 
+    private void ApplyMarkdownEdit(MarkdownEdit edit)
+    {
+        _suppressSpellingAnnouncement = true;
+        BodyBox.Select(edit.ReplaceStart, edit.ReplaceLength);
+        BodyBox.SelectedText = edit.Replacement;
+        BodyBox.Select(edit.SelectionStart, edit.SelectionLength);
+        _suppressSpellingAnnouncement = false;
+        if (!BodyBox.IsKeyboardFocusWithin)
+            BodyBox.Focus();
+    }
+
+    private void ToggleMarkdownInline(string marker, string name)
+    {
+        var edit = MarkdownEditing.ToggleInline(
+            BodyBox.Text, BodyBox.SelectionStart, BodyBox.SelectionLength, marker);
+        ApplyMarkdownEdit(edit);
+        AnnounceFormatting($"{name} {(edit.TurnedOn ? "on" : "off")}");
+    }
+
     private void ToggleBold()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown) { ToggleMarkdownInline("**", "Bold"); return; }
         EnsureRichEditorFocused();
         EditingCommands.ToggleBold.Execute(null, RichBodyBox);
         var on = Equals(RichBodyBox.Selection.GetPropertyValue(TextElement.FontWeightProperty), FontWeights.Bold);
-        AccessibilityHelper.Announce(this, on ? "Bold on" : "Bold off", category: AnnouncementCategory.Result);
+        AnnounceFormatting(on ? "Bold on" : "Bold off");
     }
 
     private void ToggleItalic()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown) { ToggleMarkdownInline("*", "Italic"); return; }
         EnsureRichEditorFocused();
         EditingCommands.ToggleItalic.Execute(null, RichBodyBox);
         var on = Equals(RichBodyBox.Selection.GetPropertyValue(TextElement.FontStyleProperty), FontStyles.Italic);
-        AccessibilityHelper.Announce(this, on ? "Italic on" : "Italic off", category: AnnouncementCategory.Result);
+        AnnounceFormatting(on ? "Italic on" : "Italic off");
     }
 
     private void ToggleUnderline()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown)
+        {
+            // Markdown has no underline and the pipeline blocks raw HTML.
+            AnnounceFormatting("Underline is not available in Markdown. Use HTML mode for underline.");
+            return;
+        }
         EnsureRichEditorFocused();
         EditingCommands.ToggleUnderline.Execute(null, RichBodyBox);
         var on = SelectionHasDecoration(TextDecorationLocation.Underline);
-        AccessibilityHelper.Announce(this, on ? "Underline on" : "Underline off", category: AnnouncementCategory.Result);
+        AnnounceFormatting(on ? "Underline on" : "Underline off");
     }
 
     private void ToggleStrikethrough()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown) { ToggleMarkdownInline("~~", "Strikethrough"); return; }
         EnsureRichEditorFocused();
         var selection = RichBodyBox.Selection;
         var current = selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;
@@ -1189,7 +1325,7 @@ public partial class ComposeWindow : Window
             updated.Add(TextDecorations.Strikethrough[0]);
         }
         selection.ApplyPropertyValue(Inline.TextDecorationsProperty, updated);
-        AccessibilityHelper.Announce(this, has ? "Strikethrough off" : "Strikethrough on", category: AnnouncementCategory.Result);
+        AnnounceFormatting(has ? "Strikethrough off" : "Strikethrough on");
     }
 
     private bool SelectionHasDecoration(TextDecorationLocation location)
@@ -1201,6 +1337,14 @@ public partial class ComposeWindow : Window
     /// <summary>Toggles a heading on the caret paragraph. Applying the same level again returns to normal text.</summary>
     private void ApplyHeading(int level)
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown)
+        {
+            var edit = MarkdownEditing.ToggleHeading(BodyBox.Text, BodyBox.CaretIndex, level);
+            ApplyMarkdownEdit(edit);
+            AnnounceFormatting(edit.TurnedOn ? $"Heading {level}" : "Normal text");
+            return;
+        }
+
         EnsureRichEditorFocused();
         var paragraph = RichBodyBox.CaretPosition.Paragraph;
         if (paragraph == null) return;
@@ -1211,35 +1355,57 @@ public partial class ComposeWindow : Window
             paragraph.Tag = null;
             paragraph.ClearValue(TextElement.FontSizeProperty);
             paragraph.ClearValue(TextElement.FontWeightProperty);
-            AccessibilityHelper.Announce(this, "Normal text", category: AnnouncementCategory.Result);
+            AnnounceFormatting("Normal text");
         }
         else
         {
             paragraph.Tag = tag;
             paragraph.FontSize = RichTextDocumentConverter.HeadingFontSize(level);
             paragraph.FontWeight = FontWeights.Bold;
-            AccessibilityHelper.Announce(this, $"Heading {level}", category: AnnouncementCategory.Result);
+            AnnounceFormatting($"Heading {level}");
         }
         _vm.MarkBodyDirty();
     }
 
     private void ToggleList(bool ordered)
     {
+        var name = ordered ? "Numbered list" : "Bullet list";
+        if (_vm.CurrentMode == ComposeMode.Markdown)
+        {
+            var edit = MarkdownEditing.ToggleListPrefix(
+                BodyBox.Text, BodyBox.SelectionStart, BodyBox.SelectionLength, ordered);
+            ApplyMarkdownEdit(edit);
+            AnnounceFormatting($"{name} {(edit.TurnedOn ? "on" : "off")}");
+            return;
+        }
+
         EnsureRichEditorFocused();
         var command = ordered ? EditingCommands.ToggleNumbering : EditingCommands.ToggleBullets;
         command.Execute(null, RichBodyBox);
         var inList = RichBodyBox.CaretPosition.Paragraph?.Parent is ListItem;
-        var name = ordered ? "Numbered list" : "Bullet list";
-        AccessibilityHelper.Announce(this, $"{name} {(inList ? "on" : "off")}", category: AnnouncementCategory.Result);
+        AnnounceFormatting($"{name} {(inList ? "on" : "off")}");
     }
 
     private void InsertLink()
     {
-        var selectionText = RichBodyBox.Selection.Text.Trim();
+        var inMarkdown = _vm.CurrentMode == ComposeMode.Markdown;
+        var selectionText = inMarkdown
+            ? BodyBox.SelectedText.Trim()
+            : RichBodyBox.Selection.Text.Trim();
         var dialog = new InsertLinkDialog(selectionText) { Owner = this };
         if (dialog.ShowDialog() != true)
         {
             FocusActiveEditor();
+            return;
+        }
+
+        if (inMarkdown)
+        {
+            var edit = MarkdownEditing.InsertLink(
+                BodyBox.Text, BodyBox.SelectionStart, BodyBox.SelectionLength,
+                dialog.DisplayText, dialog.Url);
+            ApplyMarkdownEdit(edit);
+            AnnounceFormatting("Link inserted");
             return;
         }
 
@@ -1254,11 +1420,20 @@ public partial class ComposeWindow : Window
 
         FocusActiveEditor();
         _vm.MarkBodyDirty();
-        AccessibilityHelper.Announce(this, "Link inserted", category: AnnouncementCategory.Result);
+        AnnounceFormatting("Link inserted");
     }
 
     private void ClearFormatting()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown)
+        {
+            var edit = MarkdownEditing.ClearFormatting(
+                BodyBox.Text, BodyBox.SelectionStart, BodyBox.SelectionLength);
+            ApplyMarkdownEdit(edit);
+            AnnounceFormatting("Formatting cleared");
+            return;
+        }
+
         EnsureRichEditorFocused();
         RichBodyBox.Selection.ClearAllProperties();
         // ClearAllProperties resets character/paragraph formatting but not our
@@ -1273,12 +1448,19 @@ public partial class ComposeWindow : Window
             }
         }
         _vm.MarkBodyDirty();
-        AccessibilityHelper.Announce(this, "Formatting cleared", category: AnnouncementCategory.Result);
+        AnnounceFormatting("Formatting cleared");
     }
 
-    /// <summary>Announces the formatting at the cursor, e.g. "Heading 2. Bold on, Italic off, …".</summary>
-    private void AnnounceFormattingState()
+    /// <summary>
+    /// The formatting at the cursor as one fact per entry — block type first,
+    /// then each inline attribute. Shared by the spoken announcement
+    /// (Ctrl+Shift+Space) and the Show Formatting list (Ctrl+Alt+Space).
+    /// </summary>
+    private System.Collections.Generic.List<string> GetFormattingParts()
     {
+        if (_vm.CurrentMode == ComposeMode.Markdown)
+            return MarkdownEditing.DescribeFormattingParts(BodyBox.Text, BodyBox.CaretIndex);
+
         var selection = RichBodyBox.Selection;
 
         string StateOf(object value, object onValue) =>
@@ -1302,9 +1484,33 @@ public partial class ComposeWindow : Window
                 : "Normal text",
         };
 
-        AccessibilityHelper.Announce(this,
-            $"{block}. Bold {bold}, Italic {italic}, Underline {underline}, Strikethrough {strike}.",
-            category: AnnouncementCategory.Result);
+        return
+        [
+            block,
+            $"Bold {bold}",
+            $"Italic {italic}",
+            $"Underline {underline}",
+            $"Strikethrough {strike}",
+        ];
+    }
+
+    /// <summary>Announces the formatting at the cursor, e.g. "Heading 2. Bold on, Italic off, …".</summary>
+    private void AnnounceFormattingState()
+    {
+        var parts = GetFormattingParts();
+        AnnounceFormatting($"{parts[0]}. {string.Join(", ", parts.Skip(1))}.");
+    }
+
+    /// <summary>
+    /// Shows the same formatting facts in a modal list the user can arrow
+    /// through at their own pace. Escape or Enter closes; focus returns to
+    /// the editor.
+    /// </summary>
+    private void ShowFormatting()
+    {
+        var window = new FormattingListWindow(GetFormattingParts()) { Owner = this };
+        window.ShowDialog();
+        FocusActiveEditor();
     }
 
     // ── Toolbar click handlers (mouse path for the same commands) ────────────
@@ -1327,12 +1533,22 @@ public partial class ComposeWindow : Window
     {
         if (_vm.IsPreviewVisible)
         {
+            // WebView2 initialization can move Win32 focus into the browser HWND
+            // even though the control is Focusable=False. Remember where the user
+            // was so focus can be put back — otherwise the editor goes silent for
+            // screen readers and keystrokes land in an invisible browser pane.
+            var editorHadFocus = BodyBox.IsKeyboardFocusWithin || RichBodyBox.IsKeyboardFocusWithin;
+
             PreviewRow.Height = new GridLength(1, GridUnitType.Star);
             PreviewSplitter.Visibility = Visibility.Visible;
             PreviewView.Visibility = Visibility.Visible;
             var ready = await EnsurePreviewInitializedAsync();
             if (!ready) return;
             RefreshPreview();
+
+            if (editorHadFocus && !BodyBox.IsKeyboardFocusWithin && !RichBodyBox.IsKeyboardFocusWithin)
+                FocusActiveEditor();
+
             AccessibilityHelper.Announce(this, "Preview shown", category: AnnouncementCategory.Result);
         }
         else

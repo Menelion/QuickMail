@@ -50,12 +50,26 @@ public static class RichTextDocumentConverter
             FontSize = 13,
             PagePadding = new Thickness(4),
         };
+        LoadInto(doc, html);
+        return doc;
+    }
+
+    /// <summary>
+    /// Replaces the content of an existing document with the parsed HTML.
+    /// The editor must always load through this (never assign a new document to
+    /// <c>RichTextBox.Document</c>): the control's UIA automation peer binds to
+    /// the original document's text container at creation and never rebinds, so
+    /// after a Document replacement screen readers permanently read the stale
+    /// (empty) document instead of what is on screen.
+    /// </summary>
+    public static void LoadInto(FlowDocument doc, string html)
+    {
+        doc.Blocks.Clear();
         var root = HtmlNode.Parse(html ?? string.Empty);
         foreach (var block in BuildBlocks(root.Children))
             doc.Blocks.Add(block);
         if (doc.Blocks.Count == 0)
             doc.Blocks.Add(new Paragraph());
-        return doc;
     }
 
     private static IEnumerable<Block> BuildBlocks(List<HtmlNode> nodes)
