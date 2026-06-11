@@ -50,6 +50,9 @@ public partial class SettingsViewModel : ObservableObject
     private bool _announceSpellingSuggestions;
 
     [ObservableProperty]
+    private bool _announceFormattingWhileNavigating;
+
+    [ObservableProperty]
     private bool _confirmEmptyTrash;
 
     // ── Composing ──────────────────────────────────────────────────────────────────
@@ -131,6 +134,7 @@ public partial class SettingsViewModel : ObservableObject
         AnnounceSpellingWhileTyping      = cfg.AnnounceSpellingWhileTyping;
         AnnounceSpellingWhileNavigating  = cfg.AnnounceSpellingWhileNavigating;
         AnnounceSpellingSuggestions      = cfg.AnnounceSpellingSuggestions;
+        AnnounceFormattingWhileNavigating = cfg.AnnounceFormattingWhileNavigating;
         ConfirmEmptyTrash                = cfg.ConfirmEmptyTrash;
         AutoSaveDrafts                   = cfg.AutoSaveDrafts;
         AutoSaveIntervalSeconds          = cfg.AutoSaveIntervalSeconds;
@@ -179,6 +183,7 @@ public partial class SettingsViewModel : ObservableObject
         cfg.AnnounceSpellingWhileTyping      = AnnounceSpellingWhileTyping;
         cfg.AnnounceSpellingWhileNavigating  = AnnounceSpellingWhileNavigating;
         cfg.AnnounceSpellingSuggestions      = AnnounceSpellingSuggestions;
+        cfg.AnnounceFormattingWhileNavigating = AnnounceFormattingWhileNavigating;
         cfg.ConfirmEmptyTrash                = ConfirmEmptyTrash;
         cfg.AutoSaveDrafts                   = AutoSaveDrafts;
         cfg.AutoSaveIntervalSeconds          = AutoSaveIntervalSeconds;

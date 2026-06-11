@@ -220,6 +220,7 @@ public class ConfigService : IConfigService
                     case "announcespellingwhiletyping":      config.AnnounceSpellingWhileTyping      = ParseBool(value); break;
                     case "announcespellingwhilenavigating": config.AnnounceSpellingWhileNavigating = ParseBool(value); break;
                     case "announcespellingsuggestions":     config.AnnounceSpellingSuggestions     = ParseBool(value); break;
+                    case "announceformattingwhilenavigating": config.AnnounceFormattingWhileNavigating = ParseBool(value); break;
                     case "confirmemptytrash":    config.ConfirmEmptyTrash    = ParseBool(value); break;
                     case "logformat":
                         config.LogFormat = value.ToLowerInvariant() == "timefirst" ? "timeFirst" : "actionFirst";
@@ -365,6 +366,12 @@ public class ConfigService : IConfigService
         sb.AppendLine($"AnnounceSpellingSuggestions = {(config.AnnounceSpellingSuggestions ? "on" : "off")}");
         sb.AppendLine("# Announce spelling suggestions when a misspelling is announced.");
         sb.AppendLine("# When off, only the misspelled word is spoken without suggestions.");
+        sb.AppendLine("# Values: on, off.");
+        sb.AppendLine();
+
+        sb.AppendLine($"AnnounceFormattingWhileNavigating = {(config.AnnounceFormattingWhileNavigating ? "on" : "off")}");
+        sb.AppendLine("# Announce block type (heading level, list item, normal text) when the caret");
+        sb.AppendLine("# moves to a different paragraph in HTML compose mode. Default on.");
         sb.AppendLine("# Values: on, off.");
         sb.AppendLine();
 

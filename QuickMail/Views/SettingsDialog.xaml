@@ -220,6 +220,11 @@
                                           IsChecked="{Binding AnnounceSpellingSuggestions, Mode=TwoWay}"
                                           Margin="16,4,0,0"
                                           AutomationProperties.Name="Announce spelling suggestions when a misspelling is announced"/>
+
+                                <CheckBox Content="Announce _formatting while navigating in HTML compose"
+                                          IsChecked="{Binding AnnounceFormattingWhileNavigating, Mode=TwoWay}"
+                                          Margin="16,4,0,0"
+                                          AutomationProperties.Name="Announce block type such as heading level when the caret moves to a different paragraph in HTML compose mode"/>
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>

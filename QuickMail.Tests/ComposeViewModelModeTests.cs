@@ -140,17 +140,6 @@ public class ComposeViewModelModeTests
     }
 
     [Fact]
-    public void SetMode_LeavingMarkdown_HidesPreview()
-    {
-        var vm = MakeVm();
-        vm.SetMode(ComposeMode.Markdown);
-        vm.IsPreviewVisible = true;
-
-        vm.SetMode(ComposeMode.Html);
-        Assert.False(vm.IsPreviewVisible);
-    }
-
-    [Fact]
     public void ModeDisplay_TracksCurrentMode()
     {
         var vm = MakeVm();

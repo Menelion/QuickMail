@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading;
@@ -13,7 +12,6 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Microsoft.Web.WebView2.Core;
 using QuickMail.Controls;
 using QuickMail.Helpers;
 using QuickMail.Models;
@@ -77,6 +75,13 @@ public partial class ComposeWindow : Window
     // Suppress spelling announcements during programmatic text changes (e.g. Alt+1 replacement).
     private bool _suppressSpellingAnnouncement;
 
+    // Last block type announced while navigating in HTML mode (e.g. "Heading 2", "Normal text").
+    // Used to suppress repeat announcements when the caret stays on the same paragraph type.
+    private string? _lastAnnouncedBlockType;
+
+    // Suppress formatting-while-navigating announcements during mode switches and programmatic loads.
+    private bool _suppressFormattingAnnouncement;
+
     // Set to true in PreviewKeyDown when a character-generating key is pressed (typing).
     // BodyBox_SelectionChanged skips spelling announcements while this is true; if the
     // AnnounceSpellingWhileTyping setting is on, a debounce timer fires instead after
@@ -106,8 +111,6 @@ public partial class ComposeWindow : Window
                 AccessibilityHelper.Announce(this, vm.StatusText, category: AnnouncementCategory.Status);
             else if (e.PropertyName == nameof(vm.CurrentMode))
                 ApplyComposeMode();
-            else if (e.PropertyName == nameof(vm.IsPreviewVisible))
-                _ = ApplyPreviewVisibilityAsync();
         };
 
         WireRichCompose();
@@ -161,6 +164,7 @@ public partial class ComposeWindow : Window
             }
         };
         BodyBox.SelectionChanged += BodyBox_SelectionChanged;
+        RichBodyBox.SelectionChanged += RichBodyBox_SelectionChanged;
         Closing += OnWindowClosing;
 
         // Auto-save: quiet periodic draft saves. Success shows in the status row
@@ -181,6 +185,7 @@ public partial class ComposeWindow : Window
     }
 
     private DispatcherTimer? _autoSaveTimer;
+    private MarkdownPreviewWindow? _previewWindow;
 
     // ── Autocomplete ─────────────────────────────────────────────────────────
 
@@ -480,6 +485,8 @@ public partial class ComposeWindow : Window
 
     private async void OnWindowClosing(object? sender, CancelEventArgs e)
     {
+        _previewWindow?.Close();
+
         // If the message was sent, or nothing was edited, let the window close freely.
         if (_vm.IsSent || !_vm.IsDirty)
             return;
@@ -631,6 +638,33 @@ public partial class ComposeWindow : Window
         if (_caretMovedByTyping) return;
         if (!_configService.Load().AnnounceSpellingWhileNavigating) return;
         AnnounceSpellingAtCurrentPosition();
+    }
+
+    private void RichBodyBox_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressFormattingAnnouncement) return;
+        if (_vm.CurrentMode != ComposeMode.Html) return;
+        if (!_configService.Load().AnnounceFormattingWhileNavigating) return;
+
+        var paragraph = RichBodyBox.Selection.Start.Paragraph;
+        var blockType = (paragraph?.Tag as string) switch
+        {
+            "H1" => "Heading 1",
+            "H2" => "Heading 2",
+            "H3" => "Heading 3",
+            "PRE" => "Code block",
+            "BLOCKQUOTE" => "Quote",
+            _ => paragraph?.Parent is ListItem item
+                ? (item.Parent is List { MarkerStyle: System.Windows.TextMarkerStyle.Decimal }
+                    ? "Numbered list item"
+                    : "Bullet list item")
+                : "Normal text",
+        };
+
+        if (blockType == _lastAnnouncedBlockType) return;
+        _lastAnnouncedBlockType = blockType;
+
+        AccessibilityHelper.Announce(this, blockType, category: AnnouncementCategory.Result);
     }
 
     private void ClearSpellingContext()
@@ -902,6 +936,19 @@ public partial class ComposeWindow : Window
         (previousFocus ?? BodyBox).Focus();
     }
 
+    private void OpenMarkdownPreview()
+    {
+        if (_previewWindow != null)
+        {
+            _previewWindow.Close();
+            return;
+        }
+        var fragment = _vm.GetBodyHtml();
+        _previewWindow = new MarkdownPreviewWindow(_vm.Subject, fragment) { Owner = this };
+        _previewWindow.Closed += (_, _) => { _previewWindow = null; FocusActiveEditor(); };
+        _previewWindow.Show();
+    }
+
     private void NavigateSpellingError(bool forward)
     {
         var text = BodyBox.Text;
@@ -981,9 +1028,6 @@ public partial class ComposeWindow : Window
 
     private bool _suppressRichTextChanged;
     private bool _syncingModeSelector;
-    private bool _previewReady;
-    private DispatcherTimer? _previewTimer;
-    private static readonly TimeSpan PreviewRefreshDelay = TimeSpan.FromMilliseconds(300);
 
     private void WireRichCompose()
     {
@@ -1002,9 +1046,12 @@ public partial class ComposeWindow : Window
         {
             // Programmatic load is not a user edit — don't mark the draft dirty.
             _suppressRichTextChanged = true;
+            _suppressFormattingAnnouncement = true;
+            _lastAnnouncedBlockType = null;
             RichTextDocumentConverter.LoadInto(RichBodyBox.Document, html);
             RichBodyBox.CaretPosition = RichBodyBox.Document.ContentStart;
             _suppressRichTextChanged = false;
+            _suppressFormattingAnnouncement = false;
         };
 
         _vm.InsertTextIntoEditorRequested += text =>
@@ -1012,12 +1059,6 @@ public partial class ComposeWindow : Window
             RichBodyBox.Selection.Select(RichBodyBox.CaretPosition, RichBodyBox.CaretPosition);
             RichBodyBox.Selection.Text = text;
             RichBodyBox.Selection.Select(RichBodyBox.Selection.End, RichBodyBox.Selection.End);
-        };
-
-        BodyBox.TextChanged += (_, _) =>
-        {
-            if (_vm.CurrentMode == ComposeMode.Markdown && _vm.IsPreviewVisible)
-                RestartPreviewTimer();
         };
 
         SyncModeSelector();
@@ -1052,6 +1093,8 @@ public partial class ComposeWindow : Window
     {
         var mode = _vm.CurrentMode;
         var bodyHadFocus = BodyBox.IsKeyboardFocusWithin || RichBodyBox.IsKeyboardFocusWithin;
+        _suppressFormattingAnnouncement = true;
+        _lastAnnouncedBlockType = null;
 
         FormattingToolbarTray.Visibility = mode == ComposeMode.Html ? Visibility.Visible : Visibility.Collapsed;
         RichBodyBox.Visibility           = mode == ComposeMode.Html ? Visibility.Visible : Visibility.Collapsed;
@@ -1069,6 +1112,7 @@ public partial class ComposeWindow : Window
             _                    => "Plain Text",
         };
         AccessibilityHelper.Announce(this, $"Switched to {name} mode.", category: AnnouncementCategory.Result);
+        _suppressFormattingAnnouncement = false;
     }
 
     private void SyncModeSelector()
@@ -1121,6 +1165,7 @@ public partial class ComposeWindow : Window
     private void MenuCheckAddresses_Click(object sender, RoutedEventArgs e)  => CheckAddresses();
     private void MenuToggleSpelling_Click(object sender, RoutedEventArgs e)  => ToggleSpellingAnnouncements();
     private void MenuCommandPalette_Click(object sender, RoutedEventArgs e)  => OpenCommandPalette();
+    private void MenuOpenPreview_Click(object sender, RoutedEventArgs e) => OpenMarkdownPreview();
 
     private void ModeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1141,7 +1186,6 @@ public partial class ComposeWindow : Window
         // Formatting works in both rich modes: HTML applies real formatting,
         // Markdown inserts the equivalent syntax.
         bool InRichMode() => _vm.CurrentMode != ComposeMode.PlainText;
-        bool InMarkdownMode() => _vm.CurrentMode == ComposeMode.Markdown;
 
         _registry.Register(new CommandDefinition(
             id: "compose.setModePlain", category: "Compose", title: "Switch to Plain Text Mode",
@@ -1237,10 +1281,10 @@ public partial class ComposeWindow : Window
             isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
-            id: "compose.togglePreview", category: "Compose", title: "Toggle Markdown Preview",
-            execute: () => _vm.IsPreviewVisible = !_vm.IsPreviewVisible,
+            id: "compose.openPreview", category: "Compose", title: "Open Markdown Preview",
+            execute: OpenMarkdownPreview,
             defaultKey: Key.F8, defaultModifiers: ModifierKeys.None,
-            isAvailable: InMarkdownMode));
+            isAvailable: () => _vm.CurrentMode == ComposeMode.Markdown));
     }
 
     // ── Formatting commands (HTML and Markdown modes) ─────────────────────────
@@ -1541,100 +1585,4 @@ public partial class ComposeWindow : Window
     private void ToolbarInsertLink_Click(object sender, RoutedEventArgs e)    => InsertLink();
     private void ToolbarClearFormatting_Click(object sender, RoutedEventArgs e) { ClearFormatting(); FocusActiveEditor(); }
 
-    // ── Markdown preview ─────────────────────────────────────────────────────
-
-    private async Task ApplyPreviewVisibilityAsync()
-    {
-        if (_vm.IsPreviewVisible)
-        {
-            // WebView2 initialization can move Win32 focus into the browser HWND
-            // even though the control is Focusable=False. Remember where the user
-            // was so focus can be put back — otherwise the editor goes silent for
-            // screen readers and keystrokes land in an invisible browser pane.
-            var editorHadFocus = BodyBox.IsKeyboardFocusWithin || RichBodyBox.IsKeyboardFocusWithin;
-
-            PreviewRow.Height = new GridLength(1, GridUnitType.Star);
-            PreviewSplitter.Visibility = Visibility.Visible;
-            PreviewView.Visibility = Visibility.Visible;
-            var ready = await EnsurePreviewInitializedAsync();
-            if (!ready) return;
-            RefreshPreview();
-
-            if (editorHadFocus && !BodyBox.IsKeyboardFocusWithin && !RichBodyBox.IsKeyboardFocusWithin)
-                FocusActiveEditor();
-
-            AccessibilityHelper.Announce(this, "Preview shown", category: AnnouncementCategory.Result);
-        }
-        else
-        {
-            PreviewRow.Height = new GridLength(0);
-            PreviewSplitter.Visibility = Visibility.Collapsed;
-            PreviewView.Visibility = Visibility.Collapsed;
-            AccessibilityHelper.Announce(this, "Preview hidden", category: AnnouncementCategory.Result);
-        }
-    }
-
-    private async Task<bool> EnsurePreviewInitializedAsync()
-    {
-        if (_previewReady) return true;
-        try
-        {
-            var env = await CoreWebView2Environment.CreateAsync(null,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                             "QuickMail", "WebView2"));
-            await PreviewView.EnsureCoreWebView2Async(env);
-
-            PreviewView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-            PreviewView.CoreWebView2.Settings.AreDevToolsEnabled            = false;
-            PreviewView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
-
-            // The preview renders only our own Markdown output; block all navigation.
-            PreviewView.CoreWebView2.NavigationStarting += (_, args) =>
-            {
-                var uri = args.Uri;
-                if (string.IsNullOrEmpty(uri)
-                    || uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)
-                    || uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                    return;
-                args.Cancel = true;
-            };
-
-            _previewReady = true;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogService.Log("ComposeWindow: markdown preview WebView2 init failed", ex);
-            _vm.IsPreviewVisible = false;
-            _vm.StatusText = "Preview unavailable — WebView2 runtime not found.";
-            return false;
-        }
-    }
-
-    private void RestartPreviewTimer()
-    {
-        if (_previewTimer == null)
-        {
-            _previewTimer = new DispatcherTimer { Interval = PreviewRefreshDelay };
-            _previewTimer.Tick += (_, _) =>
-            {
-                _previewTimer!.Stop();
-                RefreshPreview();
-            };
-        }
-        _previewTimer.Stop();
-        _previewTimer.Start();
-    }
-
-    private void RefreshPreview()
-    {
-        if (!_previewReady || !_vm.IsPreviewVisible) return;
-        // Same restrictive policy as the reading pane: no scripts, no remote
-        // fetches — inline styles only. The content is our own Markdig output.
-        const string csp =
-            "<head><meta charset=\"utf-8\">" +
-            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline';\"></head>";
-        var html = _vm.RenderPreviewHtml().Replace("<html>", "<html>" + csp);
-        PreviewView.CoreWebView2.NavigateToString(html);
-    }
 }

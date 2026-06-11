@@ -86,7 +86,6 @@ public partial class ComposeViewModel : ObservableObject
 
     /// <summary>Spelling navigation reads the plain TextBox, which is hidden in HTML mode.</summary>
     public bool IsSpellNavAvailable => CurrentMode != ComposeMode.Html;
-    [ObservableProperty] private bool _isPreviewVisible;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy = false;
     [ObservableProperty] private ObservableCollection<AccountModel> _senderAccounts = [];
@@ -450,9 +449,6 @@ public partial class ComposeViewModel : ObservableObject
                 break;
         }
 
-        if (newMode != ComposeMode.Markdown)
-            IsPreviewVisible = false;
-
         CurrentMode = newMode;
         return true;
     }
@@ -466,6 +462,9 @@ public partial class ComposeViewModel : ObservableObject
 
     /// <summary>Renders the current Markdown body as a full HTML document for the preview pane.</summary>
     public string RenderPreviewHtml() => _markdown.WrapDocument(_markdown.ToHtml(Body));
+
+    /// <summary>Returns the rendered HTML body fragment for the preview window, without any wrapper or styles.</summary>
+    public string GetBodyHtml() => CurrentMode == ComposeMode.Markdown ? _markdown.ToHtml(Body) : string.Empty;
 
     /// <summary>Called by the View when the rich editor content changes (RichTextBox has no Body binding).</summary>
     public void MarkBodyDirty() => _isDirty = true;

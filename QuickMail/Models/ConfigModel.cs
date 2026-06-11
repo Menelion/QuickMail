@@ -64,6 +64,9 @@ public class ConfigModel
     /// <summary>Announce spelling suggestions when a misspelling is announced.</summary>
     public bool AnnounceSpellingSuggestions { get; set; } = true;
 
+    /// <summary>Announce the block type (heading level, list item, normal text) when the caret moves to a different paragraph in HTML compose mode.</summary>
+    public bool AnnounceFormattingWhileNavigating { get; set; } = true;
+
     // ── Compose ───────────────────────────────────────────────────────────────────
 
     /// <summary>Editing mode new compose windows start in. Drafts and templates always reopen in plain text.</summary>
