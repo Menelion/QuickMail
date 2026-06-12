@@ -72,9 +72,16 @@ public class GraphMailServiceTests
             """;
         const string page2 = """{"value":[{"id":"f3","displayName":"Archive","totalItemCount":2,"unreadItemCount":1}]}""";
 
+        // ConnectAsync resolves the well-known folder IDs; feed it the real ones (inbox->f1,
+        // sentitems->f2) so special-folder classification runs through the ID map, not the
+        // display-name fallback. The other three well-known lookups fall through to the list
+        // JSON (parsed as a single folder with a null id) and are skipped — harmless. Localized-
+        // name / ID-regression coverage lives in GetFoldersAsync_DetectsSpecialFoldersById_*.
         var (svc, _) = Make(url =>
-            url.Contains("/me?") ? (HttpStatusCode.OK, MeJson)
-            : url.Contains("skiptoken=P2") ? (HttpStatusCode.OK, page2)
+            url.Contains("/mailFolders/inbox")       ? (HttpStatusCode.OK, """{"id":"f1"}""")
+            : url.Contains("/mailFolders/sentitems") ? (HttpStatusCode.OK, """{"id":"f2"}""")
+            : url.Contains("/me?")                   ? (HttpStatusCode.OK, MeJson)
+            : url.Contains("skiptoken=P2")           ? (HttpStatusCode.OK, page2)
             : (HttpStatusCode.OK, page1));
 
         var account = GraphAccount();

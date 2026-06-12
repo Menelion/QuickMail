@@ -53,7 +53,6 @@ public class GraphMailService : IMailService
     // ── Connect ────────────────────────────────────────────────────────────────────
     public async Task ConnectAsync(AccountModel account, string? password = null, CancellationToken ct = default)
     {
-        _accounts[account.Id] = account;
         var me = await _client.GetAsync<GraphMe>(account, "/me?$select=id,userPrincipalName", ct);
         if (string.IsNullOrEmpty(me?.UserPrincipalName))
             throw new InvalidOperationException("Graph /me returned no userPrincipalName.");
@@ -62,7 +61,13 @@ public class GraphMailService : IMailService
             LogService.Log($"GraphMailService: token UPN {me.UserPrincipalName} differs from account.Username {account.Username}; updating.");
             account.Username = me.UserPrincipalName;
         }
-        _wellKnownFolders[account.Id] = await ResolveWellKnownFolderIdsAsync(account, ct);
+        var wellKnown = await ResolveWellKnownFolderIdsAsync(account, ct);
+
+        // Register the account only after every connect-time fetch succeeds, so a cancelled or
+        // failed connect never leaves a half-registered account — one that passes the Account()
+        // guard but has no well-known folder map, which would classify every folder as None.
+        _wellKnownFolders[account.Id] = wellKnown;
+        _accounts[account.Id] = account;
         LogService.Log($"GraphMailService: connected for {account.AccountLabel} ({account.Username}).");
     }
 
@@ -80,9 +85,16 @@ public class GraphMailService : IMailService
                 var f = await _client.GetAsync<GraphMailFolder>(account, $"/me/mailFolders/{wk.Name}?$select=id", ct);
                 return (Id: f?.Id, wk.Kind);
             }
+            catch (OperationCanceledException)
+            {
+                throw; // propagate cancellation — a cancelled connect must not look like success
+            }
             catch (Exception ex)
             {
-                LogService.Debug($"GraphMailService: well-known folder '{wk.Name}' not resolved: {ex.Message}");
+                // A 404 means the folder genuinely doesn't exist (e.g. no Junk). Other failures
+                // (401/403/503) shouldn't silently degrade folder classification, so log at
+                // warning level — not Debug — and skip just this one.
+                LogService.Log($"GraphMailService: well-known folder '{wk.Name}' not resolved: {ex.Message}");
                 return (Id: (string?)null, wk.Kind);
             }
         });
