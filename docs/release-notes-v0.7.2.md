@@ -20,7 +20,7 @@ Both downloads include the .NET 8 runtime — you do not need to install .NET se
 Composing email gets its largest update yet. Every compose window now offers three editing modes:
 
 - **Plain Text** — the classic experience, unchanged.
-- **Markdown** — write Markdown source in the familiar text editor; QuickMail renders it to formatted HTML when the message is sent. Press **F8** to open a rendered preview in a separate window.
+- **Markdown** — write Markdown source in the familiar text editor; QuickMail renders it to formatted HTML when the message is sent. Press **F8** to open a rendered preview in a separate window where screen readers can browse the output as a web page.
 - **HTML** — a rich text editor with real formatting: bold, italic, underline, strikethrough, three heading levels, bullet and numbered lists, and links.
 
 Switch modes at any time with **Ctrl+Shift+1/2/3**, the **View** menu, or the mode selector in the compose status row. Content converts between modes automatically; switching from a rich mode down to Plain Text asks for confirmation first, because formatting would be lost. Messages composed in Markdown or HTML are sent with both a formatted HTML part and a plain text part, so every recipient's mail app can display them.
@@ -41,7 +41,7 @@ Formatting works in both rich modes — in HTML mode the commands apply real for
 | Clear formatting | `Ctrl+Space` |
 | Announce formatting state | `Ctrl+T` |
 | Show formatting list | `Ctrl+Shift+T` |
-| Open Markdown preview | `F8` (Markdown mode) |
+| Open preview | `F8` (Markdown and HTML modes) |
 
 One exception: Markdown has no underline syntax, so underline is available in HTML mode only — invoking it in Markdown explains this aloud.
 
@@ -53,9 +53,11 @@ In HTML compose mode, QuickMail now announces the block type whenever the caret 
 
 This announcement is HTML-mode-only. Markdown mode does not produce automatic formatting announcements, since the raw Markdown syntax is already present in the text.
 
-### Markdown Preview Window (F8)
+### Preview Window (F8)
 
-In Markdown mode, pressing **F8** opens a dedicated preview window that renders your message as formatted HTML. The preview window is fully focusable, so screen readers switch into browse mode and you can read the rendered output exactly as a recipient would see it. Links open in your default browser. Press **Escape** or **Ctrl+W** to close the preview and return focus to the editor. Pressing **F8** again while the preview is open closes it.
+In Markdown or HTML mode, pressing **F8** opens a dedicated preview window that renders your message as formatted HTML. The preview window is fully focusable, so screen readers switch into browse mode and you can read the rendered output exactly as a recipient would see it. Links open in your default browser. Press **Escape** or **Ctrl+W** to close the preview and return focus to the editor. Pressing **F8** again while the preview is open closes it.
+
+In HTML mode the editor is a rich text control, so screen readers read it in edit mode. The preview window is the way to hear the composed message as a recipient would — as a fully-rendered web page — without leaving the compose window.
 
 **Two ways to check formatting at the cursor:**
 
@@ -180,7 +182,7 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 - `MarkdownEditing` — pure, unit-tested text operations behind the Markdown formatting commands, applied through `TextBox.SelectedText` so each toggle is one undo unit
 - **Never replace `RichTextBox.Document`** — WPF's automation peer binds to the original document's text container and never rebinds; all loads go through `RichTextDocumentConverter.LoadInto`. Guarded by `ComposeUiaTextPatternTests`, which asserts UIA TextPattern content through real mode switches
 - `FormattingListWindow` — the Show Formatting list; shares its state-reading code with the spoken announcement
-- `MarkdownPreviewWindow` — focusable WebView2 preview window opened by F8 in Markdown mode; JS key relay returns F6/Escape/Ctrl+W to WPF; links open in the default browser; rich CSS with dark-mode support via `prefers-color-scheme`
+- `MarkdownPreviewWindow` — focusable WebView2 preview window opened by F8 in Markdown or HTML mode; JS key relay returns F6/Escape/Ctrl+W to WPF; links open in the default browser; rich CSS with dark-mode support via `prefers-color-scheme`
 - `AnnounceFormattingWhileNavigating` config key (default on): fires an announcement when the caret moves to a paragraph with a different block type in HTML mode; suppressed during mode switches and programmatic loads
 - Auto-save: `ComposeViewModel.AutoSaveAsync` driven by a `DispatcherTimer`; config keys `AutoSaveDrafts` and `AutoSaveIntervalSeconds` (clamped 30–600); failure announcements arm once per failure streak
 - New Settings → General → Composing group (auto-save toggle, interval, `DefaultComposeMode`)

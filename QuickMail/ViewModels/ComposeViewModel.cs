@@ -68,6 +68,7 @@ public partial class ComposeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     [NotifyPropertyChangedFor(nameof(IsHtmlMode))]
     [NotifyPropertyChangedFor(nameof(IsMarkdownMode))]
+    [NotifyPropertyChangedFor(nameof(IsPreviewAvailable))]
     [NotifyPropertyChangedFor(nameof(IsFormattingAvailable))]
     [NotifyPropertyChangedFor(nameof(IsSpellNavAvailable))]
     private ComposeMode _currentMode = ComposeMode.PlainText;
@@ -77,6 +78,9 @@ public partial class ComposeViewModel : ObservableObject
 
     /// <summary>True in Markdown mode — drives preview availability.</summary>
     public bool IsMarkdownMode => CurrentMode == ComposeMode.Markdown;
+
+    /// <summary>True in Markdown or HTML mode — the preview window is available in both.</summary>
+    public bool IsPreviewAvailable => CurrentMode == ComposeMode.Markdown || CurrentMode == ComposeMode.Html;
 
     /// <summary>
     /// Formatting commands work in both rich modes: HTML applies real formatting,
@@ -97,9 +101,14 @@ public partial class ComposeViewModel : ObservableObject
     private string? _draftFolderName;
     private bool _isDirty;
     private bool _isSent;
+    private ComposeMode _seededMode = ComposeMode.PlainText;
+    private string? _seededHtmlBody;
 
     public bool IsDirty => _isDirty;
     public bool IsSent  => _isSent;
+
+    /// <summary>The compose mode stored in the draft when it was last saved; PlainText for new composes.</summary>
+    public ComposeMode SeededMode => _seededMode;
 
     public event Action? CloseRequested;
 
@@ -149,6 +158,10 @@ public partial class ComposeViewModel : ObservableObject
         Attachments.Clear();
         foreach (var att in model.Attachments)
             Attachments.Add(att);
+
+        // Remember the original mode so the View can restore it after wiring up event handlers.
+        _seededMode    = model.Mode;
+        _seededHtmlBody = model.Mode == ComposeMode.Html ? model.HtmlBody : null;
 
         // Loading existing data (reply, forward, or re-opened draft) is not itself a dirty edit
         _isDirty = false;
@@ -429,7 +442,9 @@ public partial class ComposeViewModel : ObservableObject
                 break; // plain text is valid Markdown source — pass through as-is
 
             case (ComposeMode.PlainText, ComposeMode.Html):
-                LoadHtmlIntoEditorRequested?.Invoke(_markdown.PlainTextToHtml(Body));
+                var htmlToLoad = _seededHtmlBody ?? _markdown.PlainTextToHtml(Body);
+                _seededHtmlBody = null; // consume: only used for the initial draft restore
+                LoadHtmlIntoEditorRequested?.Invoke(htmlToLoad);
                 break;
 
             case (ComposeMode.Markdown, ComposeMode.Html):
@@ -464,7 +479,12 @@ public partial class ComposeViewModel : ObservableObject
     public string RenderPreviewHtml() => _markdown.WrapDocument(_markdown.ToHtml(Body), Subject);
 
     /// <summary>Returns the rendered HTML body fragment for the preview window, without any wrapper or styles.</summary>
-    public string GetBodyHtml() => CurrentMode == ComposeMode.Markdown ? _markdown.ToHtml(Body) : string.Empty;
+    public string GetBodyHtml() => CurrentMode switch
+    {
+        ComposeMode.Markdown => _markdown.ToHtml(Body),
+        ComposeMode.Html     => (RichBodyProvider?.Invoke() ?? RichBodySnapshot.Empty).Html,
+        _                    => string.Empty,
+    };
 
     /// <summary>Called by the View when the rich editor content changes (RichTextBox has no Body binding).</summary>
     public void MarkBodyDirty() => _isDirty = true;

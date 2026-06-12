@@ -11,8 +11,8 @@ using QuickMail.Services;
 namespace QuickMail.Views;
 
 /// <summary>
-/// Read-only preview of a Markdown compose rendered as HTML.
-/// Opened by pressing F8 in Markdown compose mode; Escape or Ctrl+W closes it.
+/// Read-only preview of a compose message rendered as HTML.
+/// Opened by pressing F8 in Markdown or HTML compose mode; Escape or Ctrl+W closes it.
 /// The WebView2 is focusable so screen readers can browse the rendered content.
 /// </summary>
 public partial class MarkdownPreviewWindow : Window

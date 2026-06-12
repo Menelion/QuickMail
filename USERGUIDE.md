@@ -178,7 +178,7 @@ The **Composing** group on the General tab controls the compose window:
 |---------|------------------|
 | **Automatically save drafts while composing** | On by default. Quietly saves your message as a server draft while you write — see [Automatic draft saving](#automatic-draft-saving). |
 | **Auto-save interval** | How often auto-save runs: 30 seconds to 10 minutes (default 2 minutes). |
-| **Default compose mode** | The editing mode new messages start in: Plain Text, Markdown, or HTML — see [Compose modes](#compose-modes-plain-text-markdown-and-html). Drafts and templates always reopen in Plain Text. |
+| **Default compose mode** | The editing mode new messages start in: Plain Text, Markdown, or HTML — see [Compose modes](#compose-modes-plain-text-markdown-and-html). Drafts reopen in the mode they were saved in; templates always reopen in Plain Text. |
 
 ### Advanced tab
 
@@ -850,7 +850,7 @@ Every compose action is available from the menu bar, with its keyboard shortcut 
 |------|----------|
 | **File** | Send, Save Draft, Insert Template, Save as Template, Add Attachments, Close |
 | **Edit** | Undo, Redo, Cut, Copy, Paste, Select All, Next/Previous Misspelling |
-| **View** | Plain Text / Markdown / HTML mode (the active mode is checked), Markdown Preview |
+| **View** | Plain Text / Markdown / HTML mode (the active mode is checked), Preview |
 | **Format** | Bold, Italic, Underline, Strikethrough, Headings 1–3, Bullet/Numbered List, Insert Link, Clear Formatting, Announce Formatting, Show Formatting |
 | **Tools** | Address Book, Check Addresses, Toggle Spelling Announcements, Command Palette |
 
@@ -921,9 +921,11 @@ Two commands report the formatting in effect where your cursor is. Both work in 
 - **Announce Formatting (`Ctrl+T`)** speaks a one-line summary — for example, "Heading 2. Bold on, Italic off, Underline off, Strikethrough off."
 - **Show Formatting (`Ctrl+Shift+T`)** opens a small window listing the same facts one per row — the block type first ("Heading 2"), then each attribute ("Bold on", "Italic off", …). Arrow through the entries at your own pace; press **Escape** or **Enter** to close and return to the editor exactly where you were.
 
-### Markdown preview (F8)
+### Preview window (F8)
 
-In Markdown mode, press **F8** to open a preview window that renders your message as formatted HTML — the same output your recipient will see. The preview window is fully focusable: screen readers switch into browse mode so you can read and navigate the rendered content just like any webpage.
+In Markdown or HTML mode, press **F8** to open a preview window that renders your message as formatted HTML — the same output your recipient will see. The preview window is fully focusable: screen readers switch into browse mode so you can read and navigate the rendered content just like any webpage.
+
+This is especially useful in HTML mode, where the editor is a rich text editor and screen readers read it in edit mode. The preview lets you hear the message as a recipient would — as a fully-rendered web page.
 
 Links in the preview open in your default browser. Press **Escape** or **Ctrl+W** to close the preview and return focus to the compose editor. Pressing **F8** again while the preview is open also closes it.
 
@@ -1032,7 +1034,7 @@ These are also available as buttons in the toolbar.
 | Ctrl+Space | Clear formatting (rich modes) |
 | Ctrl+T | Announce formatting at the cursor (rich modes) |
 | Ctrl+Shift+T | Show formatting at the cursor in a list (rich modes) |
-| F8 | Open or close the Markdown preview window (Markdown mode) |
+| F8 | Open or close the preview window (Markdown and HTML modes) |
 | F7 | Jump to next misspelling |
 | Shift+F7 | Jump to previous misspelling |
 | Alt+F7 | Repeat spelling announcement for current word |
@@ -1280,7 +1282,7 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Ctrl+Space | Clear formatting (rich modes) |
 | Ctrl+T | Announce formatting at the cursor (rich modes) |
 | Ctrl+Shift+T | Show formatting at the cursor in a list (rich modes) |
-| F8 | Open or close the Markdown preview window (Markdown mode) |
+| F8 | Open or close the preview window (Markdown and HTML modes) |
 | Left / Right arrow (on an address) | Move between addresses |
 | Delete / Backspace (on an address) | Remove focused address |
 | Delete / Backspace (with chips selected) | Remove all selected addresses |

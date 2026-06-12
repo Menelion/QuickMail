@@ -965,7 +965,7 @@ public partial class ComposeWindow : Window
         (previousFocus ?? BodyBox).Focus();
     }
 
-    private void OpenMarkdownPreview()
+    private void OpenPreview()
     {
         if (_previewWindow != null)
         {
@@ -1093,14 +1093,22 @@ public partial class ComposeWindow : Window
         SyncModeSelector();
     }
 
-    /// <summary>New composes (including replies/forwards) start in the configured default mode.
-    /// Drafts and templates were authored as plain text and reopen that way.</summary>
+    /// <summary>
+    /// Applies the initial editing mode after the View's event handlers are wired:
+    /// drafts restore their saved mode; templates stay plain text; new composes use the configured default.
+    /// </summary>
     private void ApplyDefaultComposeMode()
     {
-        var defaultMode = _configService.Load().DefaultComposeMode;
-        if (defaultMode == ComposeMode.PlainText) return;
-        if (_vm.ComposeKind is ComposeKind.EditDraft or ComposeKind.NewDraft or ComposeKind.EditTemplate) return;
-        _vm.SetMode(defaultMode);
+        ComposeMode targetMode;
+        if (_vm.ComposeKind is ComposeKind.EditDraft or ComposeKind.NewDraft)
+            targetMode = _vm.SeededMode;       // restore whatever mode the draft was saved in
+        else if (_vm.ComposeKind is ComposeKind.EditTemplate)
+            targetMode = ComposeMode.PlainText; // templates are plain-text only
+        else
+            targetMode = _configService.Load().DefaultComposeMode;
+
+        if (targetMode == ComposeMode.PlainText) return;
+        _vm.SetMode(targetMode);
     }
 
     private void RichBodyBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1194,7 +1202,7 @@ public partial class ComposeWindow : Window
     private void MenuCheckAddresses_Click(object sender, RoutedEventArgs e)  => CheckAddresses();
     private void MenuToggleSpelling_Click(object sender, RoutedEventArgs e)  => ToggleSpellingAnnouncements();
     private void MenuCommandPalette_Click(object sender, RoutedEventArgs e)  => OpenCommandPalette();
-    private void MenuOpenPreview_Click(object sender, RoutedEventArgs e) => OpenMarkdownPreview();
+    private void MenuOpenPreview_Click(object sender, RoutedEventArgs e) => OpenPreview();
 
     private void ModeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1310,10 +1318,10 @@ public partial class ComposeWindow : Window
             isAvailable: InRichMode));
 
         _registry.Register(new CommandDefinition(
-            id: "compose.openPreview", category: "Compose", title: "Open Markdown Preview",
-            execute: OpenMarkdownPreview,
+            id: "compose.openPreview", category: "Compose", title: "Open Preview",
+            execute: OpenPreview,
             defaultKey: Key.F8, defaultModifiers: ModifierKeys.None,
-            isAvailable: () => _vm.CurrentMode == ComposeMode.Markdown));
+            isAvailable: () => _vm.IsPreviewAvailable));
     }
 
     // ── Formatting commands (HTML and Markdown modes) ─────────────────────────

@@ -61,7 +61,7 @@
                 <MenuItem Header="_HTML" x:Name="MenuModeHtml"
                           InputGestureText="Ctrl+Shift+3" Click="MenuModeHtml_Click"/>
                 <Separator/>
-                <MenuItem Header="Markdown Pre_view" IsEnabled="{Binding IsMarkdownMode}" InputGestureText="F8" Click="MenuOpenPreview_Click" AutomationProperties.Name="Open Markdown preview"/>
+                <MenuItem Header="Pre_view" IsEnabled="{Binding IsPreviewAvailable}" InputGestureText="F8" Click="MenuOpenPreview_Click" AutomationProperties.Name="Open preview"/>
             </MenuItem>
             <!-- The top-level Format menu is always enabled (Windows standard:
                  top-level menus are never skipped); individual items gray out
