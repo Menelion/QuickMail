@@ -47,7 +47,7 @@ public sealed class MarkdownService : IMarkdownService
         var paragraphs = plainText.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.None);
         foreach (var paragraph in paragraphs)
         {
-            if (paragraph.Length == 0) continue;
+            if (paragraph.Length == 0) { sb.Append("<p><br /></p>\n"); continue; }
             sb.Append("<p>");
             sb.Append(WebUtility.HtmlEncode(paragraph).Replace("\n", "<br />"));
             sb.Append("</p>\n");

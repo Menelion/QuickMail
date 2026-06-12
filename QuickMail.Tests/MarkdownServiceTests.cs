@@ -107,6 +107,17 @@ public class MarkdownServiceTests
     }
 
     [Fact]
+    public void PlainTextToHtml_LeadingBlankParagraph_PreservesTypingArea()
+    {
+        // Reply bodies start with "\n\n" so there is a blank paragraph above the
+        // attribution. That blank paragraph must survive conversion so the cursor
+        // lands in it rather than directly on the quoted text.
+        var html = _svc.PlainTextToHtml("\n\nOn Monday, alice wrote:\n> hello");
+        Assert.StartsWith("<p><br /></p>", html);
+        Assert.Contains("<p>On Monday, alice wrote:<br />&gt; hello</p>", html);
+    }
+
+    [Fact]
     public void WrapDocument_ProducesValidHtml5Document()
     {
         var doc = _svc.WrapDocument("<p>hi</p>", "Lunch Friday");
