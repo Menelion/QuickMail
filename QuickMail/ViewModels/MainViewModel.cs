@@ -1243,10 +1243,26 @@ public partial class MainViewModel : ObservableObject
         };
 
         // Subscribe to sync progress updates.
+        // Announce every 10 folders to avoid excessive screen reader chatter.
+        int lastAnnouncedAt = 0;
         _syncService.SyncProgressChanged += (done, total) =>
         {
             if (total > 0)
-                StatusText = $"Syncing… ({done} of {total} folders)";
+            {
+                // Announce progress every 10 folders or at the end.
+                // Do not update StatusText here — it would trigger automatic screen reader
+                // announcements in addition to the explicit Announce() calls, creating duplicates.
+                if (done % 10 == 0 && done > lastAnnouncedAt)
+                {
+                    Announce($"Synced {done} of {total} folders.", AnnouncementCategory.Status);
+                    lastAnnouncedAt = done;
+                }
+                else if (done == total && done > lastAnnouncedAt)
+                {
+                    Announce($"Sync complete.", AnnouncementCategory.Status);
+                    lastAnnouncedAt = done;
+                }
+            }
         };
 
         if (SelectedFolder?.FullName == AllMailFolder.FullName && ViewMode == ViewMode.To)
@@ -3372,14 +3388,10 @@ public partial class MainViewModel : ObservableObject
         {
             ReplaceCts(ref _messageLoadCts, out var ct);
 
-            var detail = await _localStore.LoadDetailAsync(
-                summary.AccountId, summary.FolderName, summary.MessageId);
-
-            if (detail == null)
-            {
-                detail = await _imap.GetMessageDetailAsync(
-                    summary.AccountId, summary.FolderName, summary.MessageId, ct);
-            }
+            // Always fetch drafts from IMAP — skip the local cache so the compose-mode
+            // header and the latest autosaved body are read directly from the server.
+            var detail = await _imap.GetMessageDetailAsync(
+                summary.AccountId, summary.FolderName, summary.MessageId, ct);
 
             var model = new ComposeModel
             {
@@ -3389,6 +3401,8 @@ public partial class MainViewModel : ObservableObject
                 Cc              = detail.Cc,
                 Subject         = detail.Subject,
                 Body            = detail.PlainTextBody,
+                Mode            = detail.DraftComposeMode,
+                HtmlBody        = detail.DraftComposeMode == ComposeMode.Html ? detail.HtmlBody : null,
                 DraftMessageId  = summary.MessageId,
                 DraftFolderName = summary.FolderName,
             };
