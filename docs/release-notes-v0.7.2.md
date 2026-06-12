@@ -83,20 +83,16 @@ Control it under **Settings → General → Composing**: turn auto-save off, cho
 
 The compose window title now leads with your subject and editing mode — for example, "Lunch Friday - HTML - QuickMail" — so the taskbar and Alt+Tab identify each message at a glance. The title updates live as you type the subject or switch modes.
 
-### Microsoft Graph Backend (Preview)
+### Nested Lists (Tab and Shift+Tab)
 
-QuickMail now includes a read-only Microsoft Graph backend alongside IMAP, enabling support for Microsoft 365 and Outlook.com accounts. This is a foundation for future Microsoft account support; full sync and compose features for Graph accounts are coming in future releases.
+In both HTML and Markdown modes, you can now create and navigate multi-level lists using the keyboard:
 
-**Account setup for Graph accounts:**
-- When adding an account, you can choose **OAuth** for Microsoft 365 / Outlook.com accounts
-- QuickMail launches your browser to sign in via Microsoft's authentication page
-- No password is stored — tokens are managed securely by the system
-- After authentication, QuickMail connects and loads your account information
+- **Tab** while the cursor is on a list item increases its indent level, creating a sub-list.
+- **Shift+Tab** decreases the indent level. In HTML mode, pressing **Shift+Tab** on a top-level list item removes it from the list entirely, returning it to normal text.
 
-**Graph-backed account dialogs:**
-- Dialogs for Graph accounts now show the account type and username clearly
-- UI elements specific to IMAP (password, port, security settings) are hidden for Graph accounts
-- OAuth token information is displayed where applicable
+Tab and Shift+Tab on a non-list line move focus between fields as usual — the indentation behavior only activates when the cursor is inside a list item.
+
+In HTML mode, screen readers hear the new level announced immediately — for example, "Bullet list item, level 2." The block type label also includes the level when navigating by caret, so moving between levels is audible without pressing **Ctrl+T**.
 
 ---
 
@@ -143,6 +139,7 @@ The status bar continues to show "Syncing mail…" without duplicating announcem
 - **HTML compose mode was silent to screen readers.** Entering HTML mode replaced the rich editor's document, which permanently disconnected the text from the UI Automation layer — screen readers read nothing of what was actually in the editor. The editor now keeps one document for its lifetime and loads content into it in place, with an automated regression test asserting what assistive technology actually receives across mode switches.
 - **F7 (next misspelling) always reported "No misspellings found" in compose.** The spell navigation search started at the current caret position and searched forward — with the caret at the end of the text after typing, the forward pass found nothing and gave up. Spell navigation now wraps: it searches from the caret to the end, then wraps from the beginning if nothing was found in the first pass. The same wrap applies to Shift+F7 searching backward.
 - **Heading shortcut applied to the wrong paragraph when text was selected.** When you selected text and pressed a heading shortcut, the heading was applied to the paragraph at the caret (the active end of the selection) rather than the paragraph where the selection started. If the selection ended at a paragraph boundary, this meant the heading landed on the *next* paragraph — the one after your selected text. The heading now applies to the paragraph the selection begins in, matching what users expect.
+- **Heading formatting bled into the blank line below the selected text.** WPF places structural element-boundary positions between paragraphs. When a selection ended in that gap — for example after pressing Shift+Down to select a line — WPF attributed the position to the next paragraph, so the heading was applied to both the selected line and the blank line below it. The boundary check now correctly excludes any position at or before the start of the next paragraph's content.
 - **Escape closed the whole compose window from open menus and dropdowns.** Escape now closes the open menu, combo dropdown, or address autocomplete first; only when nothing transient is open does it close the window.
 - **Formatting announcements were silenced by focus changes.** Invoking a formatting command from the menu restored focus to the editor, and the focus speech overrode the result announcement — all you heard was "message body." Formatting feedback is now timed to land after focus settles.
 - **Duplicate sync progress announcements.** The status bar text and explicit screen reader announcements were both being read aloud during sync, creating redundant chatter. Now only the explicit announcements (which respect user settings) are spoken, eliminating duplicates.
@@ -169,13 +166,9 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 - Auto-save: `ComposeViewModel.AutoSaveAsync` driven by a `DispatcherTimer`; config keys `AutoSaveDrafts` and `AutoSaveIntervalSeconds` (clamped 30–600); failure announcements arm once per failure streak
 - New Settings → General → Composing group (auto-save toggle, interval, `DefaultComposeMode`)
 - New Settings → Screen Reader Announcements → Announce formatting while navigating in HTML compose
-
-### Microsoft Graph Support
-
-- `IMailService` now abstracts backend operations to support IMAP, Graph, and future backends
-- `MailServiceRouter` routes method calls to the appropriate backend based on account type
-- `GraphMailService` — new Graph backend implementation (read-only for v0.7.2)
-- Account dialog UX now detects account type and shows/hides protocol-specific settings accordingly
+- `MarkdownEditing.IndentListItem` / `DedentListItem` — pure text operations for Tab/Shift+Tab in Markdown mode (2-space indentation per level)
+- `RichBodyBox_PreviewKeyDown` intercepts Tab/Shift+Tab on list items and calls `EditingCommands.IncreaseIndentation` / `DecreaseIndentation`; suppresses the navigation announcement during the command and replaces it with a single Result announce
+- `BlockTypeLabel` / `ListDepthOf` helpers: list item labels now include the nesting depth ("Bullet list item, level 2") so navigation between levels is audible everywhere
 
 ### Sync Progress Reporting
 
@@ -192,10 +185,5 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 - **Drafts and templates always reopen in Plain Text.** The editing mode is not yet round-tripped through the mail server, so a draft written in HTML reopens as plain text (the formatted content is preserved in the sent form, but further editing starts from the text representation).
 - **No underline in Markdown mode.** Markdown has no underline syntax; use HTML mode when underline matters.
 - **Images, tables, fonts, and colors** are not yet available in the HTML editor.
-
-### Microsoft Graph Backend
-
-- **Read-only in v0.7.2.** Fetching and viewing messages is supported; sending, drafts, and mutations are not yet implemented.
-- **No direct Microsoft 365 integration for shared mailboxes.** Only personal accounts are supported at this time.
 
 ---

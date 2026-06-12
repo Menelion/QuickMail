@@ -889,6 +889,8 @@ The same formatting commands work in both rich modes. In HTML mode they apply re
 | Heading 1 / 2 / 3 | `Ctrl+Alt+1/2/3` | `#` / `##` / `###` at the start of the line |
 | Bullet list | `Ctrl+Shift+L` | `- ` at the start of each selected line |
 | Numbered list | `Ctrl+Shift+N` | `1. `, `2. `, … at the start of each selected line |
+| Indent list item | `Tab` (cursor on a list item) | Adds 2 leading spaces (increases level) |
+| Dedent list item | `Shift+Tab` (cursor on a list item) | Removes 2 leading spaces (decreases level) |
 | Insert link | `Ctrl+L` | `[text](address)` via a small dialog |
 | Clear formatting | `Ctrl+Space` | Removes markers and prefixes from the selection |
 
@@ -897,6 +899,7 @@ Tips:
 - With text selected, a command wraps (or unwraps) the selection. With no selection, it inserts an empty marker pair and places the cursor inside, ready to type — invoke it again to toggle off.
 - Applying the same heading level twice returns the line to normal text.
 - Markdown has no underline syntax, so underline works in HTML mode only. Invoking it in Markdown explains this aloud.
+- When the cursor is inside a list item, **Tab** increases the indent level and **Shift+Tab** decreases it. In HTML mode, **Shift+Tab** on a top-level list item removes it from the list. On a non-list line, Tab moves focus between fields as usual.
 - The same commands are on the **Format** menu and the formatting toolbar.
 
 ### Checking formatting at the cursor
@@ -1011,6 +1014,8 @@ These are also available as buttons in the toolbar.
 | Ctrl+Shift+X | Strikethrough (rich modes) |
 | Ctrl+Alt+1 / 2 / 3 | Heading 1 / 2 / 3 (rich modes) |
 | Ctrl+Shift+L / Ctrl+Shift+N | Bullet list / Numbered list (rich modes) |
+| Tab (on a list item) | Indent list item — increase level |
+| Shift+Tab (on a list item) | Dedent list item — decrease level |
 | Ctrl+L | Insert link (rich modes) |
 | Ctrl+Space | Clear formatting (rich modes) |
 | Ctrl+T | Announce formatting at the cursor (rich modes) |
@@ -1257,6 +1262,8 @@ To skip the confirmation, open **File → Settings**, select the **General** tab
 | Ctrl+Shift+X | Strikethrough (rich modes) |
 | Ctrl+Alt+1 / 2 / 3 | Heading 1 / 2 / 3 (rich modes) |
 | Ctrl+Shift+L / Ctrl+Shift+N | Bullet / Numbered list (rich modes) |
+| Tab (on a list item) | Indent list item — increase level |
+| Shift+Tab (on a list item) | Dedent list item — decrease level |
 | Ctrl+L | Insert link (rich modes) |
 | Ctrl+Space | Clear formatting (rich modes) |
 | Ctrl+T | Announce formatting at the cursor (rich modes) |
