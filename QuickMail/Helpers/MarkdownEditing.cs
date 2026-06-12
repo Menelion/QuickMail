@@ -120,6 +120,36 @@ public static class MarkdownEditing
             blockStart, replacement.Length, TurnedOn: !allHaveRequested);
     }
 
+    /// <summary>
+    /// Adds one level of indentation (2 spaces) to the current list line.
+    /// Returns null when the caret is not on a list line.
+    /// </summary>
+    public static MarkdownEdit? IndentListItem(string text, int caretIndex)
+    {
+        var (lineStart, _) = LineBoundsAt(text, caretIndex);
+        var line = text[lineStart..];
+        var endIdx = line.IndexOf('\n');
+        var lineContent = endIdx >= 0 ? line[..endIdx] : line;
+        if (ListPrefixLength(lineContent.TrimStart(' '), out _) == 0) return null;
+        return new MarkdownEdit(lineStart, 0, "  ", caretIndex + 2, 0, TurnedOn: true);
+    }
+
+    /// <summary>
+    /// Removes one level of indentation (2 leading spaces) from the current list line.
+    /// Returns null when the caret is not on an indented list line.
+    /// </summary>
+    public static MarkdownEdit? DedentListItem(string text, int caretIndex)
+    {
+        var (lineStart, lineEnd) = LineBoundsAt(text, caretIndex);
+        var line = text[lineStart..lineEnd];
+        if (line.Length < 2 || line[0] != ' ' || line[1] != ' ') return null;
+        var trimmed = line.TrimStart(' ');
+        if (ListPrefixLength(trimmed, out _) == 0) return null;
+        int remove = Math.Min(2, line.Length - trimmed.Length);
+        if (remove == 0) return null;
+        return new MarkdownEdit(lineStart, remove, "", Math.Max(lineStart, caretIndex - remove), 0, TurnedOn: false);
+    }
+
     // ── Links ─────────────────────────────────────────────────────────────────
 
     public static MarkdownEdit InsertLink(string text, int selStart, int selLen, string display, string url)

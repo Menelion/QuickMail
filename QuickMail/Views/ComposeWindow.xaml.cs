@@ -165,6 +165,7 @@ public partial class ComposeWindow : Window
         };
         BodyBox.SelectionChanged += BodyBox_SelectionChanged;
         RichBodyBox.SelectionChanged += RichBodyBox_SelectionChanged;
+        RichBodyBox.PreviewKeyDown += RichBodyBox_PreviewKeyDown;
         Closing += OnWindowClosing;
 
         // Auto-save: quiet periodic draft saves. Success shows in the status row
@@ -647,19 +648,7 @@ public partial class ComposeWindow : Window
         if (!_configService.Load().AnnounceFormattingWhileNavigating) return;
 
         var paragraph = RichBodyBox.Selection.Start.Paragraph;
-        var blockType = (paragraph?.Tag as string) switch
-        {
-            "H1" => "Heading 1",
-            "H2" => "Heading 2",
-            "H3" => "Heading 3",
-            "PRE" => "Code block",
-            "BLOCKQUOTE" => "Quote",
-            _ => paragraph?.Parent is ListItem item
-                ? (item.Parent is List { MarkerStyle: System.Windows.TextMarkerStyle.Decimal }
-                    ? "Numbered list item"
-                    : "Bullet list item")
-                : "Normal text",
-        };
+        var blockType = BlockTypeLabel(paragraph);
 
         if (blockType == _lastAnnouncedBlockType) return;
         _lastAnnouncedBlockType = blockType;
@@ -804,12 +793,52 @@ public partial class ComposeWindow : Window
             }
         }
 
+        // Tab/Shift+Tab on a list line in Markdown mode: indent or dedent.
+        if (e.Key == Key.Tab && _vm.CurrentMode == ComposeMode.Markdown
+            && (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            var isShift = Keyboard.Modifiers == ModifierKeys.Shift;
+            var edit = isShift
+                ? MarkdownEditing.DedentListItem(BodyBox.Text, BodyBox.CaretIndex)
+                : MarkdownEditing.IndentListItem(BodyBox.Text, BodyBox.CaretIndex);
+            if (edit.HasValue)
+            {
+                ApplyMarkdownEdit(edit.Value);
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.F7)
         {
             var forward = (Keyboard.Modifiers & ModifierKeys.Shift) == 0;
             NavigateSpellingError(forward);
             e.Handled = true;
         }
+    }
+
+    private void RichBodyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Tab) return;
+        if (Keyboard.Modifiers != ModifierKeys.None && Keyboard.Modifiers != ModifierKeys.Shift) return;
+
+        var para = RichBodyBox.CaretPosition.Paragraph;
+        if (para?.Parent is not ListItem) return;
+
+        _suppressFormattingAnnouncement = true;
+        if (Keyboard.Modifiers == ModifierKeys.Shift)
+            EditingCommands.DecreaseIndentation.Execute(null, RichBodyBox);
+        else
+            EditingCommands.IncreaseIndentation.Execute(null, RichBodyBox);
+        _suppressFormattingAnnouncement = false;
+
+        e.Handled = true;
+        _vm.MarkBodyDirty();
+
+        var newPara = RichBodyBox.CaretPosition.Paragraph;
+        var label = BlockTypeLabel(newPara);
+        _lastAnnouncedBlockType = label;
+        AccessibilityHelper.Announce(this, label, category: AnnouncementCategory.Result);
     }
 
     // ── Command Palette ──────────────────────────────────────────────────────
@@ -1482,6 +1511,42 @@ public partial class ComposeWindow : Window
         }
     }
 
+    private static int ListDepthOf(Paragraph? para)
+    {
+        int depth = 0;
+        DependencyObject? el = para?.Parent;
+        while (el != null)
+        {
+            if (el is System.Windows.Documents.List) depth++;
+            el = (el as FrameworkContentElement)?.Parent;
+        }
+        return depth;
+    }
+
+    private static string BlockTypeLabel(Paragraph? para)
+    {
+        if (para?.Tag is string tag)
+        {
+            return tag switch
+            {
+                "H1" => "Heading 1",
+                "H2" => "Heading 2",
+                "H3" => "Heading 3",
+                "PRE" => "Code block",
+                "BLOCKQUOTE" => "Quote",
+                _ => "Normal text",
+            };
+        }
+        if (para?.Parent is ListItem item)
+        {
+            var kind = item.Parent is System.Windows.Documents.List { MarkerStyle: System.Windows.TextMarkerStyle.Decimal }
+                ? "Numbered list item" : "Bullet list item";
+            var depth = ListDepthOf(para);
+            return depth > 1 ? $"{kind}, level {depth}" : kind;
+        }
+        return "Normal text";
+    }
+
     private void ToggleList(bool ordered)
     {
         var name = ordered ? "Numbered list" : "Bullet list";
@@ -1587,17 +1652,7 @@ public partial class ComposeWindow : Window
         var strike    = SelectionHasDecoration(TextDecorationLocation.Strikethrough) ? "on" : "off";
 
         var paragraph = selection.Start.Paragraph;
-        var block = (paragraph?.Tag as string) switch
-        {
-            "H1" => "Heading 1",
-            "H2" => "Heading 2",
-            "H3" => "Heading 3",
-            "PRE" => "Code block",
-            "BLOCKQUOTE" => "Quote",
-            _ => paragraph?.Parent is ListItem item
-                ? (item.Parent is List { MarkerStyle: System.Windows.TextMarkerStyle.Decimal } ? "Numbered list item" : "Bullet list item")
-                : "Normal text",
-        };
+        var block = BlockTypeLabel(paragraph);
 
         return
         [
