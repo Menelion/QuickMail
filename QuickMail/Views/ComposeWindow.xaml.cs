@@ -887,6 +887,39 @@ public partial class ComposeWindow : Window
         else if (!_caretMovedByTyping)
             _spellingTypingTimer?.Stop();
 
+        // Alt+1/2/3: replace the current misspelled word with the corresponding suggestion.
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0
+            && _currentSpellingSuggestions is { Count: > 0 }
+            && _lastAnnouncedRichSpellingPos != null)
+        {
+            int suggestionIndex = e.SystemKey switch
+            {
+                Key.D1 => 0,
+                Key.D2 => 1,
+                Key.D3 => 2,
+                _ => -1
+            };
+            if (suggestionIndex >= 0 && suggestionIndex < _currentSpellingSuggestions.Count)
+            {
+                var replacement = _currentSpellingSuggestions[suggestionIndex];
+                var wordRange = RichBodyBox.GetSpellingErrorRange(_lastAnnouncedRichSpellingPos);
+                if (wordRange != null)
+                {
+                    _suppressFormattingAnnouncement = true;
+                    wordRange.Text = replacement;
+                    RichBodyBox.Selection.Select(wordRange.End, wordRange.End);
+                    _suppressFormattingAnnouncement = false;
+
+                    RichBodyBox.Focus();
+                    AccessibilityHelper.Announce(this, $"Replaced with {replacement}.",
+                        category: AnnouncementCategory.Result);
+                    ClearSpellingContext();
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         if (e.Key != Key.Tab) return;
         if (Keyboard.Modifiers != ModifierKeys.None && Keyboard.Modifiers != ModifierKeys.Shift) return;
 
