@@ -26,12 +26,15 @@ public sealed class GraphClient : IDisposable
     private readonly IOAuthService _oauth;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
+    private readonly TimeSpan _retryDelayWhenNoHeader;
 
-    public GraphClient(IOAuthService oauth, HttpClient? http = null)
+    public GraphClient(IOAuthService oauth, HttpClient? http = null, TimeSpan? defaultRetryDelay = null)
     {
         _oauth = oauth;
         _http = http ?? new HttpClient();
         _ownsHttp = http is null;
+        // Used only when a 429 response omits a Retry-After header. Injectable so tests don't wait.
+        _retryDelayWhenNoHeader = defaultRetryDelay ?? TimeSpan.FromSeconds(2);
     }
 
     public async Task<T?> GetAsync<T>(AccountModel account, string path, CancellationToken ct = default)
@@ -82,7 +85,7 @@ public sealed class GraphClient : IDisposable
             if (resp.StatusCode != (HttpStatusCode)429 || attempt >= 2)
                 return resp;
 
-            var delay = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
+            var delay = resp.Headers.RetryAfter?.Delta ?? _retryDelayWhenNoHeader;
             resp.Dispose();
             await Task.Delay(delay, ct);
         }

@@ -804,6 +804,11 @@ public class GraphMailService : IMailService
 - **Test Connection for Graph:** a not-yet-saved account isn't registered in the router (which would route it to the IMAP fallback), so the Graph "Test Connection" directs the user to "Sign in with Microsoft" — the sign-in itself (token + `/me`) is the verification. A dedicated probe can be added once in-progress-account registration is supported.
 - `GetMaxMessageKeyAsync` is always `"0"` for Graph (non-numeric ids `CAST` to 0), so a Graph folder always takes the "recent N / since-date" sync branch — correct; delta makes it efficient in PR 7.
 
+**PR 4 follow-ups (#61, #62, #64):**
+- **Special-folder detection by ID (#61):** `ConnectAsync` resolves the well-known folder IDs once (parallel `GET /me/mailFolders/{inbox|sentitems|drafts|deleteditems|junkemail}?$select=id`) into a per-account `id → SpecialFolderKind` map. `GetFoldersAsync` keys off that map first (locale- and rename-proof — German "Posteingang" or a user-renamed inbox is still detected), and only falls back to `MapWellKnownFolder(displayName)` for anything unresolved. A folder a user renames away from a well-known ID degrades to `SpecialFolderKind.None` and still appears in the list. `ExcludeFromAllMail` is now computed from the resolved `kind` (`IsExcludedKind`) rather than re-parsing the display name.
+- **`--online` mode (#62):** `GraphMailService` has **no `ILocalStoreService` dependency** — every read (connect, folders, summaries, detail, since-date) goes straight to Graph, so `--online` (which leaves the SQLite schema uncreated) is fully supported for Graph accounts with no behavioral difference. `GraphMailService_HasNoLocalStoreDependency_SoOnlineModeWorks` asserts this structurally so the property can't regress. The local-store-first/Graph-fallback pattern lives in `MainViewModel` (router → Graph), unchanged. No `--online`-specific limitations for Graph.
+- **429 retry (#64):** `GraphClient`'s `Retry-After`/default-delay handling is now covered by `GraphClientTests`; the default no-header delay is constructor-injectable (`defaultRetryDelay`, defaults to 2 s) so tests run without real waits.
+
 ### 6.11 `GraphSmtpService.cs` — Send Path
 
 **Path:** `QuickMail/Services/GraphSmtpService.cs`
