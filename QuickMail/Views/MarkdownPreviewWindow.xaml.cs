@@ -26,7 +26,7 @@ public partial class MarkdownPreviewWindow : Window
             ? "Compose — Preview — QuickMail"
             : $"{subject.Trim()} — Preview — QuickMail";
 
-        _html = BuildHtml(htmlFragment);
+        _html = BuildHtml(subject, htmlFragment);
         InitializeComponent();
         RegisterCommands();
         Loaded += OnLoaded;
@@ -188,12 +188,17 @@ public partial class MarkdownPreviewWindow : Window
 
     // ── HTML builder ─────────────────────────────────────────────────────────
 
-    private static string BuildHtml(string fragment)
+    private static string BuildHtml(string? subject, string fragment)
     {
         var isEmpty = string.IsNullOrWhiteSpace(fragment);
         var body = isEmpty
             ? "<p style=\"color:#888;font-style:italic;\">No content to preview.</p>"
             : fragment;
+
+        var titleText = string.IsNullOrWhiteSpace(subject)
+            ? "Preview"
+            : $"Preview — {subject.Trim()}";
+        var encodedTitle = System.Net.WebUtility.HtmlEncode(titleText);
 
         return
             "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n" +
@@ -201,6 +206,7 @@ public partial class MarkdownPreviewWindow : Window
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n" +
             "<meta http-equiv=\"Content-Security-Policy\" " +
             "content=\"default-src 'none'; style-src 'unsafe-inline'; font-src 'unsafe-inline'; img-src data:;\">\n" +
+            $"<title>{encodedTitle}</title>\n" +
             "<style>\n" + PreviewCss + "\n</style>\n" +
             "</head>\n<body>\n" +
             body +
