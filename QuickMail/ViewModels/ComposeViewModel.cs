@@ -88,8 +88,7 @@ public partial class ComposeViewModel : ObservableObject
     /// </summary>
     public bool IsFormattingAvailable => CurrentMode != ComposeMode.PlainText;
 
-    /// <summary>Spelling navigation reads the plain TextBox, which is hidden in HTML mode.</summary>
-    public bool IsSpellNavAvailable => CurrentMode != ComposeMode.Html;
+    public bool IsSpellNavAvailable => true;
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy = false;
     [ObservableProperty] private ObservableCollection<AccountModel> _senderAccounts = [];

@@ -66,6 +66,7 @@ public partial class ComposeWindow : Window
     // doesn't re-announce addresses the user is actively editing.
     private bool _suppressNextFocusAnnouncement;
     private int _lastAnnouncedSpellingIndex = -1;
+    private TextPointer? _lastAnnouncedRichSpellingPos;
 
     // Track the current spelling error so Alt+1/2/3 can replace it with a suggestion.
     private int _currentSpellingWordStart = -1;
@@ -667,20 +668,28 @@ public partial class ComposeWindow : Window
     {
         if (_suppressFormattingAnnouncement) return;
         if (_vm.CurrentMode != ComposeMode.Html) return;
-        if (!_configService.Load().AnnounceFormattingWhileNavigating) return;
 
-        var paragraph = RichBodyBox.Selection.Start.Paragraph;
-        var blockType = BlockTypeLabel(paragraph);
+        var config = _configService.Load();
 
-        if (blockType == _lastAnnouncedBlockType) return;
-        _lastAnnouncedBlockType = blockType;
+        if (config.AnnounceFormattingWhileNavigating)
+        {
+            var paragraph = RichBodyBox.Selection.Start.Paragraph;
+            var blockType = BlockTypeLabel(paragraph);
+            if (blockType != _lastAnnouncedBlockType)
+            {
+                _lastAnnouncedBlockType = blockType;
+                AccessibilityHelper.Announce(this, blockType, category: AnnouncementCategory.Result);
+            }
+        }
 
-        AccessibilityHelper.Announce(this, blockType, category: AnnouncementCategory.Result);
+        if (!_caretMovedByTyping && config.AnnounceSpellingWhileNavigating)
+            AnnounceSpellingAtCurrentPosition();
     }
 
     private void ClearSpellingContext()
     {
         _lastAnnouncedSpellingIndex = -1;
+        _lastAnnouncedRichSpellingPos = null;
         _currentSpellingWordStart = -1;
         _currentSpellingWordEnd = -1;
         _currentSpellingSuggestions = null;
@@ -688,6 +697,12 @@ public partial class ComposeWindow : Window
 
     private void AnnounceSpellingAtCurrentPosition()
     {
+        if (_vm.CurrentMode == ComposeMode.Html)
+        {
+            AnnounceSpellingAtRichPosition();
+            return;
+        }
+
         var text = BodyBox.Text;
         if (string.IsNullOrEmpty(text)) return;
 
@@ -724,6 +739,31 @@ public partial class ComposeWindow : Window
         _currentSpellingSuggestions = suggestions;
 
         AccessibilityHelper.Announce(this, BuildSpellingAnnouncement(word, suggestions),
+            category: AnnouncementCategory.Result);
+    }
+
+    private void AnnounceSpellingAtRichPosition()
+    {
+        var pos = RichBodyBox.CaretPosition;
+        var error = RichBodyBox.GetSpellingError(pos);
+        if (error == null)
+        {
+            ClearSpellingContext();
+            return;
+        }
+
+        var wordRange = RichBodyBox.GetSpellingErrorRange(pos);
+        if (wordRange == null) { ClearSpellingContext(); return; }
+
+        if (_lastAnnouncedRichSpellingPos != null &&
+            _lastAnnouncedRichSpellingPos.CompareTo(wordRange.Start) == 0)
+            return;
+        _lastAnnouncedRichSpellingPos = wordRange.Start;
+
+        var suggestions = error.Suggestions.Take(3).ToList();
+        _currentSpellingSuggestions = suggestions;
+
+        AccessibilityHelper.Announce(this, BuildSpellingAnnouncement(wordRange.Text, suggestions),
             category: AnnouncementCategory.Result);
     }
 
@@ -841,6 +881,12 @@ public partial class ComposeWindow : Window
 
     private void RichBodyBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        _caretMovedByTyping = IsTypingKey(e.Key, e.KeyboardDevice.Modifiers);
+        if (_caretMovedByTyping && _configService.Load().AnnounceSpellingWhileTyping)
+            ResetSpellingTypingTimer();
+        else if (!_caretMovedByTyping)
+            _spellingTypingTimer?.Stop();
+
         if (e.Key != Key.Tab) return;
         if (Keyboard.Modifiers != ModifierKeys.None && Keyboard.Modifiers != ModifierKeys.Shift) return;
 
@@ -905,18 +951,15 @@ public partial class ComposeWindow : Window
             execute: CheckAddresses,
             defaultKey: Key.K, defaultModifiers: ModifierKeys.Control));
 
-        // Spelling navigation reads BodyBox, which is hidden in HTML mode.
         _registry.Register(new CommandDefinition(
             id: "compose.nextMisspelling", category: "Compose", title: "Next Misspelling",
             execute: () => NavigateSpellingError(forward: true),
-            defaultKey: Key.F7, defaultModifiers: ModifierKeys.None,
-            isAvailable: () => _vm.CurrentMode != ComposeMode.Html));
+            defaultKey: Key.F7, defaultModifiers: ModifierKeys.None));
 
         _registry.Register(new CommandDefinition(
             id: "compose.prevMisspelling", category: "Compose", title: "Previous Misspelling",
             execute: () => NavigateSpellingError(forward: false),
-            defaultKey: Key.F7, defaultModifiers: ModifierKeys.Shift,
-            isAvailable: () => _vm.CurrentMode != ComposeMode.Html));
+            defaultKey: Key.F7, defaultModifiers: ModifierKeys.Shift));
 
         _registry.Register(new CommandDefinition(
             id: "compose.toggleSpellingAnnouncements", category: "Compose",
@@ -927,8 +970,7 @@ public partial class ComposeWindow : Window
             id: "compose.repeatSpelling", category: "Compose",
             title: "Repeat Spelling Announcement",
             execute: RepeatSpellingAnnouncement,
-            defaultKey: Key.F7, defaultModifiers: ModifierKeys.Alt,
-            isAvailable: () => _vm.CurrentMode != ComposeMode.Html));
+            defaultKey: Key.F7, defaultModifiers: ModifierKeys.Alt));
 
         RegisterRichComposeCommands();
 
@@ -1002,6 +1044,12 @@ public partial class ComposeWindow : Window
 
     private void NavigateSpellingError(bool forward)
     {
+        if (_vm.CurrentMode == ComposeMode.Html)
+        {
+            NavigateSpellingErrorInRichBox(forward);
+            return;
+        }
+
         var text = BodyBox.Text;
         if (string.IsNullOrEmpty(text)) return;
 
@@ -1066,6 +1114,46 @@ public partial class ComposeWindow : Window
             ClearSpellingContext();
             AccessibilityHelper.Announce(this, "No misspellings found.",
                 category: AnnouncementCategory.Result);
+        }
+    }
+
+    private void NavigateSpellingErrorInRichBox(bool forward)
+    {
+        var doc = RichBodyBox.Document;
+        var direction = forward ? LogicalDirection.Forward : LogicalDirection.Backward;
+        var errorPos = RichBodyBox.GetNextSpellingErrorPosition(RichBodyBox.CaretPosition, direction);
+
+        if (errorPos == null)
+        {
+            var wrapFrom = forward ? doc.ContentStart : doc.ContentEnd;
+            errorPos = RichBodyBox.GetNextSpellingErrorPosition(wrapFrom, direction);
+        }
+
+        if (errorPos != null)
+        {
+            var wordRange = RichBodyBox.GetSpellingErrorRange(errorPos);
+            if (wordRange == null)
+            {
+                ClearSpellingContext();
+                AccessibilityHelper.Announce(this, "No misspellings found.", category: AnnouncementCategory.Result);
+                return;
+            }
+
+            RichBodyBox.Selection.Select(wordRange.Start, wordRange.End);
+            RichBodyBox.Focus();
+
+            var error = RichBodyBox.GetSpellingError(errorPos);
+            var suggestions = error?.Suggestions.Take(3).ToList() ?? new List<string>();
+            _currentSpellingSuggestions = suggestions;
+            _lastAnnouncedRichSpellingPos = wordRange.Start;
+
+            AccessibilityHelper.Announce(this, BuildSpellingAnnouncement(wordRange.Text, suggestions),
+                category: AnnouncementCategory.Result);
+        }
+        else
+        {
+            ClearSpellingContext();
+            AccessibilityHelper.Announce(this, "No misspellings found.", category: AnnouncementCategory.Result);
         }
     }
 
