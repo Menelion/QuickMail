@@ -25,7 +25,7 @@ Composing email gets its largest update yet. Every compose window now offers thr
 
 Switch modes at any time with **Ctrl+Shift+1/2/3**, the **View** menu, or the mode selector in the compose status row. Content converts between modes automatically; switching from a rich mode down to Plain Text asks for confirmation first, because formatting would be lost. Messages composed in Markdown or HTML are sent with both a formatted HTML part and a plain text part, so every recipient's mail app can display them.
 
-**Accessibility was the design constraint, not an afterthought.** The HTML editor is a native Windows rich edit control, not an embedded browser — screen readers stay in their normal edit cursor with no virtual cursor or browse mode.
+The HTML editor is a native Windows rich edit control, not an embedded browser — screen readers stay in their normal edit cursor with no virtual cursor or browse mode. Settings allow you to control announcement of format information when cursoring. Also use CTRL+Shift+t to review fomratting information in a list at any point or ctrl+t to have it announced.
 
 ### Formatting Commands
 
@@ -46,8 +46,6 @@ Formatting works in both rich modes — in HTML mode the commands apply real for
 One exception: Markdown has no underline syntax, so underline is available in HTML mode only — invoking it in Markdown explains this aloud.
 
 ### Heading Commands Apply to the Selected Paragraph
-
-Heading shortcuts (`Ctrl+Alt+1/2/3`) and menu items now apply to the paragraph the selection begins in, not the caret position. Previously, selecting a line and pressing a heading shortcut could apply the heading to the paragraph *after* the selection when the caret happened to land at the start of the next paragraph. Headings also now apply to every paragraph touched by the selection when multiple lines are selected.
 
 ### Announce Formatting While Navigating (HTML Mode)
 
@@ -82,6 +80,19 @@ Control it under **Settings → General → Composing**: turn auto-save off, cho
 ### Compose Window Titles
 
 The compose window title now leads with your subject and editing mode — for example, "Lunch Friday - HTML - QuickMail" — so the taskbar and Alt+Tab identify each message at a glance. The title updates live as you type the subject or switch modes.
+
+### Valid, Accessible HTML Email
+
+Messages composed in Markdown or HTML mode are now sent as a complete, valid HTML5 document built to WCAG 2.2 AA structure:
+
+- The document declares the **message language** and carries the **subject as its title**, so recipients' mail apps and screen readers identify the message correctly.
+- **Image descriptions (alt text) are preserved** end to end — what you write in `![description](address)` is exactly what a screen reader user receives.
+- **Table header cells are sent as real headers** with column scope, so screen readers announce the column header while moving through table cells.
+- Task-list syntax (`- [x] done`) is kept as literal, readable text instead of being rendered as checkbox form controls, which most mail apps strip and which are not accessible in email.
+
+### Lossless Markdown ↔ HTML Mode Switching
+
+Switching a Markdown message into HTML mode and back now returns exactly what you wrote. Tables (with header rows and column alignment), images (with their descriptions), headings at all six levels, fenced code blocks with their language, multi-paragraph quotes, nested lists, and exact link addresses all survive the trip in both directions. Images appear in the HTML editor as their description text, so the description stays readable and editable.
 
 ### Nested Lists (Tab and Shift+Tab)
 
@@ -143,6 +154,12 @@ The status bar continues to show "Syncing mail…" without duplicating announcem
 - **Escape closed the whole compose window from open menus and dropdowns.** Escape now closes the open menu, combo dropdown, or address autocomplete first; only when nothing transient is open does it close the window.
 - **Formatting announcements were silenced by focus changes.** Invoking a formatting command from the menu restored focus to the editor, and the focus speech overrode the result announcement — all you heard was "message body." Formatting feedback is now timed to land after focus settles.
 - **Duplicate sync progress announcements.** The status bar text and explicit screen reader announcements were both being read aloud during sync, creating redundant chatter. Now only the explicit announcements (which respect user settings) are spoken, eliminating duplicates.
+- **Spaces between adjacent formatted spans were silently deleted.** Switching a Markdown message like `*a* *b*` into HTML mode dropped the space between the styled words, merging them. Whitespace between inline elements is now preserved with correct HTML semantics (collapsed to a single space, never removed).
+- **Markdown tables were destroyed by a mode switch.** Entering HTML mode flattened tables to tab-separated text and the table never came back. Tables are now real tables in the HTML editor and convert back to pipe-format Markdown, headers and alignment intact.
+- **Images lost their address on a mode switch.** `![alt](address)` kept only the description text; the image address was discarded. Both now round-trip.
+- **Headings 4–6 were demoted to heading 3** when switching from Markdown to HTML mode. All six levels are now preserved.
+- **Code block language was dropped** (` ```csharp ` became a plain fence) and **link addresses were rewritten** by URL normalization. Both are now preserved character for character.
+- **Multi-paragraph quotes split into separate quotes** on each round trip. Consecutive quoted paragraphs now stay one quote.
 
 ---
 
@@ -157,7 +174,9 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 ### Rich Compose
 
 - `ComposeMode` (PlainText / Markdown / Html) on `ComposeModel`; rich messages are sent as `multipart/alternative` by `MimeMessageBuilder` whenever `HtmlBody` is present
-- `MarkdownService` (Markdig) renders Markdown to HTML; `RichTextDocumentConverter` converts FlowDocument ↔ HTML/Markdown with block kinds tracked via `Paragraph.Tag`
+- `MarkdownService` (Markdig) renders Markdown to HTML with an explicit, bounded extension set (pipe tables, strikethrough, auto-links; raw HTML disabled, task lists excluded); `WrapDocument` emits a full HTML5 document with doctype, `lang`, charset, and the subject as `<title>`
+- `RichTextDocumentConverter` converts FlowDocument ↔ HTML/Markdown with structure tracked on element tags: `Paragraph.Tag` for headings 1–6, code blocks (`PRE:lang`), hr, and blockquote; `TableCell.Tag` for header cells and column alignment; `Run.Tag` for image src (alt text is the run text); `Hyperlink.Tag` for the author's verbatim href (script/data schemes excluded)
+- Round-trip fidelity is locked in by `MarkdownRoundTripTests`: an exact Markdown → HTML → FlowDocument → Markdown corpus, plus XML well-formedness and WCAG structure checks on the full sent document
 - `MarkdownEditing` — pure, unit-tested text operations behind the Markdown formatting commands, applied through `TextBox.SelectedText` so each toggle is one undo unit
 - **Never replace `RichTextBox.Document`** — WPF's automation peer binds to the original document's text container and never rebinds; all loads go through `RichTextDocumentConverter.LoadInto`. Guarded by `ComposeUiaTextPatternTests`, which asserts UIA TextPattern content through real mode switches
 - `FormattingListWindow` — the Show Formatting list; shares its state-reading code with the spoken announcement
@@ -184,6 +203,6 @@ Thank you to everyone who has contributed to QuickMail through code, bug reports
 
 - **Drafts and templates always reopen in Plain Text.** The editing mode is not yet round-tripped through the mail server, so a draft written in HTML reopens as plain text (the formatted content is preserved in the sent form, but further editing starts from the text representation).
 - **No underline in Markdown mode.** Markdown has no underline syntax; use HTML mode when underline matters.
-- **Images, tables, fonts, and colors** are not yet available in the HTML editor.
+- **Images and tables cannot be created in the HTML editor** — author them in Markdown mode; they display correctly and survive switches into HTML mode and back. **Fonts and colors** are not yet available in either rich mode.
 
 ---

@@ -14,21 +14,35 @@ namespace QuickMail.Helpers;
 /// Converts between a RichTextBox <see cref="FlowDocument"/> and the HTML /
 /// Markdown / plain-text body representations used by compose. The HTML side
 /// is the bounded subset the compose pipeline produces (Markdig output and
-/// our own serialization): p, h1–h3, ul/ol/li, blockquote, pre/code, hr,
-/// strong/em/u/del/code, a, br. Unknown elements degrade to their text content.
+/// our own serialization): p, h1–h6, ul/ol/li, blockquote, pre/code, hr,
+/// table/tr/th/td, strong/em/u/del/code, a, img, br. Unknown elements degrade
+/// to their text content.
 ///
-/// Heading level, pre, hr, and blockquote are tracked via <c>Paragraph.Tag</c>
-/// ("H1".."H3", "PRE", "HR", "BLOCKQUOTE") so they round-trip without
-/// guessing from font sizes.
+/// Heading level, pre (with fence language), hr, and blockquote are tracked via
+/// <c>Paragraph.Tag</c> ("H1".."H6", "PRE" / "PRE:lang", "HR", "BLOCKQUOTE");
+/// table header cells and column alignment via <c>TableCell.Tag</c> ("TH"/"TD"
+/// with an optional ":L"/":C"/":R" suffix); images via <c>Run.Tag</c>
+/// ("IMG:src" with the alt text as the run text); and the author's original
+/// link target via <c>Hyperlink.Tag</c> — all so content round-trips without
+/// guessing from visual formatting.
 /// </summary>
 public static class RichTextDocumentConverter
 {
     public const string TagH1 = "H1";
     public const string TagH2 = "H2";
     public const string TagH3 = "H3";
+    public const string TagH4 = "H4";
+    public const string TagH5 = "H5";
+    public const string TagH6 = "H6";
     public const string TagPre = "PRE";
     public const string TagHr = "HR";
     public const string TagBlockquote = "BLOCKQUOTE";
+
+    /// <summary>Run.Tag prefix marking an image placeholder; the rest is the src.</summary>
+    public const string ImageTagPrefix = "IMG:";
+
+    /// <summary>Run text shown for images whose alt text is empty (round-trips back to alt="").</summary>
+    public const string ImageAltPlaceholder = "(image)";
 
     private static readonly FontFamily CodeFont = new("Consolas");
 
@@ -37,8 +51,21 @@ public static class RichTextDocumentConverter
     {
         1 => 24,
         2 => 19,
-        _ => 16,
+        3 => 16,
+        4 => 14,
+        5 => 13,
+        _ => 12,
     };
+
+    /// <summary>True when the tag marks a code block ("PRE" or "PRE:language").</summary>
+    public static bool IsPreTag(string? tag) =>
+        tag is not null && (tag == TagPre || tag.StartsWith(TagPre + ":", StringComparison.Ordinal));
+
+    /// <summary>The fence language of a "PRE:language" tag, or null for a plain "PRE".</summary>
+    public static string? PreLanguageOf(string? tag) =>
+        tag is not null && tag.StartsWith(TagPre + ":", StringComparison.Ordinal)
+            ? tag[(TagPre.Length + 1)..]
+            : null;
 
     // ───────────────────────────── HTML → FlowDocument ─────────────────────────
 
@@ -79,7 +106,17 @@ public static class RichTextDocumentConverter
 
         IEnumerable<Block> FlushPending()
         {
+            // Stray whitespace between block elements is layout noise, not content.
+            while (pendingInlines.Count > 0
+                   && pendingInlines[^1] is Run r
+                   && r.Tag is null
+                   && string.IsNullOrWhiteSpace(r.Text))
+                pendingInlines.RemoveAt(pendingInlines.Count - 1);
             if (pendingInlines.Count == 0) yield break;
+            // Trailing whitespace at the end of a block does not render in HTML
+            // (e.g. the newline before a nested list inside an <li>).
+            if (pendingInlines[^1] is Run lastRun && lastRun.Tag is null)
+                lastRun.Text = lastRun.Text.TrimEnd();
             var p = new Paragraph();
             foreach (var i in pendingInlines) p.Inlines.Add(i);
             pendingInlines.Clear();
@@ -99,7 +136,7 @@ public static class RichTextDocumentConverter
 
                 case "h1" or "h2" or "h3" or "h4" or "h5" or "h6":
                     foreach (var b in FlushPending()) yield return b;
-                    var level = Math.Min(node.Name[1] - '0', 3);
+                    var level = node.Name[1] - '0';
                     var heading = new Paragraph
                     {
                         Tag = "H" + level,
@@ -147,9 +184,10 @@ public static class RichTextDocumentConverter
 
                 case "pre":
                     foreach (var b in FlushPending()) yield return b;
+                    var fenceLang = FenceLanguageOf(node);
                     var pre = new Paragraph
                     {
-                        Tag = TagPre,
+                        Tag = string.IsNullOrEmpty(fenceLang) ? TagPre : TagPre + ":" + fenceLang,
                         FontFamily = CodeFont,
                     };
                     // <pre> content is whitespace-significant; lines become LineBreaks.
@@ -169,15 +207,9 @@ public static class RichTextDocumentConverter
                     break;
 
                 case "table":
-                    // Tables degrade to one paragraph per row, cells joined by tabs.
                     foreach (var b in FlushPending()) yield return b;
-                    foreach (var row in node.Descendants("tr"))
-                    {
-                        var cells = row.Children
-                            .Where(c => c.Name is "td" or "th")
-                            .Select(c => c.InnerText().Trim());
-                        yield return new Paragraph(new Run(string.Join("\t", cells)));
-                    }
+                    var table = BuildTable(node);
+                    if (table != null) yield return table;
                     break;
 
                 case "script" or "style" or "head":
@@ -193,6 +225,84 @@ public static class RichTextDocumentConverter
         foreach (var b in FlushPending()) yield return b;
     }
 
+    private static string? FenceLanguageOf(HtmlNode preNode)
+    {
+        var cls = preNode.Children.FirstOrDefault(c => c.Name == "code")?.Class;
+        var token = cls?.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(t => t.StartsWith("language-", StringComparison.OrdinalIgnoreCase));
+        return token?["language-".Length..];
+    }
+
+    private static Table? BuildTable(HtmlNode node)
+    {
+        var rowNodes = node.Descendants("tr").ToList();
+        if (rowNodes.Count == 0) return null;
+
+        var table = new Table { CellSpacing = 0 };
+        var group = new TableRowGroup();
+        table.RowGroups.Add(group);
+        int columns = 0;
+
+        foreach (var rowNode in rowNodes)
+        {
+            var row = new TableRow();
+            foreach (var cellNode in rowNode.Children.Where(c => c.Name is "td" or "th"))
+            {
+                bool isHeader = cellNode.Name == "th";
+                var alignment = AlignmentOf(cellNode.Style);
+                var cp = new Paragraph();
+                AddInlines(cp.Inlines, cellNode.Children, new InlineStyle());
+                var cell = new TableCell(cp)
+                {
+                    BorderBrush = Brushes.Gray,
+                    BorderThickness = new Thickness(0.5),
+                    Padding = new Thickness(6, 2, 6, 2),
+                    Tag = (isHeader ? "TH" : "TD") + alignment switch
+                    {
+                        TextAlignment.Left => ":L",
+                        TextAlignment.Center => ":C",
+                        TextAlignment.Right => ":R",
+                        _ => string.Empty,
+                    },
+                };
+                if (isHeader) cell.FontWeight = FontWeights.Bold;
+                if (alignment.HasValue) cell.TextAlignment = alignment.Value;
+                row.Cells.Add(cell);
+            }
+            columns = Math.Max(columns, row.Cells.Count);
+            group.Rows.Add(row);
+        }
+
+        for (int c = 0; c < columns; c++)
+            table.Columns.Add(new TableColumn());
+        return table;
+    }
+
+    private static TextAlignment? AlignmentOf(string? style)
+    {
+        if (style is null || !style.Contains("text-align", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (style.Contains("center", StringComparison.OrdinalIgnoreCase)) return TextAlignment.Center;
+        if (style.Contains("right", StringComparison.OrdinalIgnoreCase)) return TextAlignment.Right;
+        if (style.Contains("left", StringComparison.OrdinalIgnoreCase)) return TextAlignment.Left;
+        return null;
+    }
+
+    private static (bool IsHeader, string? Align) CellInfo(TableCell? cell)
+    {
+        if (cell?.Tag is not string tag) return (false, null);
+        var parts = tag.Split(':');
+        bool header = parts[0] == "TH";
+        string? align = parts.Length > 1 ? parts[1] switch
+        {
+            "L" => "left",
+            "C" => "center",
+            "R" => "right",
+            _ => null,
+        } : null;
+        return (header, align);
+    }
+
     private readonly record struct InlineStyle(
         bool Bold = false, bool Italic = false, bool Underline = false,
         bool Strike = false, bool Code = false);
@@ -204,7 +314,12 @@ public static class RichTextDocumentConverter
             switch (node.Name)
             {
                 case "":
-                    var decoded = WebUtility.HtmlDecode(node.Text).Replace('\n', ' ');
+                    // HTML whitespace semantics: runs of whitespace collapse to one
+                    // space; a space at the start of a line (start of the inline
+                    // stream or right after a <br>) does not render.
+                    var decoded = CollapseWhitespace(WebUtility.HtmlDecode(node.Text));
+                    if (target.Count == 0 || target.LastOrDefault() is LineBreak)
+                        decoded = decoded.TrimStart();
                     if (decoded.Length > 0)
                         target.Add(StyleRun(new Run(decoded), style));
                     break;
@@ -239,6 +354,10 @@ public static class RichTextDocumentConverter
                     if (Uri.TryCreate(href, UriKind.Absolute, out var uri)
                         && uri.Scheme is "http" or "https" or "mailto")
                         link.NavigateUri = uri;
+                    // Keep the author's exact href for round-tripping (NavigateUri
+                    // normalizes), but never a script/data scheme.
+                    if (href.Length > 0 && !IsDangerousHref(href))
+                        link.Tag = href;
                     AddInlines(link.Inlines, node.Children, style);
                     if (link.Inlines.Count == 0 && href.Length > 0)
                         link.Inlines.Add(new Run(href));
@@ -247,8 +366,18 @@ public static class RichTextDocumentConverter
 
                 case "img":
                     var alt = WebUtility.HtmlDecode(node.Alt ?? string.Empty);
-                    if (alt.Length > 0)
+                    var src = WebUtility.HtmlDecode(node.Src ?? string.Empty);
+                    if (src.Length > 0 && !IsDangerousHref(src))
+                    {
+                        // The alt text is the editable run text; the src rides on Tag.
+                        var imgRun = StyleRun(new Run(alt.Length > 0 ? alt : ImageAltPlaceholder), style);
+                        imgRun.Tag = ImageTagPrefix + src;
+                        target.Add(imgRun);
+                    }
+                    else if (alt.Length > 0)
+                    {
                         target.Add(StyleRun(new Run($"[{alt}]"), style));
+                    }
                     break;
 
                 default:
@@ -256,6 +385,30 @@ public static class RichTextDocumentConverter
                     break;
             }
         }
+    }
+
+    private static bool IsDangerousHref(string href)
+    {
+        var s = href.TrimStart();
+        return s.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("vbscript:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("file:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Collapses every run of whitespace (including newlines) to a single space.</summary>
+    private static string CollapseWhitespace(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        bool pendingSpace = false;
+        foreach (var ch in text)
+        {
+            if (char.IsWhiteSpace(ch)) { pendingSpace = true; continue; }
+            if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+            sb.Append(ch);
+        }
+        if (pendingSpace) sb.Append(' ');
+        return sb.ToString();
     }
 
     private static Run StyleRun(Run run, InlineStyle style)
@@ -275,9 +428,34 @@ public static class RichTextDocumentConverter
     public static string ToHtml(FlowDocument doc)
     {
         var sb = new StringBuilder();
-        foreach (var block in doc.Blocks)
-            EmitBlockHtml(sb, block);
+        EmitBlocksHtml(sb, doc.Blocks);
         return sb.ToString().TrimEnd('\n');
+    }
+
+    /// <summary>
+    /// Emits a run of sibling blocks, merging consecutive blockquote paragraphs
+    /// into a single &lt;blockquote&gt; so multi-paragraph quotes keep their
+    /// structure instead of splitting into adjacent one-paragraph quotes.
+    /// </summary>
+    private static void EmitBlocksHtml(StringBuilder sb, IEnumerable<Block> blocks)
+    {
+        bool inQuote = false;
+        foreach (var block in blocks)
+        {
+            bool isQuote = block is Paragraph { Tag: TagBlockquote };
+            if (inQuote && !isQuote) { sb.Append("</blockquote>\n"); inQuote = false; }
+            if (isQuote)
+            {
+                if (!inQuote) { sb.Append("<blockquote>\n"); inQuote = true; }
+                var qp = (Paragraph)block;
+                sb.Append("<p>");
+                EmitInlinesHtml(sb, qp.Inlines, BaselineOf(qp));
+                sb.Append("</p>\n");
+                continue;
+            }
+            EmitBlockHtml(sb, block);
+        }
+        if (inQuote) sb.Append("</blockquote>\n");
     }
 
     private static void EmitBlockHtml(StringBuilder sb, Block block)
@@ -287,11 +465,14 @@ public static class RichTextDocumentConverter
             case Paragraph p:
                 var tag = p.Tag as string;
                 if (tag == TagHr) { sb.Append("<hr />\n"); return; }
-                if (tag == TagPre)
+                if (IsPreTag(tag))
                 {
-                    sb.Append("<pre><code>");
+                    var lang = PreLanguageOf(tag);
+                    sb.Append(lang is null
+                        ? "<pre><code>"
+                        : $"<pre><code class=\"language-{WebUtility.HtmlEncode(lang)}\">");
                     sb.Append(WebUtility.HtmlEncode(InlinesPlainText(p.Inlines)));
-                    sb.Append("</code></pre>\n");
+                    sb.Append("\n</code></pre>\n");
                     return;
                 }
                 var (open, close) = tag switch
@@ -299,7 +480,9 @@ public static class RichTextDocumentConverter
                     TagH1 => ("<h1>", "</h1>"),
                     TagH2 => ("<h2>", "</h2>"),
                     TagH3 => ("<h3>", "</h3>"),
-                    TagBlockquote => ("<blockquote><p>", "</p></blockquote>"),
+                    TagH4 => ("<h4>", "</h4>"),
+                    TagH5 => ("<h5>", "</h5>"),
+                    TagH6 => ("<h6>", "</h6>"),
                     _ => ("<p>", "</p>"),
                 };
                 sb.Append(open);
@@ -317,16 +500,45 @@ public static class RichTextDocumentConverter
                     if (item.Blocks.Count == 1 && item.Blocks.FirstBlock is Paragraph ip)
                         EmitInlinesHtml(sb, ip.Inlines, BaselineOf(ip));
                     else
-                        foreach (var inner in item.Blocks)
-                            EmitBlockHtml(sb, inner);
+                        EmitBlocksHtml(sb, item.Blocks);
                     sb.Append("</li>\n");
                 }
                 sb.Append("</").Append(listTag).Append(">\n");
                 break;
 
+            case Table table:
+                sb.Append("<table>\n");
+                foreach (var rowGroup in table.RowGroups)
+                {
+                    foreach (var row in rowGroup.Rows)
+                    {
+                        sb.Append("<tr>\n");
+                        foreach (var cell in row.Cells)
+                        {
+                            var (isHeader, align) = CellInfo(cell);
+                            var cellTag = isHeader ? "th" : "td";
+                            sb.Append('<').Append(cellTag);
+                            if (isHeader) sb.Append(" scope=\"col\"");
+                            if (align != null) sb.Append(" style=\"text-align: ").Append(align).Append(";\"");
+                            sb.Append('>');
+                            bool firstBlock = true;
+                            foreach (var cb in cell.Blocks)
+                            {
+                                if (cb is not Paragraph cp) continue;
+                                if (!firstBlock) sb.Append("<br />");
+                                EmitInlinesHtml(sb, cp.Inlines, BaselineOf(cp));
+                                firstBlock = false;
+                            }
+                            sb.Append("</").Append(cellTag).Append(">\n");
+                        }
+                        sb.Append("</tr>\n");
+                    }
+                }
+                sb.Append("</table>\n");
+                break;
+
             case Section section:
-                foreach (var inner in section.Blocks)
-                    EmitBlockHtml(sb, inner);
+                EmitBlocksHtml(sb, section.Blocks);
                 break;
         }
     }
@@ -346,6 +558,16 @@ public static class RichTextDocumentConverter
                     sb.Append("<br />\n");
                     break;
 
+                case Run imgRun when imgRun.Tag is string imgTag
+                                     && imgTag.StartsWith(ImageTagPrefix, StringComparison.Ordinal):
+                    var imgAlt = imgRun.Text == ImageAltPlaceholder ? string.Empty : imgRun.Text;
+                    sb.Append("<img src=\"")
+                      .Append(WebUtility.HtmlEncode(imgTag[ImageTagPrefix.Length..]))
+                      .Append("\" alt=\"")
+                      .Append(WebUtility.HtmlEncode(imgAlt))
+                      .Append("\" />");
+                    break;
+
                 case Run run:
                     var style = EffectiveStyle(run, baseline);
                     var openTags = new List<string>();
@@ -361,7 +583,13 @@ public static class RichTextDocumentConverter
                     break;
 
                 case Hyperlink link:
-                    var href = link.NavigateUri?.ToString() ?? string.Empty;
+                    var href = link.Tag as string ?? link.NavigateUri?.ToString() ?? string.Empty;
+                    if (href.Length == 0)
+                    {
+                        // No usable target — emit the text without a dead anchor.
+                        EmitInlinesHtml(sb, link.Inlines, baseline);
+                        break;
+                    }
                     sb.Append("<a href=\"").Append(WebUtility.HtmlEncode(href)).Append("\">");
                     EmitInlinesHtml(sb, link.Inlines, baseline);
                     sb.Append("</a>");
@@ -393,9 +621,38 @@ public static class RichTextDocumentConverter
     public static string ToMarkdown(FlowDocument doc)
     {
         var sb = new StringBuilder();
-        foreach (var block in doc.Blocks)
-            EmitBlockMarkdown(sb, block);
+        EmitBlocksMarkdown(sb, doc.Blocks);
         return sb.ToString().Trim('\n');
+    }
+
+    /// <summary>
+    /// Emits a run of sibling blocks, joining consecutive blockquote paragraphs
+    /// with a "&gt;" continuation line so they re-parse as one quote.
+    /// </summary>
+    private static void EmitBlocksMarkdown(StringBuilder sb, IEnumerable<Block> blocks)
+    {
+        bool prevQuote = false;
+        foreach (var block in blocks)
+        {
+            bool isQuote = block is Paragraph { Tag: TagBlockquote };
+            if (isQuote)
+            {
+                if (prevQuote && sb.Length >= 2 && sb[^1] == '\n' && sb[^2] == '\n')
+                {
+                    // Replace the blank separator with a ">" continuation line.
+                    sb.Length -= 1;
+                    sb.Append(">\n");
+                }
+                var qp = (Paragraph)block;
+                sb.Append("> ");
+                EmitInlinesMarkdown(sb, qp.Inlines, BaselineOf(qp), "> ");
+                sb.Append("\n\n");
+                prevQuote = true;
+                continue;
+            }
+            prevQuote = false;
+            EmitBlockMarkdown(sb, block);
+        }
     }
 
     private static void EmitBlockMarkdown(StringBuilder sb, Block block)
@@ -405,9 +662,10 @@ public static class RichTextDocumentConverter
             case Paragraph p:
                 var tag = p.Tag as string;
                 if (tag == TagHr) { sb.Append("---\n\n"); return; }
-                if (tag == TagPre)
+                if (IsPreTag(tag))
                 {
-                    sb.Append("```\n").Append(InlinesPlainText(p.Inlines)).Append("\n```\n\n");
+                    sb.Append("```").Append(PreLanguageOf(tag) ?? string.Empty).Append('\n')
+                      .Append(InlinesPlainText(p.Inlines)).Append("\n```\n\n");
                     return;
                 }
                 var prefix = tag switch
@@ -415,6 +673,9 @@ public static class RichTextDocumentConverter
                     TagH1 => "# ",
                     TagH2 => "## ",
                     TagH3 => "### ",
+                    TagH4 => "#### ",
+                    TagH5 => "##### ",
+                    TagH6 => "###### ",
                     TagBlockquote => "> ",
                     _ => string.Empty,
                 };
@@ -428,26 +689,102 @@ public static class RichTextDocumentConverter
                 int n = 1;
                 foreach (var item in list.ListItems)
                 {
-                    sb.Append(ordered ? $"{n}. " : "- ");
+                    var marker = ordered ? $"{n}. " : "- ";
                     n++;
+                    sb.Append(marker);
+                    // Continuation lines must be indented to the marker's width
+                    // ("1. " needs three spaces) for nested content to re-parse.
+                    var indent = new string(' ', marker.Length);
                     if (item.Blocks.Count == 1 && item.Blocks.FirstBlock is Paragraph ip)
-                        EmitInlinesMarkdown(sb, ip.Inlines, BaselineOf(ip), "  ");
+                        EmitInlinesMarkdown(sb, ip.Inlines, BaselineOf(ip), indent);
                     else
-                    {
-                        var inner = new StringBuilder();
-                        foreach (var b in item.Blocks) EmitBlockMarkdown(inner, b);
-                        sb.Append(inner.ToString().Trim('\n').Replace("\n", "\n  "));
-                    }
+                        sb.Append(ListItemMarkdown(item, indent));
                     sb.Append('\n');
                 }
                 sb.Append('\n');
                 break;
 
+            case Table table:
+                EmitTableMarkdown(sb, table);
+                break;
+
             case Section section:
-                foreach (var inner in section.Blocks)
-                    EmitBlockMarkdown(sb, inner);
+                EmitBlocksMarkdown(sb, section.Blocks);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Markdown for a multi-block list item. A nested list directly after a
+    /// paragraph joins with a single newline (a blank line would make the list
+    /// loose); other neighbors keep the blank-line separator.
+    /// </summary>
+    private static string ListItemMarkdown(ListItem item, string indent)
+    {
+        var parts = new List<(bool IsList, string Text)>();
+        foreach (var block in item.Blocks)
+        {
+            var part = new StringBuilder();
+            EmitBlocksMarkdown(part, [block]);
+            parts.Add((block is List, part.ToString().Trim('\n')));
+        }
+        var joined = new StringBuilder();
+        for (int i = 0; i < parts.Count; i++)
+        {
+            if (i > 0)
+                joined.Append(parts[i].IsList && !parts[i - 1].IsList ? "\n" : "\n\n");
+            joined.Append(parts[i].Text);
+        }
+        return joined.ToString().Replace("\n", "\n" + indent);
+    }
+
+    private static void EmitTableMarkdown(StringBuilder sb, Table table)
+    {
+        var rows = table.RowGroups.SelectMany(g => g.Rows).ToList();
+        if (rows.Count == 0) return;
+
+        var cellTexts = rows
+            .Select(r => r.Cells.Select(CellMarkdown).ToList())
+            .ToList();
+        int columns = cellTexts.Max(r => r.Count);
+        if (columns == 0) return;
+
+        string RowLine(List<string> cells) =>
+            "| " + string.Join(" | ", Enumerable.Range(0, columns)
+                .Select(i => i < cells.Count ? cells[i] : string.Empty)) + " |";
+
+        // First row is the header (pipe tables require one); its alignment
+        // drives the delimiter row.
+        sb.Append(RowLine(cellTexts[0])).Append('\n');
+        var delimiters = Enumerable.Range(0, columns).Select(i =>
+        {
+            var cell = i < rows[0].Cells.Count ? rows[0].Cells[i] : null;
+            return CellInfo(cell).Align switch
+            {
+                "center" => ":---:",
+                "right" => "---:",
+                "left" => ":---",
+                _ => "---",
+            };
+        });
+        sb.Append("| ").Append(string.Join(" | ", delimiters)).Append(" |\n");
+        for (int r = 1; r < cellTexts.Count; r++)
+            sb.Append(RowLine(cellTexts[r])).Append('\n');
+        sb.Append('\n');
+    }
+
+    private static string CellMarkdown(TableCell cell)
+    {
+        var sb = new StringBuilder();
+        bool first = true;
+        foreach (var block in cell.Blocks)
+        {
+            if (block is not Paragraph p) continue;
+            if (!first) sb.Append(' ');
+            EmitInlinesMarkdown(sb, p.Inlines, BaselineOf(p), string.Empty);
+            first = false;
+        }
+        return sb.ToString().Replace("\n", " ").Replace("|", "\\|").Trim();
     }
 
     private static void EmitInlinesMarkdown(StringBuilder sb, InlineCollection inlines, InlineStyle baseline, string continuationPrefix)
@@ -458,6 +795,13 @@ public static class RichTextDocumentConverter
             {
                 case LineBreak:
                     sb.Append('\n').Append(continuationPrefix);
+                    break;
+
+                case Run mdImg when mdImg.Tag is string mdImgTag
+                                    && mdImgTag.StartsWith(ImageTagPrefix, StringComparison.Ordinal):
+                    var mdAlt = mdImg.Text == ImageAltPlaceholder ? string.Empty : mdImg.Text;
+                    sb.Append("![").Append(mdAlt).Append("](")
+                      .Append(mdImgTag[ImageTagPrefix.Length..]).Append(')');
                     break;
 
                 case Run run:
@@ -493,11 +837,13 @@ public static class RichTextDocumentConverter
                 case Hyperlink link:
                     var inner = new StringBuilder();
                     EmitInlinesMarkdown(inner, link.Inlines, baseline, continuationPrefix);
-                    var url = link.NavigateUri?.ToString() ?? string.Empty;
-                    if (url.Length > 0)
-                        sb.Append('[').Append(inner).Append("](").Append(url).Append(')');
-                    else
+                    var url = link.Tag as string ?? link.NavigateUri?.ToString() ?? string.Empty;
+                    if (url.Length == 0)
                         sb.Append(inner);
+                    else if (string.Equals(inner.ToString(), url, StringComparison.Ordinal))
+                        sb.Append(url); // bare autolink stays bare
+                    else
+                        sb.Append('[').Append(inner).Append("](").Append(url).Append(')');
                     break;
 
                 case Span span:
@@ -543,6 +889,9 @@ public static class RichTextDocumentConverter
         public string Text = string.Empty;
         public string? Href;
         public string? Alt;
+        public string? Src;
+        public string? Class;
+        public string? Style;
         public List<HtmlNode> Children = [];
 
         private static readonly HashSet<string> VoidTags =
@@ -611,6 +960,9 @@ public static class RichTextDocumentConverter
                 var attrs = body[nameEnd..];
                 node.Href = ExtractAttr(attrs, "href");
                 node.Alt = ExtractAttr(attrs, "alt");
+                node.Src = ExtractAttr(attrs, "src");
+                node.Class = ExtractAttr(attrs, "class");
+                node.Style = ExtractAttr(attrs, "style");
                 stack.Peek().Children.Add(node);
 
                 if (!selfClosed && !VoidTags.Contains(name))
@@ -622,10 +974,10 @@ public static class RichTextDocumentConverter
 
         private static void AppendText(HtmlNode parent, string text)
         {
+            // All text is kept; whitespace handling is contextual and happens
+            // when blocks/inlines are built (whitespace between inline elements
+            // is significant, whitespace between block elements is not).
             if (text.Length == 0) return;
-            // Whitespace-only text between blocks is layout noise except inside <pre>.
-            if (string.IsNullOrWhiteSpace(text) && parent.Name != "pre" && parent.Name != "code")
-                return;
             parent.Children.Add(new HtmlNode { Text = text });
         }
 

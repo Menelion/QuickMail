@@ -107,13 +107,49 @@ public class MarkdownServiceTests
     }
 
     [Fact]
-    public void WrapDocument_ProducesHtmlBodyWithFontStyle()
+    public void WrapDocument_ProducesValidHtml5Document()
     {
-        var doc = _svc.WrapDocument("<p>hi</p>");
-        Assert.StartsWith("<html><body", doc);
+        var doc = _svc.WrapDocument("<p>hi</p>", "Lunch Friday");
+        Assert.StartsWith("<!DOCTYPE html>", doc);
+        Assert.Contains("<html lang=\"", doc);
+        Assert.Contains("<meta charset=\"utf-8\" />", doc);
+        Assert.Contains("<title>Lunch Friday</title>", doc);
         Assert.Contains("font-family", doc);
         Assert.Contains("<p>hi</p>", doc);
-        Assert.EndsWith("</body></html>", doc);
+        Assert.EndsWith("</html>", doc);
+    }
+
+    [Fact]
+    public void WrapDocument_NoSubject_StillHasTitle()
+    {
+        var doc = _svc.WrapDocument("<p>hi</p>");
+        Assert.Contains("<title>Email message</title>", doc);
+    }
+
+    [Fact]
+    public void WrapDocument_TitleIsEncoded()
+    {
+        var doc = _svc.WrapDocument("<p>hi</p>", "Q3 <results> & more");
+        Assert.Contains("<title>Q3 &lt;results&gt; &amp; more</title>", doc);
+        Assert.DoesNotContain("<title>Q3 <results>", doc);
+    }
+
+    [Fact]
+    public void ToHtml_TaskListSyntax_StaysLiteralText_NoInputElements()
+    {
+        // Task-list checkboxes render as unlabeled <input> elements, which fail
+        // WCAG 4.1.2 and are stripped by most mail clients — the pipeline keeps
+        // the bracket syntax as literal, accessible text instead.
+        var html = _svc.ToHtml("- [x] done\n- [ ] not yet");
+        Assert.DoesNotContain("<input", html);
+        Assert.Contains("[x] done", html);
+    }
+
+    [Fact]
+    public void ToHtml_Strikethrough_RendersDel()
+    {
+        var html = _svc.ToHtml("~~gone~~");
+        Assert.Contains("<del>gone</del>", html);
     }
 
     [Fact]

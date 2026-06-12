@@ -461,7 +461,7 @@ public partial class ComposeViewModel : ObservableObject
     };
 
     /// <summary>Renders the current Markdown body as a full HTML document for the preview pane.</summary>
-    public string RenderPreviewHtml() => _markdown.WrapDocument(_markdown.ToHtml(Body));
+    public string RenderPreviewHtml() => _markdown.WrapDocument(_markdown.ToHtml(Body), Subject);
 
     /// <summary>Returns the rendered HTML body fragment for the preview window, without any wrapper or styles.</summary>
     public string GetBodyHtml() => CurrentMode == ComposeMode.Markdown ? _markdown.ToHtml(Body) : string.Empty;
@@ -619,7 +619,7 @@ public partial class ComposeViewModel : ObservableObject
         switch (CurrentMode)
         {
             case ComposeMode.Markdown when !string.IsNullOrWhiteSpace(Body):
-                htmlBody = _markdown.WrapDocument(_markdown.ToHtml(Body));
+                htmlBody = _markdown.WrapDocument(_markdown.ToHtml(Body), Subject);
                 break;
 
             case ComposeMode.Html:
@@ -627,7 +627,7 @@ public partial class ComposeViewModel : ObservableObject
                 if (!snapshot.IsEmpty)
                 {
                     body     = snapshot.PlainText;
-                    htmlBody = _markdown.WrapDocument(snapshot.Html);
+                    htmlBody = _markdown.WrapDocument(snapshot.Html, Subject);
                 }
                 break;
         }

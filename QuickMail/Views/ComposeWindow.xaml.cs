@@ -1532,8 +1532,11 @@ public partial class ComposeWindow : Window
                 "H1" => "Heading 1",
                 "H2" => "Heading 2",
                 "H3" => "Heading 3",
-                "PRE" => "Code block",
+                "H4" => "Heading 4",
+                "H5" => "Heading 5",
+                "H6" => "Heading 6",
                 "BLOCKQUOTE" => "Quote",
+                _ when RichTextDocumentConverter.IsPreTag(tag) => "Code block",
                 _ => "Normal text",
             };
         }

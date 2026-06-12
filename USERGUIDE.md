@@ -876,6 +876,18 @@ Your content converts automatically when you switch — Markdown becomes formatt
 
 The mode new messages start in is set under **Settings → General → Composing → Default compose mode**. Drafts and templates always reopen in Plain Text regardless of this setting.
 
+### What Markdown supports — and what survives a mode switch
+
+QuickMail's Markdown understands headings (`#` through `######`), bold, italic, strikethrough (`~~`), inline code and fenced code blocks (including a language name after the opening fence), bullet, numbered, and nested lists, links, bare web addresses (linked automatically), images (`![description](address)`), block quotes, horizontal rules (`---`), and tables in the pipe format (`| A | B |`). Raw HTML typed into Markdown is never rendered — it stays visible as text, so pasted markup cannot smuggle active content into your message.
+
+Task-list syntax (`- [x] done`) is kept as literal text rather than rendered as checkboxes: checkbox form controls are stripped by most mail apps and are not accessible in email, so the bracket text — which reads naturally with screen readers — is sent instead.
+
+Switching Markdown → HTML mode and back returns exactly what you wrote: headings keep their levels, tables keep their header rows and column alignment, images keep their description (alt text) and address, code blocks keep their language, quotes keep their paragraph structure, and link addresses are preserved character for character. An image appears in the HTML editor as its description text, so you can read and refine the description like any other content.
+
+### The HTML that recipients receive
+
+Messages composed in Markdown or HTML mode are sent as a complete, valid HTML document built for accessibility: it declares the message language, carries your subject as the document title, preserves image descriptions, and marks table header cells so screen readers announce column headers while moving through a table. A plain text version always accompanies it for mail apps that prefer text.
+
 ### Formatting (Markdown and HTML modes)
 
 The same formatting commands work in both rich modes. In HTML mode they apply real formatting; in Markdown mode they insert the equivalent Markdown syntax at the cursor or around the selected text. Every command confirms its result aloud — "Bold on", "Heading 2", "Bullet list off":

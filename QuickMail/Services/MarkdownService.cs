@@ -1,7 +1,9 @@
 using System;
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Markdig;
+using Markdig.Extensions.EmphasisExtras;
 using QuickMail.Helpers;
 
 namespace QuickMail.Services;
@@ -12,12 +14,18 @@ namespace QuickMail.Services;
 /// </summary>
 public sealed class MarkdownService : IMarkdownService
 {
-    // Advanced extensions: tables, fenced code, strikethrough, task lists, auto-links.
-    // Soft line breaks render as <br> (email convention — people expect their line
-    // breaks to survive). Raw HTML in Markdown is disabled so pasted markup cannot
-    // smuggle script or active content into the rendered body.
+    // Explicit, bounded extension set: pipe tables, strikethrough, and auto-links.
+    // This is deliberately narrower than UseAdvancedExtensions so every construct
+    // the pipeline can emit round-trips losslessly through the rich editor and
+    // produces accessible markup (e.g. task lists are excluded because they render
+    // as unlabeled <input> checkboxes, which fail WCAG 4.1.2 and are stripped by
+    // most mail clients). Soft line breaks render as <br /> (email convention —
+    // people expect their line breaks to survive). Raw HTML in Markdown is disabled
+    // so pasted markup cannot smuggle script or active content into the rendered body.
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
-        .UseAdvancedExtensions()
+        .UsePipeTables()
+        .UseEmphasisExtras(EmphasisExtraOptions.Strikethrough)
+        .UseAutoLinks()
         .UseSoftlineBreakAsHardlineBreak()
         .DisableHtml()
         .Build();
@@ -47,8 +55,22 @@ public sealed class MarkdownService : IMarkdownService
         return sb.ToString();
     }
 
-    public string WrapDocument(string htmlFragment) =>
-        "<html><body style=\"font-family: Segoe UI, Arial, sans-serif; font-size: 13px;\">\n"
-        + htmlFragment
-        + "\n</body></html>";
+    public string WrapDocument(string htmlFragment, string? title = null)
+    {
+        // A complete, valid HTML5 document: doctype, lang (WCAG 3.1.1), charset,
+        // and a title (WCAG 2.4.2) taken from the message subject when available.
+        var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        if (string.IsNullOrWhiteSpace(lang)) lang = "en";
+        var docTitle = string.IsNullOrWhiteSpace(title) ? "Email message" : title;
+
+        return "<!DOCTYPE html>\n"
+            + $"<html lang=\"{WebUtility.HtmlEncode(lang)}\">\n"
+            + "<head>\n"
+            + "<meta charset=\"utf-8\" />\n"
+            + $"<title>{WebUtility.HtmlEncode(docTitle)}</title>\n"
+            + "</head>\n"
+            + "<body style=\"font-family: Segoe UI, Arial, sans-serif; font-size: 13px;\">\n"
+            + htmlFragment
+            + "\n</body>\n</html>";
+    }
 }
