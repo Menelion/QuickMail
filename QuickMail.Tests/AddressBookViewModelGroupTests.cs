@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 using QuickMail.Models;
 using QuickMail.Services;
 using QuickMail.ViewModels;
@@ -53,8 +54,7 @@ public class AddressBookViewModelGroupTests
         try
         {
             vm.NewGroupName = "Friends";
-            vm.CreateGroupCommand.Execute(null);
-            await Task.Delay(50);
+            await ((IAsyncRelayCommand)vm.CreateGroupCommand).ExecuteAsync(null);
             Assert.NotEmpty(vm.Groups);
             Assert.Equal("Friends", vm.Groups[0].Name);
         }
@@ -68,8 +68,7 @@ public class AddressBookViewModelGroupTests
         try
         {
             vm.NewGroupName = "   ";
-            vm.CreateGroupCommand.Execute(null);
-            await Task.Delay(50);
+            await ((IAsyncRelayCommand)vm.CreateGroupCommand).ExecuteAsync(null);
             Assert.Empty(vm.Groups);
         }
         finally { Cleanup(dir); }
@@ -83,12 +82,10 @@ public class AddressBookViewModelGroupTests
         {
             vm.ConfirmRequested += (_, _) => Task.FromResult(true);
             vm.NewGroupName = "ToDelete";
-            vm.CreateGroupCommand.Execute(null);
-            await Task.Delay(50);
+            await ((IAsyncRelayCommand)vm.CreateGroupCommand).ExecuteAsync(null);
             Assert.Single(vm.Groups);
             vm.SelectedGroup = vm.Groups[0];
-            vm.DeleteGroupCommand.Execute(null);
-            await Task.Delay(50);
+            await ((IAsyncRelayCommand)vm.DeleteGroupCommand).ExecuteAsync(null);
             Assert.Empty(vm.Groups);
         }
         finally { Cleanup(dir); }
@@ -107,7 +104,6 @@ public class AddressBookViewModelGroupTests
             await service.AddMemberAsync(groupId, 2);
             await vm.LoadAsync();
             vm.SelectedGroup = vm.Groups.First(g => g.Id == groupId);
-            await Task.Delay(50);
             Assert.Equal(2, vm.SelectedGroupMembers.Count);
         }
         finally { Cleanup(dir); }
@@ -125,12 +121,10 @@ public class AddressBookViewModelGroupTests
             await service.AddMemberAsync(groupId, 1);
             await vm.LoadAsync();
             vm.SelectedGroup = vm.Groups.First(g => g.Id == groupId);
-            await Task.Delay(50);
             var bob = vm.FilteredContacts.First(c => c.DisplayName == "Bob");
             vm.SelectedContact = bob;
             var targetGroup = vm.Groups.First(g => g.Id == groupId);
             await vm.AddContactToGroupAsync(targetGroup);
-            await Task.Delay(50);
             var group = await service.LoadAllGroupsAsync();
             Assert.Equal(2, group.First(g => g.Id == groupId).MemberContactIds.Count);
         }
@@ -150,10 +144,8 @@ public class AddressBookViewModelGroupTests
             await service.AddMemberAsync(groupId, 2);
             await vm.LoadAsync();
             vm.SelectedGroup = vm.Groups.First(g => g.Id == groupId);
-            await Task.Delay(50);
             var alice = vm.SelectedGroupMembers.First(c => c.DisplayName == "Alice");
             await vm.RemoveContactFromGroupAsync(alice);
-            await Task.Delay(50);
             var group = await service.LoadAllGroupsAsync();
             Assert.Single(group.First(g => g.Id == groupId).MemberContactIds);
         }
