@@ -12,9 +12,12 @@ namespace QuickMail.Tests;
 
 public class GraphSendMailServiceTests
 {
-    /// <summary>Captures the single request it serves and returns 202 Accepted (Graph /sendMail).</summary>
+    /// <summary>Captures the single request it serves and returns the configured status (202 by default).</summary>
     private sealed class CapturingHandler : HttpMessageHandler
     {
+        private readonly HttpStatusCode _status;
+        public CapturingHandler(HttpStatusCode status = HttpStatusCode.Accepted) => _status = status;
+
         public string? Url { get; private set; }
         public string? ContentType { get; private set; }
         public byte[]? Body { get; private set; }
@@ -27,13 +30,15 @@ public class GraphSendMailServiceTests
                 ContentType = request.Content.Headers.ContentType?.MediaType;
                 Body = await request.Content.ReadAsByteArrayAsync(ct);
             }
-            return new HttpResponseMessage(HttpStatusCode.Accepted);
+            // Always attach a body so a non-2xx response is surfaced via EnsureSuccessAsync
+            // (which reads the error body) rather than NRE-ing on null content.
+            return new HttpResponseMessage(_status) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
         }
     }
 
-    private static (GraphSendMailService Svc, CapturingHandler Handler) Make()
+    private static (GraphSendMailService Svc, CapturingHandler Handler) Make(HttpStatusCode status = HttpStatusCode.Accepted)
     {
-        var handler = new CapturingHandler();
+        var handler = new CapturingHandler(status);
         return (new GraphSendMailService(new StubOAuthService(), new HttpClient(handler)), handler);
     }
 
@@ -74,5 +79,16 @@ public class GraphSendMailServiceTests
         var mime = DecodeMime(handler.Body!);
         Assert.Contains("organizer@x.com", mime);
         Assert.Contains("method=REPLY", mime.Replace("\"", "")); // calendar method survives the round-trip
+    }
+
+    [Fact]
+    public async Task SendAsync_SurfacesNon2xxResponse_AsException()
+    {
+        // A failed /sendMail must propagate — a silently-swallowed send would tell the user the
+        // message was sent when it wasn't. GraphClient.EnsureSuccessAsync throws on non-2xx.
+        var (svc, _) = Make(HttpStatusCode.InternalServerError);
+        var compose = new ComposeModel { To = "alice@x.com", Subject = "Hi", Body = "Hello" };
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => svc.SendAsync(compose, GraphAccount(), null));
     }
 }

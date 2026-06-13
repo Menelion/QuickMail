@@ -52,4 +52,18 @@ public class SmtpServiceDispatchTests
 
         Assert.True(graph.IcsCalled);
     }
+
+    [Fact]
+    public async Task SendAsync_DoesNotRouteImapAccount_ToGraphBackend()
+    {
+        var graph = new RecordingSmtp();
+        var svc = new SmtpService(new StubOAuthService(), graph);
+        // ImapSmtp account with an empty SMTP host: the MailKit path is taken and fails fast on
+        // connect. The point is the dispatch must NOT hand an IMAP account to the Graph sender.
+        var account = new AccountModel { Id = Guid.NewGuid(), Username = "me@example.com", BackendKind = BackendKind.ImapSmtp, SmtpHost = "" };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => svc.SendAsync(new ComposeModel(), account, "pw"));
+
+        Assert.False(graph.SendCalled); // took the MailKit path, not the Graph dispatch
+    }
 }
