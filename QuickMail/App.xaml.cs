@@ -9,6 +9,9 @@ namespace QuickMail;
 
 public partial class App : Application
 {
+    // Held so OnExit can dispose it — it owns a GraphClient/HttpClient.
+    private GraphSendMailService? _graphSendMail;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -75,7 +78,8 @@ public partial class App : Application
             var configService     = new ConfigService(profile);
             var imapBackend       = new ImapMailService(oauthService, configService);
             var graphBackend      = new GraphMailService(oauthService, configService);
-            var smtpService       = new SmtpService(oauthService);
+            _graphSendMail        = new GraphSendMailService(oauthService);
+            var smtpService       = new SmtpService(oauthService, _graphSendMail);
 
             // Per-account mail backend router. Each account is registered to the backend its
             // BackendKind selects (IMAP by default, Graph for Microsoft 365 accounts).
@@ -127,6 +131,13 @@ public partial class App : Application
                 LogService.Log("Startup", cur);
             throw;
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // GraphSendMailService owns a GraphClient (and its HttpClient) — release it on exit.
+        _graphSendMail?.Dispose();
+        base.OnExit(e);
     }
 
     /// <summary>
