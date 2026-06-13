@@ -77,8 +77,28 @@ public class GraphSendMailServiceTests
 
         Assert.Equal("https://graph.microsoft.com/v1.0/me/sendMail", handler.Url);
         var mime = DecodeMime(handler.Body!);
-        Assert.Contains("organizer@x.com", mime);
+        Assert.Contains("<me@contoso.com>", mime);                   // From carries the sending account
+        Assert.Contains("organizer@x.com", mime);                    // To is the organizer
         Assert.Contains("method=REPLY", mime.Replace("\"", "")); // calendar method survives the round-trip
+    }
+
+    [Fact]
+    public async Task SendIcsReplyAsync_Throws_ForNullContent()
+    {
+        // A descriptive ArgumentException at the call site beats an NRE from inside MimeKit.
+        var (svc, handler) = Make();
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.SendIcsReplyAsync(null!, GraphAccount(), null, "organizer@x.com"));
+        Assert.Null(handler.Url); // never reached the network
+    }
+
+    [Fact]
+    public async Task SendIcsReplyAsync_Throws_ForMissingOrganizer()
+    {
+        var (svc, handler) = Make();
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.SendIcsReplyAsync("BEGIN:VCALENDAR\nEND:VCALENDAR", GraphAccount(), null, ""));
+        Assert.Null(handler.Url);
     }
 
     [Fact]

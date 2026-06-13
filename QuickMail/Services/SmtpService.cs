@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MailKit.Net.Smtp;
@@ -11,8 +10,6 @@ public class SmtpService : ISendMailService
 {
     private readonly IOAuthService _oauth;
     private readonly ISendMailService _graphSmtp;
-    private static readonly string UserAgent =
-        "QuickMail/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0");
 
     public SmtpService(IOAuthService oauth, ISendMailService graphSmtp)
     {
@@ -28,7 +25,7 @@ public class SmtpService : ISendMailService
             return;
         }
 
-        var message = MimeMessageBuilder.Build(compose, account, UserAgent);
+        var message = MimeMessageBuilder.Build(compose, account, MimeMessageBuilder.AppUserAgent);
 
         using var client = new SmtpClient();
 

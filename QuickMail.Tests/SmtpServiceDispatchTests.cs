@@ -66,4 +66,17 @@ public class SmtpServiceDispatchTests
 
         Assert.False(graph.SendCalled); // took the MailKit path, not the Graph dispatch
     }
+
+    [Fact]
+    public async Task SendIcsReplyAsync_DoesNotRouteImapAccount_ToGraphBackend()
+    {
+        var graph = new RecordingSmtp();
+        var svc = new SmtpService(new StubOAuthService(), graph);
+        var account = new AccountModel { Id = Guid.NewGuid(), Username = "me@example.com", BackendKind = BackendKind.ImapSmtp, SmtpHost = "" };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => svc.SendIcsReplyAsync("BEGIN:VCALENDAR\nEND:VCALENDAR", account, "pw", "organizer@x.com"));
+
+        Assert.False(graph.IcsCalled); // took the MailKit path, not the Graph dispatch
+    }
 }

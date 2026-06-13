@@ -1002,7 +1002,7 @@ foreach (var account in accountService.LoadAccounts())
 
 // SMTP — single service that delegates internally:
 var graphSendMail = new GraphSendMailService(oauthService);
-var smtpService = new SmtpService(oauthService, graphSmtpService);
+var smtpService = new SmtpService(oauthService, graphSendMail);
 
 // Change notifier — composite over both backends:
 var imapNotifier = new ImapChangeNotifier(imapBackend);

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using MimeKit;
 using QuickMail.Helpers;
@@ -15,6 +16,10 @@ namespace QuickMail.Services;
 /// </summary>
 public static class MimeMessageBuilder
 {
+    /// <summary>The User-Agent string for outgoing mail — one source of truth for every sender.</summary>
+    internal static readonly string AppUserAgent =
+        "QuickMail/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0");
+
     /// <summary>
     /// Builds a complete MIME message from compose fields, including attachments.
     /// </summary>
@@ -100,6 +105,8 @@ public static class MimeMessageBuilder
     /// <param name="organizerEmail">The event organizer's address (the reply recipient).</param>
     public static MimeMessage BuildIcsReply(AccountModel account, string icsReplyContent, string organizerEmail)
     {
+        if (string.IsNullOrWhiteSpace(icsReplyContent))
+            throw new ArgumentException("ICS reply content is required.", nameof(icsReplyContent));
         if (string.IsNullOrWhiteSpace(organizerEmail))
             throw new ArgumentException("Organizer email is required for ICS reply.", nameof(organizerEmail));
 

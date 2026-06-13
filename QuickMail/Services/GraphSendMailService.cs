@@ -1,8 +1,7 @@
 using System;
+using System.Buffers.Text;
 using System.IO;
 using System.Net.Http;
-using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MimeKit;
@@ -16,17 +15,15 @@ namespace QuickMail.Services;
 /// (base64-encoded, <c>Content-Type: text/plain</c>); Graph delivers it and auto-saves a copy
 /// to the Sent folder, so <see cref="IMailService.AppendToSentAsync"/> is a no-op for Graph.
 /// </summary>
-public class GraphSendMailService : ISendMailService
+public class GraphSendMailService : ISendMailService, IDisposable
 {
     private readonly GraphClient _client;
-    private static readonly string UserAgent =
-        "QuickMail/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0");
 
     /// <param name="http">Optional injected HttpClient for tests; null uses a real one.</param>
     public GraphSendMailService(IOAuthService oauth, HttpClient? http = null) => _client = new GraphClient(oauth, http);
 
     public Task SendAsync(ComposeModel compose, AccountModel account, string? password, CancellationToken ct = default)
-        => SendMimeAsync(account, MimeMessageBuilder.Build(compose, account, UserAgent), ct);
+        => SendMimeAsync(account, MimeMessageBuilder.Build(compose, account, MimeMessageBuilder.AppUserAgent), ct);
 
     public Task SendIcsReplyAsync(string icsReplyContent, AccountModel account, string? password,
         string organizerEmail, CancellationToken ct = default)
@@ -36,13 +33,17 @@ public class GraphSendMailService : ISendMailService
     {
         using var ms = new MemoryStream();
         await message.WriteToAsync(ms, ct);
-        var mimeBytes = ms.ToArray();
+        int mimeLength = (int)ms.Length;
 
-        // Graph /sendMail takes the MIME message base64-encoded, sent as a text/plain body.
-        var body = Encoding.ASCII.GetBytes(Convert.ToBase64String(mimeBytes));
+        // Graph /sendMail takes the MIME message base64-encoded as a text/plain body. Encode the
+        // MIME bytes straight to base64 ASCII bytes — no intermediate base64 string allocation.
+        var body = new byte[Base64.GetMaxEncodedToUtf8Length(mimeLength)];
+        Base64.EncodeToUtf8(ms.GetBuffer().AsSpan(0, mimeLength), body, out _, out _);
 
-        LogService.Log($"GraphSendMailService: sending {mimeBytes.Length} MIME bytes via /me/sendMail");
+        LogService.Log($"GraphSendMailService: sending {mimeLength} MIME bytes via /me/sendMail");
         await _client.PostRawAsync(account, "/me/sendMail", body, "text/plain", ct);
         LogService.Log("GraphSendMailService: send complete");
     }
+
+    public void Dispose() => _client.Dispose();
 }
