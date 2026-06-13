@@ -30,6 +30,7 @@ public partial class MainViewModel : ObservableObject
     private readonly ICommandRegistry _commandRegistry;
     private readonly IRuleService _ruleService;
     private readonly ISendMailService _smtp;
+    private readonly IFlagService? _flagService;
 
     // Separate CTS per operation type so they can't cancel each other accidentally
     private CancellationTokenSource? _connectCts;
