@@ -168,6 +168,7 @@ public partial class MainWindow : Window
     private readonly IViewService _viewService;
     private readonly IRuleService _ruleService;
     private readonly ITemplateService _templateService;
+    private readonly IFlagService? _flagService;
 
     private TutorialViewModel? _tutorialVm;
 
@@ -190,7 +191,8 @@ public partial class MainWindow : Window
         IViewService viewService,
         IRuleService ruleService,
         ITemplateService templateService,
-        IFeatureGate featureGate)
+        IFeatureGate featureGate,
+        IFlagService? flagService = null)
     {
         _vm = vm;
         _smtp = smtp;
@@ -206,6 +208,7 @@ public partial class MainWindow : Window
         _ruleService = ruleService;
         _templateService = templateService;
         _featureGate = featureGate;
+        _flagService = flagService;
 
         InitializeComponent();
         DataContext = vm;
@@ -1621,15 +1624,29 @@ public partial class MainWindow : Window
             await _vm.ToggleSingleFlagAsync(_vm.SelectedMessage);
     }
 
-    private Task PickFlagCommandAsync()
+    private async Task PickFlagCommandAsync()
     {
-        // Phase 4: flag picker window not yet implemented.
-        return Task.CompletedTask;
+        if (_flagService == null) return;
+        var msg = _vm.SelectedMessage;
+        if (msg == null) return;
+
+        var prev = Keyboard.FocusedElement as IInputElement;
+        var picker = new FlagPickerWindow(_flagService, msg.IsFlagged) { Owner = this };
+        picker.ShowDialog();
+        (prev ?? MessageList).Focus();
+
+        if (picker.DialogResult == true)
+            await _vm.SetMessageFlagAsync(msg, picker.ResultFlagId);
     }
 
     private void OpenFlagManager()
     {
-        // Phase 4: flag manager window not yet implemented.
+        if (_flagService == null) return;
+        var prev = Keyboard.FocusedElement as IInputElement;
+        var vmFm = new FlagManagerViewModel(_flagService);
+        var win  = new FlagManagerWindow(vmFm) { Owner = this };
+        win.ShowDialog();
+        (prev ?? MessageList).Focus();
     }
 
     private void ExtendSelectionToTop()

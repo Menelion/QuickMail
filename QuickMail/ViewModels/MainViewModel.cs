@@ -2920,6 +2920,23 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex) { LogService.Log("ToggleGroupFlag failed", ex); }
     }
 
+    public async Task SetMessageFlagAsync(MailMessageSummary message, string? flagId)
+    {
+        if (_flagService == null) return;
+        try
+        {
+            ReplaceCts(ref _messageActionCts, out var ct);
+            await _flagService.SetMessageFlagAsync(message, flagId, _localStore, _imap, ct);
+            if (_announceFlagStatus)
+            {
+                var text = flagId == null ? "Unflagged" : (message.FlagName ?? "Flagged");
+                Announce(text, AnnouncementCategory.Result);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { LogService.Log("SetMessageFlag failed", ex); }
+    }
+
     private async void OnFlagDefinitionsChanged(object? sender, EventArgs e)
     {
         if (_flagService == null) return;
