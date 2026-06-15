@@ -307,6 +307,9 @@ public partial class MainWindow : Window
                 else
                 {
                     LogService.Debug("[FOCUS]   → FocusActiveMessagePanel (dispatched)");
+                    // Park focus on the ListView so the rebuild can't null out Keyboard.FocusedElement and cause Shift+F10 to fall through to the Win32 system menu.
+                    if (MessageList.IsKeyboardFocusWithin)
+                        MessageList.Focus();
                     Dispatcher.InvokeAsync(FocusActiveMessagePanel, DispatcherPriority.Input);
                 }
             }
@@ -396,6 +399,7 @@ public partial class MainWindow : Window
         };
 
         PreviewKeyDown += OnWindowKeyDown;
+        ContextMenuOpening += OnWindowContextMenuOpening;
         MainStatusBar.PreviewKeyDown += StatusBar_PreviewKeyDown;
         Loaded      += OnLoaded;
         Deactivated += OnDeactivated;
@@ -831,6 +835,20 @@ public partial class MainWindow : Window
 
         // Connect accounts and sync new mail in the background; messages trickle in via FolderSynced.
         _ = _vm.StartBackgroundSyncAsync();
+    }
+
+    // Fallback for when a rebuild removed the focused ListViewItem; WPF then routes ContextMenuOpening to the Window and Shift+F10 would show the Win32 system menu.
+    private void OnWindowContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (e.Handled) return;
+        if (_vm.IsMessagesView && MessageList.Visibility == Visibility.Visible
+            && MessageList.Items.Count > 0)
+        {
+            var cm = (ContextMenu)FindResource("MessageContextMenu");
+            cm.PlacementTarget = MessageList;
+            cm.IsOpen = true;
+            e.Handled = true;
+        }
     }
 
     // Global key handler (PreviewKeyDown so it fires before any child can swallow the event).
