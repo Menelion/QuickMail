@@ -32,7 +32,8 @@ public interface IFlagService
     Task<FlagDefinition?> SetMessageFlagAsync(
         MailMessageSummary message,
         string? flagId,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        FlagDefinition? resolvedDef = null);
 
     /// <summary>
     /// Toggles the K-default flag on a message (sets if unflagged, clears if already flagged

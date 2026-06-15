@@ -389,11 +389,16 @@
                               Command="{Binding SetFilterCommand}"
                               CommandParameter="tome"/>
                     <Separator/>
-                    <MenuItem Header="Fla_gged"
-                              IsCheckable="True"
-                              IsChecked="{Binding IsFilterFlagged, Mode=OneWay}"
-                              Command="{Binding SetFilterCommand}"
-                              CommandParameter="flagged"/>
+                    <MenuItem x:Name="FilterFlaggedItem"
+                              Header="Fla_gged"
+                              IsChecked="{Binding IsFilterFlagged, Mode=OneWay}">
+                        <MenuItem Header="All Fla_gged"
+                                  IsCheckable="True"
+                                  IsChecked="{Binding IsFilterAllFlagged, Mode=OneWay}"
+                                  Command="{Binding SetFilterCommand}"
+                                  CommandParameter="flagged"/>
+                        <Separator x:Name="FilterFlaggedSeparator"/>
+                    </MenuItem>
                 </MenuItem>
                 <MenuItem Header="S_ort">
                     <MenuItem Header="Newest _First"

@@ -31,8 +31,8 @@ public class FlagManagerViewModelTests
         public Task SaveFlagDefinitionsAsync(List<FlagDefinition> flags) { Saved = new List<FlagDefinition>(flags); return Task.CompletedTask; }
         public Task<FlagDefinition> GetKDefaultFlagAsync() => Task.FromResult(_flags.Find(f => f.Id == KDefaultId) ?? FlagDefinition.CreateBuiltIn());
         public Task SetKDefaultFlagAsync(Guid flagId) { KDefaultId = flagId; return Task.CompletedTask; }
-        public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, CancellationToken ct = default)
-            => Task.FromResult<FlagDefinition?>(flagId != null ? _flags.Find(f => f.Id.ToString() == flagId) : null);
+        public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, CancellationToken ct = default, FlagDefinition? resolvedDef = null)
+            => Task.FromResult<FlagDefinition?>(resolvedDef ?? (flagId != null ? _flags.Find(f => f.Id.ToString() == flagId) : null));
         public Task<FlagDefinition?> ToggleDefaultFlagAsync(MailMessageSummary message, CancellationToken ct = default)
             => Task.FromResult<FlagDefinition?>(message.IsFlagged ? null : _flags.Find(f => f.Id == KDefaultId));
     }
@@ -104,6 +104,19 @@ public class FlagManagerViewModelTests
         var (vm, _) = await MakeVmAsync();
         await vm.AddFlagCommand.ExecuteAsync(null);
         Assert.True(vm.IsRenaming);
+    }
+
+    [Fact]
+    public async Task AddFlag_GeneratesUniqueNameWhenNewFlagExists()
+    {
+        var flags = new List<FlagDefinition>
+        {
+            FlagDefinition.CreateBuiltIn(),
+            new() { Name = "New Flag", SortOrder = 1 },
+        };
+        var (vm, _) = await MakeVmAsync(flags);
+        await vm.AddFlagCommand.ExecuteAsync(null);
+        Assert.Equal("New Flag 2", vm.Flags[2].Name);
     }
 
     [Fact]
@@ -188,6 +201,41 @@ public class FlagManagerViewModelTests
         Assert.False(vm.IsRenaming);
         Assert.Equal("Important", vm.SelectedFlag!.Name);
         Assert.Equal("Important", svc.Saved[1].Name);
+    }
+
+    [Fact]
+    public async Task SaveRename_DuplicateName_SetsError()
+    {
+        var flags = new List<FlagDefinition>
+        {
+            FlagDefinition.CreateBuiltIn(),
+            new() { Name = "Urgent",    SortOrder = 1 },
+            new() { Name = "Important", SortOrder = 2 },
+        };
+        var (vm, _) = await MakeVmAsync(flags);
+        vm.SelectedFlag = vm.Flags[1]; // "Urgent"
+        vm.BeginRenameCommand.Execute(null);
+        vm.EditName = "Important";     // already exists on a different flag
+        await vm.SaveRenameCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRenaming);
+        Assert.NotEmpty(vm.RenameError);
+    }
+
+    [Fact]
+    public async Task SaveRename_SameNameAsOwn_Succeeds()
+    {
+        var flags = new List<FlagDefinition>
+        {
+            FlagDefinition.CreateBuiltIn(),
+            new() { Name = "Urgent", SortOrder = 1 },
+        };
+        var (vm, _) = await MakeVmAsync(flags);
+        vm.SelectedFlag = vm.Flags[1];
+        vm.BeginRenameCommand.Execute(null);
+        vm.EditName = "urgent"; // same name, different case — saving own name is fine
+        await vm.SaveRenameCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRenaming);
+        Assert.Empty(vm.RenameError);
     }
 
     [Fact]

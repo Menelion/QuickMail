@@ -19,6 +19,7 @@
         <!-- Toolbar -->
         <ToolBar x:Name="FlagToolbar"
                  DockPanel.Dock="Top"
+                 KeyboardNavigation.TabNavigation="Continue"
                  AutomationProperties.Name="Flag manager">
             <Button x:Name="AddButton"
                     Content="Add Flag"
@@ -90,7 +91,7 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"/>
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" IsTabStop="False"/>
 
             <!-- Edit panel -->
             <ScrollViewer x:Name="EditPanel"
@@ -262,12 +263,12 @@
                             </WrapPanel.Resources>
                             <RadioButton Tag="#E53E3E" AutomationProperties.Name="Red"     Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#E53E3E"/>
                             <RadioButton Tag="#DD6B20" AutomationProperties.Name="Orange"  Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#DD6B20"/>
-                            <RadioButton Tag="#FF8C00" AutomationProperties.Name="Amber"   Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#FF8C00"/>
-                            <RadioButton Tag="#D69E2E" AutomationProperties.Name="Yellow"  Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#D69E2E"/>
+                            <RadioButton Tag="#C05621" AutomationProperties.Name="Amber"   Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#C05621"/>
+                            <RadioButton Tag="#B7791F" AutomationProperties.Name="Yellow"  Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#B7791F"/>
                             <RadioButton Tag="#38A169" AutomationProperties.Name="Green"   Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#38A169"/>
-                            <RadioButton Tag="#68D391" AutomationProperties.Name="Lime"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#68D391"/>
+                            <RadioButton Tag="#276749" AutomationProperties.Name="Lime"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#276749"/>
                             <RadioButton Tag="#319795" AutomationProperties.Name="Teal"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#319795"/>
-                            <RadioButton Tag="#00B5D8" AutomationProperties.Name="Cyan"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#00B5D8"/>
+                            <RadioButton Tag="#0987A0" AutomationProperties.Name="Cyan"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#0987A0"/>
                             <RadioButton Tag="#3182CE" AutomationProperties.Name="Blue"    Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#3182CE"/>
                             <RadioButton Tag="#5A67D8" AutomationProperties.Name="Indigo"  Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#5A67D8"/>
                             <RadioButton Tag="#6B46C1" AutomationProperties.Name="Violet"  Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="#6B46C1"/>

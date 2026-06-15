@@ -15,7 +15,7 @@ public partial class FlagDefinition : ObservableObject
     private string _name = string.Empty;
 
     [ObservableProperty]
-    private string _colorHex = "#FF8C00";
+    private string _colorHex = "#C05621";
 
     [ObservableProperty]
     private int _sortOrder;
@@ -28,7 +28,7 @@ public partial class FlagDefinition : ObservableObject
     {
         Id        = BuiltInFlagId,
         Name      = "Flagged",
-        ColorHex  = "#FF8C00",
+        ColorHex  = "#C05621",
         SortOrder = 0,
         IsBuiltIn = true,
     };

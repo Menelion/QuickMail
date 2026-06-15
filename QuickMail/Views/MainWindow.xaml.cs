@@ -228,6 +228,8 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.ActiveView))
                 UpdateViewMenuCheckmarks();
         };
+        vm.FlagDefinitions.CollectionChanged += (_, _) => RebuildFlagSubmenuItems();
+        FilterFlaggedItem.SubmenuOpened += (_, _) => UpdateFlagSubmenuChecks();
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
@@ -4144,6 +4146,32 @@ public partial class MainWindow : Window
         {
             if (obj is MenuItem { Tag: Guid id } item)
                 item.IsChecked = id == _vm.ActiveView?.Id;
+        }
+    }
+
+    private void RebuildFlagSubmenuItems()
+    {
+        // Items 0 = "All Flagged", 1 = Separator — keep those, remove the rest.
+        while (FilterFlaggedItem.Items.Count > 2)
+            FilterFlaggedItem.Items.RemoveAt(2);
+
+        foreach (var flag in _vm.FlagDefinitions)
+        {
+            var flagId = flag.Id.ToString();
+            var item = new MenuItem { Header = flag.Name, IsCheckable = true, Tag = flagId };
+            item.Click += (_, _) => _vm.SetFlagFilterCommand.Execute(flagId);
+            FilterFlaggedItem.Items.Add(item);
+        }
+        UpdateFlagSubmenuChecks();
+    }
+
+    private void UpdateFlagSubmenuChecks()
+    {
+        for (int i = 2; i < FilterFlaggedItem.Items.Count; i++)
+        {
+            if (FilterFlaggedItem.Items[i] is MenuItem { Tag: string flagId } item)
+                item.IsChecked = _vm.ActiveFilter == MessageFilter.Flagged
+                    && _vm.ActiveFlagFilterId == flagId;
         }
     }
 

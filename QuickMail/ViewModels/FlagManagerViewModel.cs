@@ -52,8 +52,8 @@ public partial class FlagManagerViewModel : ObservableObject
 
     public static string[] PresetColors { get; } =
     [
-        "#E53E3E", "#DD6B20", "#FF8C00", "#D69E2E",
-        "#38A169", "#68D391", "#319795", "#00B5D8",
+        "#E53E3E", "#DD6B20", "#C05621", "#B7791F",
+        "#38A169", "#276749", "#319795", "#0987A0",
         "#3182CE", "#5A67D8", "#6B46C1", "#D53F8C",
     ];
 
@@ -67,9 +67,10 @@ public partial class FlagManagerViewModel : ObservableObject
         Flags.CollectionChanged += (_, _) => RecomputeUserFlagCount();
     }
 
-    public async Task LoadAsync()
+    public async Task LoadAsync(CancellationToken ct = default)
     {
         var flags = await _flagService.LoadFlagDefinitionsAsync();
+        ct.ThrowIfCancellationRequested();
         Flags.Clear();
         foreach (var f in flags.OrderBy(f => f.SortOrder))
             Flags.Add(f);
@@ -95,10 +96,16 @@ public partial class FlagManagerViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAddFlagNow))]
     private async Task AddFlag()
     {
+        const string baseName = "New Flag";
+        var name = baseName;
+        int n = 2;
+        while (Flags.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            name = $"{baseName} {n++}";
+
         var newFlag = new FlagDefinition
         {
             Id        = Guid.NewGuid(),
-            Name      = "New Flag",
+            Name      = name,
             ColorHex  = "#3182CE",
             SortOrder = Flags.Count > 0 ? Flags.Max(f => f.SortOrder) + 1 : 1,
             IsBuiltIn = false,
@@ -148,6 +155,11 @@ public partial class FlagManagerViewModel : ObservableObject
         if (trimmed.Length > MaxNameLength)
         {
             RenameError = $"Name must be {MaxNameLength} characters or fewer.";
+            return;
+        }
+        if (Flags.Any(f => f != SelectedFlag && f.Name.Equals(trimmed, StringComparison.OrdinalIgnoreCase)))
+        {
+            RenameError = $"\"{trimmed}\" is already in use.";
             return;
         }
         SelectedFlag.Name = trimmed;

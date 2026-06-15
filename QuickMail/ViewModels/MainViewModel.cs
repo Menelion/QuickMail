@@ -79,6 +79,7 @@ public partial class MainViewModel : ObservableObject
 
     private bool _announceFlagStatus;
     private string? _activeFlagFilterId;
+    private EventHandler? _onFlagDefinitionsChanged;
 
     // Retains folder lists for every account that has been connected this session
     private readonly Dictionary<Guid, List<MailFolderModel>> _cachedFolders = new();
@@ -313,6 +314,8 @@ public partial class MainViewModel : ObservableObject
     public bool IsFromView          => ViewMode == ViewMode.From;
     public bool IsToView            => ViewMode == ViewMode.To;
 
+    public ObservableCollection<FlagDefinition> FlagDefinitions { get; } = [];
+
     public bool IsFilterAll             => ActiveFilter == MessageFilter.All;
     public bool IsFilterUnread          => ActiveFilter == MessageFilter.Unread;
     public bool IsFilterRead            => ActiveFilter == MessageFilter.Read;
@@ -321,6 +324,7 @@ public partial class MainViewModel : ObservableObject
     public bool IsFilterForwarded       => ActiveFilter == MessageFilter.Forwarded;
     public bool IsFilterToMe            => ActiveFilter == MessageFilter.ToMe;
     public bool IsFilterFlagged         => ActiveFilter == MessageFilter.Flagged;
+    public bool IsFilterAllFlagged      => ActiveFilter == MessageFilter.Flagged && _activeFlagFilterId == null;
     public bool IsFilterActive          => ActiveFilter != MessageFilter.All;
     public bool AnnounceFlagStatus      => _announceFlagStatus;
     /// <summary>Named-flag sub-filter id, set by saved views. Null = show all flagged messages.</summary>
@@ -683,7 +687,10 @@ public partial class MainViewModel : ObservableObject
         _syncService.RulesApplied    += OnRulesApplied;
         _imap.InboxNewMailDetected += OnInboxNewMailDetected;
         if (_flagService != null)
-            _flagService.FlagDefinitionsChanged += async (_, _) => await OnFlagDefinitionsChangedAsync();
+        {
+            _onFlagDefinitionsChanged = (_, _) => _ = OnFlagDefinitionsChangedAsync();
+            _flagService.FlagDefinitionsChanged += _onFlagDefinitionsChanged;
+        }
 
         // Load saved views and register their commands before the UI is shown.
         LoadSavedViews();
@@ -836,7 +843,7 @@ public partial class MainViewModel : ObservableObject
             _             => MessageFilter.All,
         };
         ActiveSort = ConfigModel.ParseSort(view.Sort);
-        _activeFlagFilterId = string.IsNullOrEmpty(view.FlagFilterId) ? null : view.FlagFilterId;
+        SetActiveFlagFilterId(string.IsNullOrEmpty(view.FlagFilterId) ? null : view.FlagFilterId);
 
         // Validate the flag filter id against current flag definitions.
         // If the referenced flag has been deleted, treat it as no filter
@@ -846,7 +853,7 @@ public partial class MainViewModel : ObservableObject
         {
             var defs = await _flagService.LoadFlagDefinitionsAsync();
             if (!defs.Exists(d => d.Id == flagGuid))
-                _activeFlagFilterId = null;
+                SetActiveFlagFilterId(null);
         }
 
         ActiveDayLimit = view.DaysOfMail;
@@ -1235,6 +1242,13 @@ public partial class MainViewModel : ObservableObject
     {
         SelectedFolder = AllMailFolder;
         LastSyncText = "Never synced";  // Ensure sync time is visible in status bar
+        if (_flagService != null)
+        {
+            var defs = await _flagService.LoadFlagDefinitionsAsync();
+            FlagDefinitions.Clear();
+            foreach (var d in defs.OrderBy(d => d.SortOrder))
+                FlagDefinitions.Add(d);
+        }
         if (OnlineMode)
         {
             StatusText = "Online mode — connecting…";
@@ -2078,6 +2092,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsFilterToMe));
         OnPropertyChanged(nameof(IsFilterActive));
         OnPropertyChanged(nameof(IsFilterFlagged));
+        OnPropertyChanged(nameof(IsFilterAllFlagged));
         OnPropertyChanged(nameof(FilterLabel));
         OnPropertyChanged(nameof(WindowTitle));
 
@@ -2328,7 +2343,7 @@ public partial class MainViewModel : ObservableObject
         _suppressFilterRebuild = true;
         ActiveFilter        = MessageFilter.All;
         ActiveDayLimit      = null;
-        _activeFlagFilterId = null;
+        SetActiveFlagFilterId(null);
         SearchText          = string.Empty;
         IsSearchActive      = false;
         ActiveView          = null;
@@ -3010,30 +3025,40 @@ public partial class MainViewModel : ObservableObject
 
     private async Task OnFlagDefinitionsChangedAsync()
     {
-        if (_flagService == null) return;
-        var defs = await _flagService.LoadFlagDefinitionsAsync();
-        var lookup = new Dictionary<Guid, FlagDefinition>(defs.Count);
-        foreach (var d in defs) lookup[d.Id] = d;
-        // Event is now marshalled to the UI thread by FlagService, so no
-        // Dispatcher.Invoke needed here.
-        foreach (var msg in _rawMessages)
+        try
         {
-            if (msg.FlagId != null && Guid.TryParse(msg.FlagId, out var fid))
+            if (_flagService == null) return;
+            var defs = await _flagService.LoadFlagDefinitionsAsync();
+
+            FlagDefinitions.Clear();
+            foreach (var d in defs.OrderBy(d => d.SortOrder))
+                FlagDefinitions.Add(d);
+
+            var lookup = new Dictionary<Guid, FlagDefinition>(defs.Count);
+            foreach (var d in defs) lookup[d.Id] = d;
+            foreach (var msg in _rawMessages)
             {
-                if (lookup.TryGetValue(fid, out var def))
+                if (msg.FlagId != null && Guid.TryParse(msg.FlagId, out var fid))
                 {
-                    msg.FlagName     = def.Name;
-                    msg.FlagColorHex = def.ColorHex;
-                }
-                else
-                {
-                    // Flag was deleted — clear all flag state so the message
-                    // no longer appears flagged or stuck in the Flagged filter.
-                    msg.FlagId       = null;
-                    msg.FlagName     = null;
-                    msg.FlagColorHex = null;
+                    if (lookup.TryGetValue(fid, out var def))
+                    {
+                        msg.FlagName     = def.Name;
+                        msg.FlagColorHex = def.ColorHex;
+                    }
+                    else
+                    {
+                        // Flag was deleted — clear all flag state so the message
+                        // no longer appears flagged or stuck in the Flagged filter.
+                        msg.FlagId       = null;
+                        msg.FlagName     = null;
+                        msg.FlagColorHex = null;
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("OnFlagDefinitionsChanged", ex);
         }
     }
 
@@ -4312,6 +4337,13 @@ public partial class MainViewModel : ObservableObject
 
     // ── Filter command ────────────────────────────────────────────────────────
 
+    private void SetActiveFlagFilterId(string? id)
+    {
+        _activeFlagFilterId = id;
+        OnPropertyChanged(nameof(ActiveFlagFilterId));
+        OnPropertyChanged(nameof(IsFilterAllFlagged));
+    }
+
     [RelayCommand]
     private Task SetFilterAsync(string? filter)
     {
@@ -4328,7 +4360,16 @@ public partial class MainViewModel : ObservableObject
         };
         // Clear any named-flag sub-filter from a previously applied saved view
         // so the user sees all flagged messages, not just one specific flag.
-        _activeFlagFilterId = null;
+        SetActiveFlagFilterId(null);
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private Task SetFlagFilterAsync(string flagId)
+    {
+        ActiveFilter = MessageFilter.Flagged;
+        SetActiveFlagFilterId(flagId);
+        ApplyFiltersAndSearch();
         return Task.CompletedTask;
     }
 

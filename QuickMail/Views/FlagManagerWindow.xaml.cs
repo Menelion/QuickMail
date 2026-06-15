@@ -12,6 +12,7 @@ public partial class FlagManagerWindow : Window
 {
     private readonly FlagManagerViewModel _vm;
     private readonly CommandRegistry _localRegistry = new();
+    private CancellationTokenSource? _loadCts;
 
     public FlagManagerWindow(FlagManagerViewModel vm)
     {
@@ -27,8 +28,10 @@ public partial class FlagManagerWindow : Window
 
         Loaded += async (_, _) =>
         {
-            await _vm.LoadAsync();
-            FlagList.Focus();
+            _loadCts = new CancellationTokenSource();
+            try { await _vm.LoadAsync(_loadCts.Token); }
+            catch (OperationCanceledException) { return; }
+            FocusPane(FlagList);
         };
     }
 
@@ -157,6 +160,8 @@ public partial class FlagManagerWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
         _vm.ConfirmDeleteRequested -= OnConfirmDelete;
         _vm.AnnouncementRequested  -= OnAnnouncement;
         _vm.RenameStarted          -= OnRenameStarted;

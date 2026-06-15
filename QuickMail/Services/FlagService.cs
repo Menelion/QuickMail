@@ -4,7 +4,6 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using QuickMail.Models;
 
 namespace QuickMail.Services;
@@ -50,8 +49,12 @@ public class FlagService : IFlagService
             else
             {
                 // Enforce built-in properties so they cannot be mutated on disk.
-                var bi = list.Find(f => f.Id == FlagDefinition.BuiltInFlagId)!;
-                bi.Name      = "Flagged";
+                // ColorHex is also reset here to migrate installs that stored the
+                // pre-WCAG amber (#FF8C00) before the palette was corrected.
+                var bi       = list.Find(f => f.Id == FlagDefinition.BuiltInFlagId)!;
+                var builtIn  = FlagDefinition.CreateBuiltIn();
+                bi.Name      = builtIn.Name;
+                bi.ColorHex  = builtIn.ColorHex;
                 bi.IsBuiltIn = true;
             }
 
@@ -76,13 +79,7 @@ public class FlagService : IFlagService
         var tmp  = _flagsFile + ".tmp";
         await File.WriteAllTextAsync(tmp, json);
         File.Move(tmp, _flagsFile, overwrite: true);
-        // Fire on the UI thread so subscribers (ViewModels) can update
-        // observable collections without needing Dispatcher.Invoke.
-        // Same pattern as SyncService event marshalling.
-        if (Application.Current?.Dispatcher is { } disp)
-            await disp.InvokeAsync(() => FlagDefinitionsChanged?.Invoke(this, EventArgs.Empty));
-        else
-            FlagDefinitionsChanged?.Invoke(this, EventArgs.Empty);
+        FlagDefinitionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task<FlagDefinition> GetKDefaultFlagAsync()
@@ -106,7 +103,8 @@ public class FlagService : IFlagService
     public async Task<FlagDefinition?> SetMessageFlagAsync(
         MailMessageSummary message,
         string? flagId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        FlagDefinition? resolvedDef = null)
     {
         // Update local store.
         try
@@ -124,8 +122,11 @@ public class FlagService : IFlagService
             await _mailService.SetMessageFlaggedAsync(
                 message.AccountId, message.FolderName, message.MessageId, isBuiltIn, ct);
 
+        if (flagId == null) return null;
+        if (resolvedDef != null) return resolvedDef;
+
         // Resolve the flag definition so the caller can update the in-memory model.
-        if (flagId != null && Guid.TryParse(flagId, out var defId))
+        if (Guid.TryParse(flagId, out var defId))
         {
             var flags = await LoadFlagDefinitionsAsync();
             return flags.Find(f => f.Id == defId);
@@ -141,6 +142,6 @@ public class FlagService : IFlagService
         if (message.IsFlagged)
             return await SetMessageFlagAsync(message, null, ct);
         else
-            return await SetMessageFlagAsync(message, kFlag.Id.ToString(), ct);
+            return await SetMessageFlagAsync(message, kFlag.Id.ToString(), ct, resolvedDef: kFlag);
     }
 }
