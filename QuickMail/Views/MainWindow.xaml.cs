@@ -75,6 +75,57 @@ public class StringToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>
+/// Converts a hex color string (e.g. "#FF8C00") to a SolidColorBrush.
+/// Returns Transparent when the string is null or empty (message is unflagged).
+/// </summary>
+public class StringToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string hex && !string.IsNullOrEmpty(hex))
+        {
+            try
+            {
+                var color = (System.Windows.Media.Color)
+                    System.Windows.Media.ColorConverter.ConvertFromString(hex);
+                return new System.Windows.Media.SolidColorBrush(color);
+            }
+            catch { }
+        }
+        return System.Windows.Media.Brushes.Transparent;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// Builds the accessible name string for a message row, optionally prepending the flag label.
+/// Values: [FlagLabel, ReadStatusLabel, From, Subject, Preview, DateDisplay, AnnounceFlagStatus].
+/// </summary>
+public class MessageAccessibleNameConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 7) return string.Empty;
+        var flagLabel       = values[0] as string ?? string.Empty;
+        var readStatusLabel = values[1] as string ?? string.Empty;
+        var from            = values[2] as string ?? string.Empty;
+        var subject         = values[3] as string ?? string.Empty;
+        var preview         = values[4] as string ?? string.Empty;
+        var dateDisplay     = values[5] as string ?? string.Empty;
+        var announceFlag    = values[6] is bool b && b;
+        var flagPrefix      = announceFlag && !string.IsNullOrEmpty(flagLabel)
+                                ? flagLabel + ". "
+                                : string.Empty;
+        return $"{flagPrefix}{readStatusLabel}. {from}. {subject}. {preview}. {dateDisplay}.";
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 public partial class MainWindow : Window
 {
     private static readonly TimeSpan TypeAheadResetDelay = TimeSpan.FromSeconds(1);
@@ -117,6 +168,7 @@ public partial class MainWindow : Window
     private readonly IViewService _viewService;
     private readonly IRuleService _ruleService;
     private readonly ITemplateService _templateService;
+    private readonly IFlagService? _flagService;
 
     private TutorialViewModel? _tutorialVm;
 
@@ -139,7 +191,8 @@ public partial class MainWindow : Window
         IViewService viewService,
         IRuleService ruleService,
         ITemplateService templateService,
-        IFeatureGate featureGate)
+        IFeatureGate featureGate,
+        IFlagService? flagService = null)
     {
         _vm = vm;
         _smtp = smtp;
@@ -155,6 +208,7 @@ public partial class MainWindow : Window
         _ruleService = ruleService;
         _templateService = templateService;
         _featureGate = featureGate;
+        _flagService = flagService;
 
         InitializeComponent();
         DataContext = vm;
@@ -174,6 +228,8 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.ActiveView))
                 UpdateViewMenuCheckmarks();
         };
+        vm.FlagDefinitions.CollectionChanged += (_, _) => RebuildFlagSubmenuItems();
+        FilterFlaggedItem.SubmenuOpened += (_, _) => UpdateFlagSubmenuChecks();
         vm.ConfirmationRequested = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
@@ -617,6 +673,22 @@ public partial class MainWindow : Window
             execute: SelectAllMessages,
             defaultKey: Key.A, defaultModifiers: ModifierKeys.Control,
             isAvailable: IsMessageListFocused));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.toggleFlag", category: "Mail", title: "Toggle Flag",
+            execute: async () => await ToggleFlagCommandAsync(),
+            defaultKey: Key.K, defaultModifiers: ModifierKeys.None,
+            isAvailable: () => _vm.HasSelectedMessage || IsGroupRowSelected()));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.pickFlag", category: "Mail", title: "Pick Flag…",
+            execute: async () => await PickFlagCommandAsync(),
+            defaultKey: Key.K, defaultModifiers: ModifierKeys.Control | ModifierKeys.Shift,
+            isAvailable: () => _vm.HasSelectedMessage));
+
+        _registry.Register(new CommandDefinition(
+            id: "mail.openFlagManager", category: "Mail", title: "Manage Flags…",
+            execute: OpenFlagManager));
 
         // Override the VM's mail.delete with one that deletes ALL selected messages.
         // The VM registration uses DeleteMessageCommand, which deletes only SelectedMessage
@@ -1534,6 +1606,51 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private bool IsGroupRowSelected()
+    {
+        if (_vm.IsConversationsView) return ConversationTree.SelectedItem is ConversationGroup;
+        if (_vm.IsFromView)          return SenderGroupTree.SelectedItem is SenderGroup;
+        if (_vm.IsToView)            return ToGroupTree.SelectedItem is SenderGroup;
+        return false;
+    }
+
+    private async Task ToggleFlagCommandAsync()
+    {
+        if (_vm.IsConversationsView && ConversationTree.SelectedItem is ConversationGroup cg)
+            await _vm.ToggleGroupFlagAsync(cg.Messages);
+        else if (_vm.IsFromView && SenderGroupTree.SelectedItem is SenderGroup sg)
+            await _vm.ToggleGroupFlagAsync(sg.Messages);
+        else if (_vm.IsToView && ToGroupTree.SelectedItem is SenderGroup tg)
+            await _vm.ToggleGroupFlagAsync(tg.Messages);
+        else if (_vm.SelectedMessage != null)
+            await _vm.ToggleSingleFlagAsync(_vm.SelectedMessage);
+    }
+
+    private async Task PickFlagCommandAsync()
+    {
+        if (_flagService == null) return;
+        var msg = _vm.SelectedMessage;
+        if (msg == null) return;
+
+        var prev = Keyboard.FocusedElement as IInputElement;
+        var picker = new FlagPickerWindow(_flagService, msg.IsFlagged) { Owner = this };
+        picker.ShowDialog();
+        (prev ?? MessageList).Focus();
+
+        if (picker.DialogResult == true)
+            await _vm.SetMessageFlagAsync(msg, picker.ResultFlagId);
+    }
+
+    private void OpenFlagManager()
+    {
+        if (_flagService == null) return;
+        var prev = Keyboard.FocusedElement as IInputElement;
+        var vmFm = new FlagManagerViewModel(_flagService);
+        var win  = new FlagManagerWindow(vmFm) { Owner = this };
+        win.ShowDialog();
+        (prev ?? MessageList).Focus();
+    }
+
     private void ExtendSelectionToTop()
     {
         if (MessageList.Items.Count == 0) return;
@@ -2442,9 +2559,28 @@ public partial class MainWindow : Window
         }
     }
 
+    // Click handler for the 16px transparent flag hit area in all message row DataTemplates.
+    // Tag is set to the MailMessageSummary, ConversationGroup, or SenderGroup in the template.
+    private async void FlagHitArea_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        e.Handled = true;
+        if (fe.Tag is MailMessageSummary msg)
+            await _vm.ToggleSingleFlagAsync(msg);
+        else if (fe.Tag is ConversationGroup cg)
+            await _vm.ToggleGroupFlagAsync(cg.Messages);
+        else if (fe.Tag is SenderGroup sg)
+            await _vm.ToggleGroupFlagAsync(sg.Messages);
+    }
+
     // Builds the screen-reader announcement string for a single message row.
-    private static string MessageSummaryAnnouncement(MailMessageSummary msg) =>
-        $"{msg.ReadStatusLabel}. {msg.From}. {msg.Subject}. {msg.Preview}. {msg.DateDisplay}.";
+    private string MessageSummaryAnnouncement(MailMessageSummary msg)
+    {
+        var flag = _vm.AnnounceFlagStatus && !string.IsNullOrEmpty(msg.FlagLabel)
+            ? msg.FlagLabel + ". "
+            : string.Empty;
+        return $"{flag}{msg.ReadStatusLabel}. {msg.From}. {msg.Subject}. {msg.Preview}. {msg.DateDisplay}.";
+    }
 
     // After an async conversation rebuild, selects and focuses the conversation
     // at the given index (clamped to the new list size).
@@ -3883,7 +4019,8 @@ public partial class MainWindow : Window
             currentFilter:    _vm.ActiveFilter,
             currentSort:      _vm.ActiveSort,
             currentDayLimit:  _vm.ActiveDayLimit,
-            isCreateMode:     createMode);
+            isCreateMode:     createMode,
+            activeFlagFilterId: _vm.ActiveFlagFilterId);
 
         var dialog = new ViewManagerWindow(vmVm, createMode) { Owner = this };
         dialog.ShowDialog();
@@ -4009,6 +4146,32 @@ public partial class MainWindow : Window
         {
             if (obj is MenuItem { Tag: Guid id } item)
                 item.IsChecked = id == _vm.ActiveView?.Id;
+        }
+    }
+
+    private void RebuildFlagSubmenuItems()
+    {
+        // Items 0 = "All Flagged", 1 = Separator — keep those, remove the rest.
+        while (FilterFlaggedItem.Items.Count > 2)
+            FilterFlaggedItem.Items.RemoveAt(2);
+
+        foreach (var flag in _vm.FlagDefinitions)
+        {
+            var flagId = flag.Id.ToString();
+            var item = new MenuItem { Header = flag.Name, IsCheckable = true, Tag = flagId };
+            item.Click += (_, _) => _vm.SetFlagFilterCommand.Execute(flagId);
+            FilterFlaggedItem.Items.Add(item);
+        }
+        UpdateFlagSubmenuChecks();
+    }
+
+    private void UpdateFlagSubmenuChecks()
+    {
+        for (int i = 2; i < FilterFlaggedItem.Items.Count; i++)
+        {
+            if (FilterFlaggedItem.Items[i] is MenuItem { Tag: string flagId } item)
+                item.IsChecked = _vm.ActiveFilter == MessageFilter.Flagged
+                    && _vm.ActiveFlagFilterId == flagId;
         }
     }
 
