@@ -21,7 +21,7 @@ You can now flag messages for follow-up — and QuickMail stays in sync with fla
 
 **One keypress to flag or unflag:** Press `K` on any message in the list to toggle its flag. Press `K` again to clear it. No menu required. In Conversations, From, or To view, pressing `K` on a group row flags every message in the group at once.
 
-**Named, color-coded flags:** QuickMail ships with one built-in "Flagged" flag. You can create up to 20 named flags with your choice of color — for example, "Urgent" in red, "Waiting" in yellow, "Done" in green. Open the Flag Manager from the command palette (`Ctrl+Shift+P` → "Manage Flags…") to create, rename, recolor, reorder, and delete flags.
+**Named flags:** QuickMail ships with one built-in "Flagged" flag. You can create up to 20 named flags — "Urgent", "Waiting", "Done", or whatever fits your workflow, each with an optional color. Open the Flag Manager from the command palette (`Ctrl+Shift+P` → "Manage Flags…") to create, rename, reorder, and delete flags.
 
 **Choose which flag `K` applies:** In the Flag Manager, select any flag and choose "Set as K default." From that point, `K` applies that flag instead of the built-in one. The setting survives app restarts.
 
@@ -40,8 +40,6 @@ You can now flag messages for follow-up — and QuickMail stays in sync with fla
 **Flag toggle is confirmed aloud:** Pressing `K` announces the outcome: "Flagged: Urgent." or "Unflagged." or "Flagged 4 messages: Urgent." for a group. These announcements respect the "Announce results" preference.
 
 **The announcement is optional:** If you prefer not to hear flag names while navigating the message list, turn off "Announce flag status" in Settings → General → Accessibility. The flag indicator remains visible on screen; only the spoken name is suppressed.
-
-**Color is never the only indicator:** Every flagged message row shows the flag name in the status column text in addition to the colored indicator. The flag name is always in the accessible name of the row regardless of color settings.
 
 ### Forward Mail
 
