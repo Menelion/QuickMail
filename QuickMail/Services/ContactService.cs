@@ -9,7 +9,7 @@ using QuickMail.Models;
 
 namespace QuickMail.Services;
 
-public class ContactService : IContactService
+public class ContactService : IContactService, IDisposable
 {
     private readonly string _contactsFilePath;
     private readonly string _groupsFilePath;
@@ -354,7 +354,7 @@ public class ContactService : IContactService
         }
     }
 
-    private async Task<List<T>> LoadJsonAsync<T>(string path, Func<List<T>> emptyFactory) where T : class
+    private static async Task<List<T>> LoadJsonAsync<T>(string path, Func<List<T>> emptyFactory) where T : class
     {
         if (!File.Exists(path)) return emptyFactory();
         try
@@ -414,6 +414,12 @@ public class ContactService : IContactService
     private async Task SaveGroupsAsyncLocked()
     {
         await WriteJsonAtomicallyAsync(_groupsFilePath, _groupsCache);
+    }
+
+    public void Dispose()
+    {
+        _loadLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private async Task WriteJsonAtomicallyAsync<T>(string path, T payload)

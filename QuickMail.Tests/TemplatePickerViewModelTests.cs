@@ -26,10 +26,10 @@ public class TemplatePickerViewModelTests
         public Task<List<MessageTemplate>> LoadAllAsync() =>
             Task.FromResult(_templates.OrderBy(t => t.Title).ToList());
 
-        public Task<MessageTemplate> AddAsync(MessageTemplate template) =>
-            Task.FromResult(template);
+        public Task<MessageTemplate> AddAsync(MessageTemplate item) =>
+            Task.FromResult(item);
 
-        public Task UpdateAsync(MessageTemplate template) =>
+        public Task UpdateAsync(MessageTemplate item) =>
             Task.CompletedTask;
 
         public Task DeleteAsync(int id) =>

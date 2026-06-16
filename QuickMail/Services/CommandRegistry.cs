@@ -75,10 +75,10 @@ public sealed class CommandRegistry : ICommandRegistry
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    public void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides)
+    public void ApplyUserOverrides(IEnumerable<HotkeyBinding> bindings)
     {
         _userOverrides.Clear();
-        foreach (var b in overrides)
+        foreach (var b in bindings)
         {
             if (string.IsNullOrEmpty(b.CommandId)) continue;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -15,6 +16,7 @@ namespace QuickMail.Views;
 /// Opened by pressing F8 in Markdown or HTML compose mode; Escape or Ctrl+W closes it.
 /// The WebView2 is focusable so screen readers can browse the rendered content.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "_cts is cancelled in OnClosing; Window subclasses cannot implement IDisposable.")]
 public partial class MarkdownPreviewWindow : Window
 {
     private readonly string _html;

@@ -103,8 +103,8 @@ public class FlagService : IFlagService
     public async Task<FlagDefinition?> SetMessageFlagAsync(
         MailMessageSummary message,
         string? flagId,
-        CancellationToken ct = default,
-        FlagDefinition? resolvedDef = null)
+        FlagDefinition? resolvedDef = null,
+        CancellationToken ct = default)
     {
         // Update local store.
         try
@@ -140,8 +140,8 @@ public class FlagService : IFlagService
     {
         var kFlag = await GetKDefaultFlagAsync();
         if (message.IsFlagged)
-            return await SetMessageFlagAsync(message, null, ct);
+            return await SetMessageFlagAsync(message, null, ct: ct);
         else
-            return await SetMessageFlagAsync(message, kFlag.Id.ToString(), ct, resolvedDef: kFlag);
+            return await SetMessageFlagAsync(message, kFlag.Id.ToString(), resolvedDef: kFlag, ct: ct);
     }
 }

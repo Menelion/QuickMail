@@ -11,7 +11,7 @@ public interface ICommandRegistry
     IReadOnlyList<CommandDefinition> GetAll();
     CommandDefinition? FindById(string id);
     CommandDefinition? FindByGesture(Key key, ModifierKeys modifiers);
-    void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides);
+    void ApplyUserOverrides(IEnumerable<HotkeyBinding> bindings);
 
     /// <summary>
     /// CommandIds in the user-override list that don't correspond to any registered command.

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using System.Windows;
 using QuickMail.Models;
@@ -7,6 +8,7 @@ using QuickMail.Views;
 
 namespace QuickMail;
 
+[SuppressMessage("Design", "CA1001", Justification = "_graphSendMail is disposed in OnExit; Application subclasses cannot implement IDisposable.")]
 public partial class App : Application
 {
     // Held so OnExit can dispose it — it owns a GraphClient/HttpClient.

@@ -249,7 +249,7 @@ public class IcsModel
         value = value.Trim();
         if (value.Length >= 15 && value[8] == 'T')
         {
-            var isUtc = value.EndsWith("Z");
+            var isUtc = value.EndsWith('Z');
             var datePart = value[..8];
             var timePart = value.Substring(9, 6);
             if (DateTime.TryParseExact($"{datePart}{timePart}",

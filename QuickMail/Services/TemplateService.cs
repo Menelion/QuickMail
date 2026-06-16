@@ -9,8 +9,10 @@ using QuickMail.Models;
 
 namespace QuickMail.Services;
 
-public class TemplateService : ITemplateService
+public class TemplateService : ITemplateService, IDisposable
 {
+    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+
     private readonly string _filePath;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private List<MessageTemplate> _cache = [];
@@ -35,16 +37,16 @@ public class TemplateService : ITemplateService
         }
     }
 
-    public async Task<MessageTemplate> AddAsync(MessageTemplate template)
+    public async Task<MessageTemplate> AddAsync(MessageTemplate item)
     {
         await EnsureLoadedAsync();
         await _loadLock.WaitAsync();
         try
         {
-            template.Id = _cache.Count > 0 ? _cache.Max(t => t.Id) + 1 : 1;
-            _cache.Add(template);
+            item.Id = _cache.Count > 0 ? _cache.Max(t => t.Id) + 1 : 1;
+            _cache.Add(item);
             await SaveAsyncLocked();
-            return template;
+            return item;
         }
         finally
         {
@@ -52,18 +54,18 @@ public class TemplateService : ITemplateService
         }
     }
 
-    public async Task UpdateAsync(MessageTemplate template)
+    public async Task UpdateAsync(MessageTemplate item)
     {
         await EnsureLoadedAsync();
         await _loadLock.WaitAsync();
         try
         {
-            var existing = _cache.FirstOrDefault(t => t.Id == template.Id);
+            var existing = _cache.FirstOrDefault(t => t.Id == item.Id);
             if (existing != null)
             {
-                existing.Title = template.Title;
-                existing.Subject = template.Subject;
-                existing.Body = template.Body;
+                existing.Title = item.Title;
+                existing.Subject = item.Subject;
+                existing.Body = item.Body;
                 await SaveAsyncLocked();
             }
         }
@@ -86,6 +88,12 @@ public class TemplateService : ITemplateService
         {
             _loadLock.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        _loadLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private async Task EnsureLoadedAsync()
@@ -117,7 +125,7 @@ public class TemplateService : ITemplateService
 
     private async Task SaveAsyncLocked()
     {
-        var json = JsonSerializer.Serialize(_cache, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(_cache, WriteOptions);
         var tempPath = _filePath + ".tmp";
         await File.WriteAllTextAsync(tempPath, json);
         File.Move(tempPath, _filePath, overwrite: true);

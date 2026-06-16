@@ -16,7 +16,7 @@ using QuickMail.Services;
 
 namespace QuickMail.ViewModels;
 
-public partial class ComposeViewModel : ObservableObject
+public partial class ComposeViewModel : ObservableObject, IDisposable
 {
     private readonly ISendMailService _smtp;
     private readonly IAccountService _accountService;
@@ -90,7 +90,9 @@ public partial class ComposeViewModel : ObservableObject
     /// </summary>
     public bool IsFormattingAvailable => CurrentMode != ComposeMode.PlainText;
 
+#pragma warning disable CA1822 // instance property required for XAML data binding
     public bool IsSpellNavAvailable => true;
+#pragma warning restore CA1822
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy = false;
     [ObservableProperty] private ObservableCollection<AccountModel> _senderAccounts = [];
@@ -179,7 +181,7 @@ public partial class ComposeViewModel : ObservableObject
         {
             var sig = SenderAccount.Signature;
             // Add separator if body already has content (reply/forward)
-            if (!string.IsNullOrWhiteSpace(Body) && !Body.EndsWith("\n"))
+            if (!string.IsNullOrWhiteSpace(Body) && !Body.EndsWith('\n'))
                 Body += "\n";
             if (!string.IsNullOrWhiteSpace(Body))
                 Body += "\n-- \n";
@@ -240,7 +242,12 @@ public partial class ComposeViewModel : ObservableObject
         _isDirty = false;
     }
 
-    private sealed class DraftFolderMissingException : Exception { }
+    private sealed class DraftFolderMissingException : Exception
+    {
+        public DraftFolderMissingException() { }
+        public DraftFolderMissingException(string message) : base(message) { }
+        public DraftFolderMissingException(string message, Exception innerException) : base(message, innerException) { }
+    }
 
     // ── Auto-save ──────────────────────────────────────────────────────────────
 
@@ -248,6 +255,12 @@ public partial class ComposeViewModel : ObservableObject
 
     /// <summary>Cancels any in-flight autosave. Called by the window on closing.</summary>
     public void CancelAutoSave() => _autoSaveCts.Cancel();
+
+    public void Dispose()
+    {
+        _autoSaveCts.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>Visual status-row text, e.g. "Auto-saved 3:42 PM". Never announced on success.</summary>
     [ObservableProperty] private string _autoSaveText = string.Empty;
@@ -728,8 +741,8 @@ public partial class ComposeViewModel : ObservableObject
         // Merge original To + Cc, excluding the sender's own address and the To recipient,
         // into the new Cc. Use TryParse so empty/malformed address strings return an empty
         // list rather than throwing MimeKit.ParseException.
-        InternetAddressList.TryParse(detail.To ?? string.Empty, out var toList);
-        InternetAddressList.TryParse(detail.Cc ?? string.Empty, out var ccList);
+        _ = InternetAddressList.TryParse(detail.To ?? string.Empty, out var toList);
+        _ = InternetAddressList.TryParse(detail.Cc ?? string.Empty, out var ccList);
         var recipients = (toList ?? [])
             .Concat(ccList ?? [])
             .OfType<MailboxAddress>()

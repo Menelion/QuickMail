@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading;
@@ -52,6 +53,7 @@ internal sealed class AddressSuggestion
     public AddressSuggestion(GroupModel g)   { Group   = g; }
 }
 
+[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _autocompleteCts in OnClosing; Window subclasses cannot implement IDisposable.")]
 public partial class ComposeWindow : Window
 {
     private readonly ComposeViewModel   _vm;

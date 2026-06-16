@@ -187,5 +187,6 @@ public class MailServiceRouter : IMailService
             b.AccountReachabilityChanged -= OnInnerAccountReachabilityChanged;
             b.Dispose();
         }
+        GC.SuppressFinalize(this);
     }
 }

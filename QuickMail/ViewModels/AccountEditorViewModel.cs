@@ -14,8 +14,8 @@ namespace QuickMail.ViewModels;
 /// </summary>
 public abstract partial class AccountEditorViewModel : ObservableObject
 {
-    protected readonly IMailService MailService;
-    protected readonly IOAuthService OAuthService;
+    protected IMailService MailService { get; }
+    protected IOAuthService OAuthService { get; }
 
     [ObservableProperty] private string _accountName = string.Empty;
     [ObservableProperty] private string _displayName = string.Empty;

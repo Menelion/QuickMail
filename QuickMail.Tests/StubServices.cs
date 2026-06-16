@@ -187,7 +187,7 @@ sealed class StubCommandRegistry : ICommandRegistry
         => _commands.Values.FirstOrDefault(c => c.DefaultKey == key && c.DefaultModifiers == modifiers);
 
     public void Unregister(string id) => _commands.Remove(id);
-    public void ApplyUserOverrides(IEnumerable<HotkeyBinding> overrides) { }
+    public void ApplyUserOverrides(IEnumerable<HotkeyBinding> bindings) { }
     public IReadOnlyList<string> GetOrphanOverrideCommandIds() => [];
 
     // Test helpers
@@ -210,8 +210,8 @@ sealed class StubConfigService : IConfigService
 sealed class StubTemplateService : ITemplateService
 {
     public Task<List<MessageTemplate>> LoadAllAsync() => Task.FromResult(new List<MessageTemplate>());
-    public Task<MessageTemplate> AddAsync(MessageTemplate template) => Task.FromResult(template);
-    public Task UpdateAsync(MessageTemplate template) => Task.CompletedTask;
+    public Task<MessageTemplate> AddAsync(MessageTemplate item) => Task.FromResult(item);
+    public Task UpdateAsync(MessageTemplate item) => Task.CompletedTask;
     public Task DeleteAsync(int id) => Task.CompletedTask;
 }
 
@@ -235,7 +235,7 @@ sealed class StubFlagService : IFlagService
     public Task SaveFlagDefinitionsAsync(List<FlagDefinition> flags) => Task.CompletedTask;
     public Task<FlagDefinition> GetKDefaultFlagAsync() => Task.FromResult(FlagDefinition.CreateBuiltIn());
     public Task SetKDefaultFlagAsync(Guid flagId) => Task.CompletedTask;
-    public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, CancellationToken ct = default, FlagDefinition? resolvedDef = null)
+    public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, FlagDefinition? resolvedDef = null, CancellationToken ct = default)
         => Task.FromResult<FlagDefinition?>(resolvedDef ?? (flagId != null ? FlagDefinition.CreateBuiltIn() : null));
     public Task<FlagDefinition?> ToggleDefaultFlagAsync(MailMessageSummary message, CancellationToken ct = default)
         => Task.FromResult<FlagDefinition?>(message.IsFlagged ? null : FlagDefinition.CreateBuiltIn());
