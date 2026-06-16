@@ -45,5 +45,9 @@ public class GraphSendMailService : ISendMailService, IDisposable
         LogService.Log("GraphSendMailService: send complete");
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        _client.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

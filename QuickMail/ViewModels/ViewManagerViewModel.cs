@@ -121,7 +121,7 @@ public partial class ViewManagerViewModel : ObservableObject
         "AllDrafts"  => "All Drafts",
         "AllSent"    => "All Sent",
         "AllTrash"   => "All Trash",
-        var k when k.StartsWith("AccountMail:") => "Account Mail",
+        var k when k.StartsWith("AccountMail:", StringComparison.Ordinal) => "Account Mail",
         _            => "Virtual folder",
     };
 
@@ -296,7 +296,7 @@ public partial class ViewManagerViewModel : ObservableObject
         folder != null &&
         !folder.IsHeader &&
         folder.AccountId != Guid.Empty &&
-        !folder.FullName.StartsWith("\x00", StringComparison.Ordinal);
+        !folder.FullName.StartsWith('\x00');
 
     [RelayCommand]
     private void SaveAsNew()
@@ -322,7 +322,7 @@ public partial class ViewManagerViewModel : ObservableObject
             });
         }
         else if (CurrentFolder != null &&
-                 CurrentFolder.FullName.StartsWith("\x00", StringComparison.Ordinal))
+                 CurrentFolder.FullName.StartsWith('\x00'))
         {
             // Strip the NUL sentinel prefix — storing it causes JSON serialization
             // edge cases. ApplyViewAsync prepends it again when looking up the folder.

@@ -18,9 +18,9 @@ public class ConfigFeatureGate : IFeatureGate
         [FeatureFlag.GraphBackend] = false,
     };
 
-    private readonly IReadOnlyDictionary<string, string> _configFlags;
-    private readonly IReadOnlySet<string> _cliEnable;
-    private readonly IReadOnlySet<string> _cliDisable;
+    private readonly Dictionary<string, string> _configFlags;
+    private readonly HashSet<string> _cliEnable;
+    private readonly HashSet<string> _cliDisable;
 
     public ConfigFeatureGate(ConfigModel config, IEnumerable<string> cliEnable, IEnumerable<string>? cliDisable = null)
     {

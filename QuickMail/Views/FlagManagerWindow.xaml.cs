@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -8,6 +9,7 @@ using QuickMail.ViewModels;
 
 namespace QuickMail.Views;
 
+[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _loadCts on close; Window subclasses cannot implement IDisposable.")]
 public partial class FlagManagerWindow : Window
 {
     private readonly FlagManagerViewModel _vm;

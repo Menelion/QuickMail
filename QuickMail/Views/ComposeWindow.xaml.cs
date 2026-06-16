@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading;
@@ -52,6 +53,7 @@ internal sealed class AddressSuggestion
     public AddressSuggestion(GroupModel g)   { Group   = g; }
 }
 
+[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _autocompleteCts in OnClosing; Window subclasses cannot implement IDisposable.")]
 public partial class ComposeWindow : Window
 {
     private readonly ComposeViewModel   _vm;
@@ -512,6 +514,12 @@ public partial class ComposeWindow : Window
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) return false;
         try { return new MailAddress(email).Host.Contains('.'); }
         catch { return false; }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _vm.Dispose();
+        base.OnClosed(e);
     }
 
     private async void OnWindowClosing(object? sender, CancelEventArgs e)

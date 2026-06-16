@@ -942,7 +942,11 @@ public class ImapMailService : IMailService
         try
         {
             if (account.ImapAcceptInvalidCert)
+            {
+#pragma warning disable CA5359 // callback intentionally accepts any cert when the user enables ImapAcceptInvalidCert
                 client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+#pragma warning restore CA5359
+            }
 
             var ssl = account.ImapUseSsl
                 ? SecureSocketOptions.SslOnConnect
@@ -1512,5 +1516,6 @@ public class ImapMailService : IMailService
         foreach (var pool in _pools.Values)
             pool.Dispose();
         _pools.Clear();
+        GC.SuppressFinalize(this);
     }
 }

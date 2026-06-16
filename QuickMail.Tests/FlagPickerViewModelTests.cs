@@ -28,7 +28,7 @@ public class FlagPickerViewModelTests
         public Task SaveFlagDefinitionsAsync(List<FlagDefinition> flags) => Task.CompletedTask;
         public Task<FlagDefinition> GetKDefaultFlagAsync() => Task.FromResult(FlagDefinition.CreateBuiltIn());
         public Task SetKDefaultFlagAsync(Guid flagId) => Task.CompletedTask;
-        public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, CancellationToken ct = default, FlagDefinition? resolvedDef = null)
+        public Task<FlagDefinition?> SetMessageFlagAsync(MailMessageSummary message, string? flagId, FlagDefinition? resolvedDef = null, CancellationToken ct = default)
             => Task.FromResult<FlagDefinition?>(resolvedDef ?? (flagId != null ? _flags.Find(f => f.Id.ToString() == flagId) : null));
         public Task<FlagDefinition?> ToggleDefaultFlagAsync(MailMessageSummary message, CancellationToken ct = default)
             => Task.FromResult<FlagDefinition?>(message.IsFlagged ? null : FlagDefinition.CreateBuiltIn());

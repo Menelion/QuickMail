@@ -30,7 +30,11 @@ public class SmtpService : ISendMailService
         using var client = new SmtpClient();
 
         if (account.SmtpAcceptInvalidCert)
+        {
+#pragma warning disable CA5359 // callback intentionally accepts any cert when the user enables SmtpAcceptInvalidCert
             client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+#pragma warning restore CA5359
+        }
 
         var ssl = account.SmtpUseSsl
             ? SecureSocketOptions.SslOnConnect
@@ -78,7 +82,11 @@ public class SmtpService : ISendMailService
         using var client = new SmtpClient();
 
         if (account.SmtpAcceptInvalidCert)
+        {
+#pragma warning disable CA5359 // callback intentionally accepts any cert when the user enables SmtpAcceptInvalidCert
             client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+#pragma warning restore CA5359
+        }
 
         var ssl = account.SmtpUseSsl
             ? SecureSocketOptions.SslOnConnect

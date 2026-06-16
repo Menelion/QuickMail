@@ -216,7 +216,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearHotkey(HotkeyRowViewModel? row)
+    private static void ClearHotkey(HotkeyRowViewModel? row)
     {
         row?.ClearCustomBinding();
     }

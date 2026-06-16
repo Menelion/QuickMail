@@ -510,10 +510,10 @@ public class LocalStoreService : ILocalStoreService
         await tx.CommitAsync();
     }
 
-    public async Task UpsertDetailAsync(MailMessageDetail d)
+    public async Task UpsertDetailAsync(MailMessageDetail detail)
     {
-        var attJson = d.Attachments.Count > 0
-            ? JsonSerializer.Serialize(d.Attachments.Select(a => new { a.FileName, a.ContentType, a.FileSize, a.PartSpecifier }))
+        var attJson = detail.Attachments.Count > 0
+            ? JsonSerializer.Serialize(detail.Attachments.Select(a => new { a.FileName, a.ContentType, a.FileSize, a.PartSpecifier }))
             : null;
 
         await using var conn = await OpenAsync();
@@ -530,14 +530,14 @@ public class LocalStoreService : ILocalStoreService
                 html_body        = excluded.html_body,
                 attachments_json = excluded.attachments_json;
             """;
-        cmd.Parameters.AddWithValue("$uid",    d.MessageId);
-        cmd.Parameters.AddWithValue("$aid",    d.AccountId.ToString());
-        cmd.Parameters.AddWithValue("$fn",     d.FolderName);
-        cmd.Parameters.AddWithValue("$to",     d.To);
-        cmd.Parameters.AddWithValue("$cc",     d.Cc);
-        cmd.Parameters.AddWithValue("$rt",     d.ReplyTo);
-        cmd.Parameters.AddWithValue("$plain",  d.PlainTextBody);
-        cmd.Parameters.AddWithValue("$html",   d.HtmlBody);
+        cmd.Parameters.AddWithValue("$uid",    detail.MessageId);
+        cmd.Parameters.AddWithValue("$aid",    detail.AccountId.ToString());
+        cmd.Parameters.AddWithValue("$fn",     detail.FolderName);
+        cmd.Parameters.AddWithValue("$to",     detail.To);
+        cmd.Parameters.AddWithValue("$cc",     detail.Cc);
+        cmd.Parameters.AddWithValue("$rt",     detail.ReplyTo);
+        cmd.Parameters.AddWithValue("$plain",  detail.PlainTextBody);
+        cmd.Parameters.AddWithValue("$html",   detail.HtmlBody);
         cmd.Parameters.AddWithValue("$attjson", (object?)attJson ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync();
 
@@ -546,10 +546,10 @@ public class LocalStoreService : ILocalStoreService
         cmd2.CommandText =
             "UPDATE MessageSummary SET has_attachments=$ha " +
             "WHERE unique_id=$uid AND account_id=$aid AND folder_name=$fn;";
-        cmd2.Parameters.AddWithValue("$ha",  d.Attachments.Count > 0 ? 1 : 0);
-        cmd2.Parameters.AddWithValue("$uid", d.MessageId);
-        cmd2.Parameters.AddWithValue("$aid", d.AccountId.ToString());
-        cmd2.Parameters.AddWithValue("$fn",  d.FolderName);
+        cmd2.Parameters.AddWithValue("$ha",  detail.Attachments.Count > 0 ? 1 : 0);
+        cmd2.Parameters.AddWithValue("$uid", detail.MessageId);
+        cmd2.Parameters.AddWithValue("$aid", detail.AccountId.ToString());
+        cmd2.Parameters.AddWithValue("$fn",  detail.FolderName);
         await cmd2.ExecuteNonQueryAsync();
 
         await tx.CommitAsync();

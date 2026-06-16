@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using System.Windows;
 using QuickMail.Models;
@@ -7,10 +8,13 @@ using QuickMail.Views;
 
 namespace QuickMail;
 
+[SuppressMessage("Design", "CA1001", Justification = "Disposable fields are disposed in OnExit; WPF Application does not support IDisposable.")]
 public partial class App : Application
 {
-    // Held so OnExit can dispose it — it owns a GraphClient/HttpClient.
+    // Held so OnExit can dispose them.
     private GraphSendMailService? _graphSendMail;
+    private ContactService? _contactService;
+    private TemplateService? _templateService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -96,8 +100,10 @@ public partial class App : Application
             // covers accounts added at runtime through RefreshAccountList.
             var accounts = accountService.LoadAccounts();
 
-            var contactService = new ContactService(profile);
-            var templateService = new TemplateService(profile);
+            _contactService = new ContactService(profile);
+            var contactService = _contactService;
+            _templateService = new TemplateService(profile);
+            var templateService = _templateService;
             var ruleService = new RuleService(mailRouter, localStore, profile.ProfileDir);
             var syncService = new SyncService(mailRouter, localStore, configService, ruleService);
 
@@ -136,8 +142,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // GraphSendMailService owns a GraphClient (and its HttpClient) — release it on exit.
         _graphSendMail?.Dispose();
+        _contactService?.Dispose();
+        _templateService?.Dispose();
         base.OnExit(e);
     }
 

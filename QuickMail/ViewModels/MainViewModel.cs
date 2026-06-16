@@ -790,7 +790,7 @@ public partial class MainViewModel : ObservableObject
         Key defaultKey         = Key.None;
         ModifierKeys defaultMods = ModifierKeys.None;
         if (!string.IsNullOrEmpty(gesture))
-            GestureHelper.TryParse(gesture, out defaultKey, out defaultMods);
+            _ = GestureHelper.TryParse(gesture, out defaultKey, out defaultMods);
 
         // Capture the ID (not the SavedView reference) to avoid closure-captures
         // that would break if the collection is replaced.
@@ -935,7 +935,7 @@ public partial class MainViewModel : ObservableObject
                 foreach (var vf in view.Folders)
                 {
                     // Guard: skip any sentinel folder names accidentally stored in older views.
-                    if (vf.FolderFullName.StartsWith("\x00", StringComparison.Ordinal)) continue;
+                    if (vf.FolderFullName.StartsWith('\x00')) continue;
                     var msgs = await _localStore.LoadFolderSummariesAsync(vf.AccountId, vf.FolderFullName);
                     cached.AddRange(msgs);
                 }
@@ -955,7 +955,7 @@ public partial class MainViewModel : ObservableObject
             var newMessages = new List<MailMessageSummary>();
             foreach (var vf in view.Folders)
             {
-                if (vf.FolderFullName.StartsWith("\x00", StringComparison.Ordinal)) continue;
+                if (vf.FolderFullName.StartsWith('\x00')) continue;
                 ct.ThrowIfCancellationRequested();
                 try
                 {
@@ -2997,7 +2997,7 @@ public partial class MainViewModel : ObservableObject
             string? targetFlagId = anyFlagged ? null : kFlag.Id.ToString();
             foreach (var msg in messages)
             {
-                var def = await _flagService.SetMessageFlagAsync(msg, targetFlagId, ct);
+                var def = await _flagService.SetMessageFlagAsync(msg, targetFlagId, ct: ct);
                 msg.FlagId       = targetFlagId;
                 msg.FlagName     = def?.Name;
                 msg.FlagColorHex = def?.ColorHex;
@@ -3020,7 +3020,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             ReplaceCts(ref _flagActionCts, out var ct);
-            var def = await _flagService.SetMessageFlagAsync(message, flagId, ct);
+            var def = await _flagService.SetMessageFlagAsync(message, flagId, ct: ct);
             message.FlagId       = flagId;
             message.FlagName     = def?.Name;
             message.FlagColorHex = def?.ColorHex;
@@ -3043,7 +3043,7 @@ public partial class MainViewModel : ObservableObject
             FlagDefinition? def = null;
             foreach (var msg in messages)
             {
-                def = await _flagService.SetMessageFlagAsync(msg, flagId, ct);
+                def = await _flagService.SetMessageFlagAsync(msg, flagId, ct: ct);
                 msg.FlagId       = flagId;
                 msg.FlagName     = def?.Name;
                 msg.FlagColorHex = def?.ColorHex;

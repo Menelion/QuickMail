@@ -261,7 +261,11 @@ public class GraphMailService : IMailService
     public Task CopyFolderAsync(Guid accountId, string folderName, string? destinationParentName, CancellationToken ct = default)
         => throw NotYet(nameof(CopyFolderAsync));
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        _client.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     // ── Mapping helpers ──────────────────────────────────────────────────────────
     private static MailMessageSummary MapToSummary(GraphMessage m, Guid accountId, string folderName) => new()

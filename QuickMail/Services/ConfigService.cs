@@ -156,7 +156,7 @@ public class ConfigService : IConfigService
                     section  = "windowing";
                     acctGuid = Guid.Empty;
                 }
-                else if (header.StartsWith("account:") &&
+                else if (header.StartsWith("account:", StringComparison.Ordinal) &&
                          Guid.TryParse(header["account:".Length..], out var g))
                 {
                     section  = "account";
@@ -223,7 +223,7 @@ public class ConfigService : IConfigService
                     case "announceformattingwhilenavigating": config.AnnounceFormattingWhileNavigating = ParseBool(value); break;
                     case "confirmemptytrash":    config.ConfirmEmptyTrash    = ParseBool(value); break;
                     case "logformat":
-                        config.LogFormat = value.ToLowerInvariant() == "timefirst" ? "timeFirst" : "actionFirst";
+                        config.LogFormat = string.Equals(value, "timefirst", StringComparison.OrdinalIgnoreCase) ? "timeFirst" : "actionFirst";
                         break;
                     case "tutorialcompleted":    config.TutorialCompleted    = ParseBool(value); break;
                     case "defaultcomposemode":
