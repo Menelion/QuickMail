@@ -22,8 +22,8 @@ public partial class GrabAddressesDialog : Window
         AddressList.ItemsSource = _entries;
         Loaded += async (_, _) =>
         {
-            await LoadGroupsAsync();
             FocusFirstAddress();
+            await LoadGroupsAsync();
         };
     }
 
