@@ -9,6 +9,7 @@
     <Version>0.7.3</Version>
     <AssemblyVersion>0.7.3.0</AssemblyVersion>
     <FileVersion>0.7.3.0</FileVersion>
+    <AnalysisMode>Recommended</AnalysisMode>
     <!-- Single-file publish: native DLLs (WebView2Loader, SQLite) extract to temp on first run -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -27,6 +28,10 @@
     <PackageReference Include="Microsoft.Identity.Client" Version="4.84.2" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.84.2" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" />
+    <PackageReference Include="Roslynator.Analyzers" Version="4.12.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
 </Project>
