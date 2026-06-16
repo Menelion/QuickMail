@@ -516,6 +516,12 @@ public partial class ComposeWindow : Window
         catch { return false; }
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        _vm.Dispose();
+        base.OnClosed(e);
+    }
+
     private async void OnWindowClosing(object? sender, CancelEventArgs e)
     {
         _vm.CancelAutoSave();

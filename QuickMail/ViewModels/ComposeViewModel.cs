@@ -258,6 +258,7 @@ public partial class ComposeViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _autoSaveCts.Cancel();
         _autoSaveCts.Dispose();
         GC.SuppressFinalize(this);
     }

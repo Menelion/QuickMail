@@ -151,6 +151,39 @@ view state.  Use `IsRealImapFolder()` in `ViewManagerViewModel` at the point whe
 **enters** a saved view.  Defensive guards in load/fetch code are belt-and-suspenders only;
 they should never be the primary protection.
 
+## IDisposable Rules — Enforced
+
+Fixing CA1001 by implementing `IDisposable` is only half the job. Before the PR can merge, verify the full ownership chain:
+
+### Always cancel before disposing a CancellationTokenSource
+
+```csharp
+// Wrong — in-flight tasks get ObjectDisposedException instead of OperationCanceledException
+public void Dispose() { _cts.Dispose(); }
+
+// Correct — Cancel is safe to call twice; sends the clean signal before the handle is released
+public void Dispose() { _cts.Cancel(); _cts.Dispose(); GC.SuppressFinalize(this); }
+```
+
+### Verify Dispose() is actually called
+
+Adding `IDisposable` to a class means nothing unless something calls `Dispose()`. For every new `IDisposable` implementation, identify where `Dispose()` is called before the PR is merged:
+
+- **Services created in `App.xaml.cs`**: store in a private field; call `?.Dispose()` in `OnExit`.
+- **ViewModels owned by a Window**: call `vm.Dispose()` in `OnClosed` (not `OnClosing` — the window may still cancel the close and stay open).
+- **Process-lifetime singletons where disposal is genuinely a no-op**: suppress CA1001 with a `[SuppressMessage]` explaining why nothing calls Dispose, rather than implementing the interface.
+
+### `[RelayCommand]` methods must stay instance methods
+
+Do not make a `[RelayCommand]` method `static` to satisfy CA1822. Use `#pragma warning disable CA1822` instead. Static relay commands are unidiomatic in CommunityToolkit.Mvvm and lose integration with the owning `ObservableObject` instance.
+
+### `#pragma warning disable` comments must state the real reason
+
+When suppressing a warning, the comment must state *why* the suppression is correct, not just echo the warning text. Two common mistakes found in this codebase:
+
+- ❌ `// instance property required for XAML data binding` — XAML can bind to static properties; the real reason is `[NotifyPropertyChangedFor]` fires `PropertyChanged` on the instance.
+- ❌ `// Window subclasses cannot implement IDisposable` — they can; the real reason is WPF does not call `Dispose` on `Window` instances.
+
 ## MVVM Rules — Enforced
 
 These rules apply to every change. Violations must be corrected before a PR can merge.
