@@ -120,8 +120,8 @@ public class MessageAccessibleNameConverter : IMultiValueConverter
         var flagPrefix      = announceFlag && !string.IsNullOrEmpty(flagLabel)
                                 ? flagLabel + ". "
                                 : string.Empty;
-        var attachmentSuffix = hasAttachments ? " attachments." : string.Empty;
-        return $"{flagPrefix}{readStatusLabel}. {from}. {subject}. {preview}. {dateDisplay}.{attachmentSuffix}";
+        var attachmentPart = hasAttachments ? "attachments. " : string.Empty;
+        return $"{flagPrefix}{readStatusLabel}. {attachmentPart}{from}. {subject}. {preview}. {dateDisplay}.";
     }
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
