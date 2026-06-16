@@ -19,3 +19,11 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+
+[*.cs]
+# Redundant explicit initializers — intentional readability choice in models
+dotnet_diagnostic.CA1805.severity = none
+# FeatureFlag name — intentional; the type represents a feature flag
+dotnet_diagnostic.CA1711.severity = none
+# Locale-sensitive formatting — display strings intentionally use CurrentCulture
+dotnet_diagnostic.CA1305.severity = none
