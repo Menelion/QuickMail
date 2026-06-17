@@ -58,7 +58,7 @@ Your credential is stored in Windows Credential Manager and refreshes automatica
 
 ### Managing Accounts
 
-Open **Settings → Accounts** to rename, edit, or remove an account, or to sign out of an OAuth account. Removing an account does not delete mail from the server.
+Open **Settings → Accounts** to rename, edit, or remove an account. Removing an account does not delete mail from the server. For OAuth accounts (Microsoft or Google), removing the account also clears the stored credential from Windows Credential Manager.
 
 ---
 

@@ -23,9 +23,7 @@ You can now add a Gmail account using your Google account instead of an app pass
 
 Your sign-in credential is stored in Windows Credential Manager, the same secure store QuickMail uses for other accounts. The access token refreshes automatically in the background; you will not be prompted to sign in again unless you revoke access from your Google account settings.
 
-**Sign out:** Open **Settings → Accounts**, select your Gmail account, and press **Sign Out**. The stored credential is removed from Windows Credential Manager.
-
-This feature requires a Google client ID and client secret, which the QuickMail project registers with Google. If you are building QuickMail from source, see `docs/GOOGLE-AUTH-SPEC.md` for how to configure your own credentials.
+**Removing a Gmail account:** Open **Settings → Accounts**, select the account, and press **Delete**. This removes the account from QuickMail and clears the stored credential from Windows Credential Manager.
 
 ### Grab Addresses: Add to Group
 
