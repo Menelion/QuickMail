@@ -26,6 +26,7 @@ public partial class GrabAddressesDialog : Window
             FocusFirstAddress();
             await LoadGroupsAsync();
         };
+        PreviewKeyDown += (_, e) => LogService.Debug($"GrabAddresses: PreviewKeyDown Key={e.Key} Focus={Keyboard.FocusedElement?.GetType().Name ?? "null"}");
     }
 
     private void FocusFirstAddress()
@@ -84,6 +85,7 @@ public partial class GrabAddressesDialog : Window
 
     private void SetNewGroupNameVisible(bool visible)
     {
+        LogService.Debug($"GrabAddresses: SetNewGroupNameVisible({visible}) dropDownOpen={GroupComboBox.IsDropDownOpen}");
         var vis = visible ? Visibility.Visible : Visibility.Collapsed;
         NewGroupNameLabel.Visibility = vis;
         NewGroupNameBox.Visibility = vis;
@@ -91,12 +93,12 @@ public partial class GrabAddressesDialog : Window
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
                 new Action(() =>
                 {
-                    // Don't steal focus while the combo dropdown popup is open —
-                    // the popup's HwndSource holds Win32 keyboard focus and will
-                    // absorb or discard the call. DropDownClosed handles focus
-                    // restoration in that path instead.
+                    LogService.Debug($"GrabAddresses: BeginInvoke fired dropDownOpen={GroupComboBox.IsDropDownOpen} IsVisible={NewGroupNameBox.IsVisible}");
                     if (!GroupComboBox.IsDropDownOpen)
-                        NewGroupNameBox.Focus();
+                    {
+                        bool focused = NewGroupNameBox.Focus();
+                        LogService.Debug($"GrabAddresses: NewGroupNameBox.Focus()={focused} IsKeyboardFocused={NewGroupNameBox.IsKeyboardFocused} WpfFocus={Keyboard.FocusedElement?.GetType().Name ?? "null"}");
+                    }
                 }));
     }
 
