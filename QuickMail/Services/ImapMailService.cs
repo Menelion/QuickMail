@@ -956,7 +956,7 @@ public class ImapMailService : IMailService
             LogService.Debug($"  user={account.Username}");
             await client.ConnectAsync(account.ImapHost, account.ImapPort, ssl, ct);
 
-            if (account.AuthType == AuthType.OAuth2Microsoft)
+            if (account.AuthType is AuthType.OAuth2Microsoft or AuthType.OAuth2Google)
             {
                 var token = await _oauth.GetAccessTokenAsync(account, ct);
                 await client.AuthenticateAsync(new SaslMechanismOAuth2(account.Username, token), ct);
