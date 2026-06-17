@@ -27,6 +27,10 @@ public partial class GrabAddressesDialog : Window
             await LoadGroupsAsync();
         };
         PreviewKeyDown += (_, e) => LogService.Debug($"GrabAddresses: PreviewKeyDown Key={e.Key} Focus={Keyboard.FocusedElement?.GetType().Name ?? "null"}");
+        NewGroupNameBox.LostKeyboardFocus += (_, e) =>
+            LogService.Debug($"GrabAddresses: NewGroupNameBox LostKeyboardFocus newFocus={e.NewFocus?.GetType().Name ?? "null"}");
+        NewGroupNameBox.GotKeyboardFocus += (_, _) =>
+            LogService.Debug($"GrabAddresses: NewGroupNameBox GotKeyboardFocus");
     }
 
     private void FocusFirstAddress()
