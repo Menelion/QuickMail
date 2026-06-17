@@ -24,6 +24,9 @@ Thumbs.db
 # MailGenerator credentials (contains passwords)
 **/credentials.ini
 
+# Google OAuth client credentials (real values — copy from docs/GoogleOAuthService.Credentials.example)
+**/GoogleOAuthService.Credentials.cs
+
 # Claude Code worktrees and local session data
 .claude/worktrees/
 .claude/settings.local.json
@@ -31,3 +34,5 @@ Thumbs.db
 /artifacts
 startmail.bat
 startoffline.bat
+Tools/MailGenerator/credentials.ini
+/logs
