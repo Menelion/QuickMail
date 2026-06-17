@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using QuickMail.Models;
 using QuickMail.Services;
 
@@ -12,6 +14,9 @@ namespace QuickMail.Views;
 
 public partial class GrabAddressesDialog : Window
 {
+    [DllImport("user32.dll")] static extern IntPtr GetFocus();
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+
     private readonly IContactService _contactService;
     private readonly List<AddressEntry> _entries;
 
@@ -100,8 +105,18 @@ public partial class GrabAddressesDialog : Window
                     LogService.Debug($"GrabAddresses: BeginInvoke fired dropDownOpen={GroupComboBox.IsDropDownOpen} IsVisible={NewGroupNameBox.IsVisible}");
                     if (!GroupComboBox.IsDropDownOpen)
                     {
+                        var dialogHwnd = new WindowInteropHelper(this).Handle;
                         bool focused = NewGroupNameBox.Focus();
-                        LogService.Debug($"GrabAddresses: NewGroupNameBox.Focus()={focused} IsKeyboardFocused={NewGroupNameBox.IsKeyboardFocused} WpfFocus={Keyboard.FocusedElement?.GetType().Name ?? "null"}");
+                        var win32Focus = GetFocus();
+                        var foreground = GetForegroundWindow();
+                        LogService.Debug($"GrabAddresses: NewGroupNameBox.Focus()={focused} IsKeyboardFocused={NewGroupNameBox.IsKeyboardFocused} WpfFocus={Keyboard.FocusedElement?.GetType().Name ?? "null"} Win32Focus={win32Focus:X} DialogHwnd={dialogHwnd:X} Foreground={foreground:X} FocusMatchesDialog={win32Focus == dialogHwnd}");
+
+                        // Snapshot focus state after a short delay to catch anything that steals it
+                        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+                        {
+                            var win32FocusLate = GetFocus();
+                            LogService.Debug($"GrabAddresses: [delayed] Win32Focus={win32FocusLate:X} DialogHwnd={dialogHwnd:X} IsKeyboardFocused={NewGroupNameBox.IsKeyboardFocused} WpfFocus={Keyboard.FocusedElement?.GetType().Name ?? "null"} FocusMatchesDialog={win32FocusLate == dialogHwnd}");
+                        }));
                     }
                 }));
     }
