@@ -4478,7 +4478,7 @@ public partial class MainViewModel : ObservableObject
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = "https://github.com/kellylford/QuickMail/blob/main/USERGUIDE.md",
+            FileName = "https://github.com/kellylford/QuickMail/blob/main/docs/USER-GUIDE.md",
             UseShellExecute = true
         });
     }
