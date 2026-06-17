@@ -251,7 +251,7 @@ Not permitted in `.xaml.cs`:
 
 ## Keyboard Shortcuts — Enforced
 
-Every user-facing keyboard shortcut **must** be registered in `CommandRegistry` via `_registry.Register(new CommandDefinition(...))` in `MainWindow.xaml.cs`. This is not optional: registration is what makes the shortcut appear in the **keyboard customizations** dialog and in the **Command Palette**.
+Every user-facing keyboard shortcut **must** be registered in `CommandRegistry` via a `Register(new CommandDefinition(...))` call. Registrations live in two places: most are in the `RegisterCommands` method in `MainViewModel.cs` (VM-backed actions — mail, view, account, help, etc.), and the remainder are in `MainWindow.xaml.cs` (window-level wiring). When adding a command, follow whichever file already registers the related commands. This is not optional: registration is what makes the shortcut appear in the **keyboard customizations** dialog and in the **Command Palette**.
 
 ### Rules
 
