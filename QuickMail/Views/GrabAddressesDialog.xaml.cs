@@ -108,6 +108,13 @@ public partial class GrabAddressesDialog : Window
                     await _contactService.AddMemberAsync(groupId.Value, model.Id);
             }
         }
+        catch (DuplicateGroupNameException)
+        {
+            AccessibilityHelper.Announce(this,
+                $"A group named \"{NewGroupNameBox.Text.Trim()}\" already exists. Enter a different name, or pick the existing group from the list.",
+                category: AnnouncementCategory.Result);
+            return; // keep the dialog open so the user can correct the name
+        }
         catch (Exception ex)
         {
             LogService.Log("GrabAddresses Save", ex);

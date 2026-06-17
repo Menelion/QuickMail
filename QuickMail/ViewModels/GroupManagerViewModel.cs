@@ -96,6 +96,11 @@ public partial class GroupManagerViewModel : ObservableObject
         {
             await _contactService.RenameGroupAsync(g.Id, newName);
         }
+        catch (DuplicateGroupNameException)
+        {
+            Announce($"A group named '{newName}' already exists. Choose a different name.", AnnouncementCategory.Result);
+            return;
+        }
         catch (ArgumentException) { return; }
         NewName = string.Empty;
         await ReloadGroupsAsync();
@@ -180,6 +185,11 @@ public partial class GroupManagerViewModel : ObservableObject
         if (string.IsNullOrEmpty(name)) return;
         int id;
         try { id = await _contactService.CreateGroupAsync(name); }
+        catch (DuplicateGroupNameException)
+        {
+            Announce($"A group named '{name}' already exists. Choose a different name.", AnnouncementCategory.Result);
+            return;
+        }
         catch (ArgumentException) { return; }
         NewName = string.Empty;
         await ReloadGroupsAsync();

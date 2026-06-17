@@ -296,6 +296,53 @@ public class GrabAddressesDialogTests
         }
     }
 
+    [StaFact]
+    public void Save_CreateNewGroupWithDuplicateName_DoesNotCloseOrCreateSecondGroup()
+    {
+        // Group names must be unique (case-insensitive). Creating "test group"
+        // when "Test Group" exists must be refused and the dialog kept open,
+        // so a user can never end up with two same-named groups.
+        EnsureApplication();
+        var dir = TempDir();
+        var svc = new ContactService(new ProfileContext(dir));
+        svc.CreateGroupAsync("Test Group").GetAwaiter().GetResult();
+        var dialog = new GrabAddressesDialog(TwoAddresses, svc);
+        var closed = false;
+        dialog.Closed += (_, _) => closed = true;
+        try
+        {
+            dialog.Show();
+            dialog.UpdateLayout();
+            DoEvents();
+
+            var checkBox = dialog.FindName("AddToGroupCheckBox") as CheckBox;
+            var combo    = dialog.FindName("GroupComboBox") as ComboBox;
+            var textBox  = dialog.FindName("NewGroupNameBox") as TextBox;
+            var save     = dialog.FindName("SaveButton") as Button;
+            Assert.NotNull(checkBox);
+            Assert.NotNull(combo);
+            Assert.NotNull(textBox);
+            Assert.NotNull(save);
+
+            checkBox!.IsChecked = true;
+            combo!.SelectedIndex = combo.Items.Count - 1; // "Create new group"
+            textBox!.Text = "test group";                 // differs from "Test Group" only by case
+
+            InvokeButton(save!);
+            for (int i = 0; i < 10; i++) DoEvents();
+
+            Assert.False(closed, "A duplicate group name should keep the dialog open.");
+            var groups = svc.LoadAllGroupsAsync().GetAwaiter().GetResult();
+            Assert.Single(groups);
+            Assert.Equal("Test Group", groups[0].Name);
+        }
+        finally
+        {
+            dialog.Close();
+            DeleteDir(dir);
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static void InvokeButton(Button button)

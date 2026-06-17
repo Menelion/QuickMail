@@ -180,14 +180,19 @@ public class ContactService : IContactService, IDisposable
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Group name cannot be empty.", nameof(name));
 
+        var trimmed = name.Trim();
+
         await EnsureLoadedAsync();
         await _loadLock.WaitAsync();
         try
         {
+            if (_groupsCache.Any(g => string.Equals(g.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
+                throw new DuplicateGroupNameException(trimmed);
+
             var group = new GroupModel
             {
                 Id = _groupsCache.Count > 0 ? _groupsCache.Max(g => g.Id) + 1 : 1,
-                Name = name.Trim(),
+                Name = trimmed,
             };
             _groupsCache.Add(group);
             await SaveGroupsAsyncLocked();
@@ -204,13 +209,18 @@ public class ContactService : IContactService, IDisposable
         if (string.IsNullOrWhiteSpace(newName))
             throw new ArgumentException("Group name cannot be empty.", nameof(newName));
 
+        var trimmed = newName.Trim();
+
         await EnsureLoadedAsync();
         await _loadLock.WaitAsync();
         try
         {
+            if (_groupsCache.Any(g => g.Id != id && string.Equals(g.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
+                throw new DuplicateGroupNameException(trimmed);
+
             var group = _groupsCache.FirstOrDefault(g => g.Id == id)
                 ?? throw new InvalidOperationException($"Group with id {id} not found.");
-            group.Name = newName.Trim();
+            group.Name = trimmed;
             await SaveGroupsAsyncLocked();
         }
         finally

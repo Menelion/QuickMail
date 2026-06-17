@@ -273,6 +273,11 @@ public partial class AddressBookViewModel : ObservableObject
         {
             id = await _contactService.CreateGroupAsync(name);
         }
+        catch (DuplicateGroupNameException)
+        {
+            Announce($"A group named '{name}' already exists. Choose a different name.", AnnouncementCategory.Result);
+            return;
+        }
         catch (ArgumentException)
         {
             // Empty / whitespace name. The "New group" text box already
@@ -317,7 +322,15 @@ public partial class AddressBookViewModel : ObservableObject
         if (SelectedGroup is not { } g) return;
         var newName = NewGroupName?.Trim();
         if (string.IsNullOrEmpty(newName) || newName == g.Name) return;
-        await _contactService.RenameGroupAsync(g.Id, newName);
+        try
+        {
+            await _contactService.RenameGroupAsync(g.Id, newName);
+        }
+        catch (DuplicateGroupNameException)
+        {
+            Announce($"A group named '{newName}' already exists. Choose a different name.", AnnouncementCategory.Result);
+            return;
+        }
         NewGroupName = string.Empty;
         await ReloadGroupsAsync();
         var renamed = Groups.FirstOrDefault(x => x.Id == g.Id);
