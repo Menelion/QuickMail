@@ -23,6 +23,16 @@ public partial class AddAccountViewModel : AccountEditorViewModel
 
         AvailableBackends = backends;
         _selectedBackend = backends[0];
+
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(Username)) return;
+            if (!ShowGoogleAuthOption) return;
+            if (AuthType == AuthType.OAuth2Google) return;
+            var lower = Username.ToLowerInvariant();
+            if (lower.EndsWith("@gmail.com") || lower.EndsWith("@googlemail.com"))
+                AuthType = AuthType.OAuth2Google;
+        };
     }
 
     /// <summary>Backend options offered in the dialog, derived from the feature gate.</summary>
@@ -54,16 +64,6 @@ public partial class AddAccountViewModel : AccountEditorViewModel
             SmtpHost = string.Empty;
             Password = string.Empty;
         }
-    }
-
-    partial void OnUsernameChanged(string value)
-    {
-        if (!ShowGoogleAuthOption) return;
-        if (AuthType == AuthType.OAuth2Google) return;
-
-        var lower = value.ToLowerInvariant();
-        if (lower.EndsWith("@gmail.com") || lower.EndsWith("@googlemail.com"))
-            AuthType = AuthType.OAuth2Google;
     }
 
     protected override void OnAuthTypeChangedInternal(AuthType value)
