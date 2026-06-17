@@ -90,7 +90,7 @@ public partial class ComposeViewModel : ObservableObject, IDisposable
     /// </summary>
     public bool IsFormattingAvailable => CurrentMode != ComposeMode.PlainText;
 
-#pragma warning disable CA1822 // instance property required for XAML data binding
+#pragma warning disable CA1822 // [NotifyPropertyChangedFor] raises PropertyChanged for this property on the instance, so it must be an instance member
     public bool IsSpellNavAvailable => true;
 #pragma warning restore CA1822
     [ObservableProperty] private string _statusText = string.Empty;

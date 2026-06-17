@@ -53,7 +53,7 @@ internal sealed class AddressSuggestion
     public AddressSuggestion(GroupModel g)   { Group   = g; }
 }
 
-[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _autocompleteCts in OnClosing; Window subclasses cannot implement IDisposable.")]
+[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _autocompleteCts in OnClosing; WPF never calls Dispose on a Window, so implementing IDisposable would be dead code.")]
 public partial class ComposeWindow : Window
 {
     private readonly ComposeViewModel   _vm;

@@ -21,7 +21,7 @@ namespace QuickMail.Views;
 /// Opened via Ctrl+Enter or MessageOpenMode = Window.
 /// Each instance owns its own WebView2 process.
 /// </summary>
-[SuppressMessage("Design", "CA1001", Justification = "_loadCts is cancelled and replaced in OnClosing; Window subclasses cannot implement IDisposable.")]
+[SuppressMessage("Design", "CA1001", Justification = "_loadCts is cancelled and replaced in OnClosing; WPF never calls Dispose on a Window, so implementing IDisposable would be dead code.")]
 public partial class MessageWindow : Window
 {
     private static readonly TimeSpan WebViewNavigationTimeout = TimeSpan.FromSeconds(4);

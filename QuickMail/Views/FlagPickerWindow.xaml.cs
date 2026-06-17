@@ -10,7 +10,7 @@ using QuickMail.ViewModels;
 
 namespace QuickMail.Views;
 
-[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _loadCts on close; Window subclasses cannot implement IDisposable.")]
+[SuppressMessage("Design", "CA1001", Justification = "Window cleans up _loadCts on close; WPF never calls Dispose on a Window, so implementing IDisposable would be dead code.")]
 public partial class FlagPickerWindow : Window
 {
     private readonly FlagPickerViewModel _vm;
