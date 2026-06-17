@@ -48,13 +48,15 @@ Press **Verify** to test the connection before saving.
 
 ### Microsoft Account (Outlook.com / Microsoft 365)
 
-Choose **Microsoft OAuth**. The server fields fill in automatically. Press **Sign in with Microsoft** — your browser opens to a Microsoft sign-in page. Sign in and grant QuickMail permission. Switch back to QuickMail and press **Save**.
+Choose **Microsoft OAuth**. The server fields fill in automatically. Activate **Sign in with Microsoft** — your browser opens to a Microsoft sign-in page. Sign in and grant QuickMail permission, then close the browser window. Back in QuickMail, activate **Add Account**.
 
 ### Gmail (Google Account)
 
-Choose **Google OAuth**. Press **Sign in with Google** — your browser opens to a Google sign-in page. Sign in and grant QuickMail permission to read and send mail. Switch back to QuickMail and press **Save**. Server settings fill in automatically.
+Enter your Gmail address in the **Email / Username** field — QuickMail then automatically selects Google authentication for the account, so you do not need to set the authentication type yourself. Activate the **Sign in with Google** button; your browser opens to a Google sign-in page. Complete the sign-in, grant QuickMail permission to read and send mail, then close the browser window. Back in QuickMail, activate **Add Account**. Gmail's server settings fill in automatically.
 
-Your credential is stored in Windows Credential Manager and refreshes automatically. You are not prompted to sign in again unless you revoke access from your Google account settings.
+You may see a message that no password was saved for the account. This is expected with Google authentication — Gmail signs in through your Google account rather than a stored password, so there is no password to save. The Google sign-in itself is stored securely in Windows Credential Manager and refreshes automatically; you are not prompted to sign in again unless you revoke access from your Google account settings.
+
+When you sign in, Google shows a warning that QuickMail is an unverified app. This is expected — choose **Advanced** and continue to **Go to QuickMail (unsafe)**. Google's app-verification process can take several weeks and may require an expensive third-party security assessment. If you would rather avoid the warning, generate a Gmail app-specific password from your Google Account security settings and use it with the standard **Password** authentication method instead.
 
 ### Managing Accounts
 

@@ -19,9 +19,11 @@ Both downloads include the .NET 8 runtime — you do not need to install .NET se
 
 You can now add a Gmail account using your Google account instead of an app password.
 
-**Adding a Gmail account:** Open **Settings → Accounts → Add Account** (or press **Ctrl+Shift+A**). Choose **Google OAuth** from the account type list. Press **Sign in with Google** — your default browser opens to a Google sign-in page. Sign in and grant QuickMail permission to read and send mail. When the browser confirms success, switch back to QuickMail and press **Save**. Server settings are filled in automatically; you do not need to enter them.
+**Adding a Gmail account:** Open the account manager (**Settings → Accounts**) and choose **Add Account**. Enter an account name, a sender display name, and your Gmail address in the **Email / Username** field. When QuickMail sees a Gmail address, it automatically selects Google authentication for the account — you do not need to set the authentication type yourself. Move to the **Sign in with Google** button and activate it; your default browser opens to a Google sign-in page. Complete the Google sign-in, grant QuickMail permission to read and send mail, then close the browser window. Back in QuickMail, activate the **Add Account** button to add the account, then close the account manager. Gmail's IMAP and SMTP server settings are filled in automatically; you do not need to enter them.
 
-Your sign-in credential is stored in Windows Credential Manager, the same secure store QuickMail uses for other accounts. The access token refreshes automatically in the background; you will not be prompted to sign in again unless you revoke access from your Google account settings.
+You may see a message that no password was saved for the account. This is expected when you use Google authentication — there is no password to save, because Gmail signs in through your Google account rather than a stored password.
+
+The Google sign-in itself is stored securely in Windows Credential Manager, the same store QuickMail uses for other accounts. The access token refreshes automatically in the background; you will not be prompted to sign in again unless you revoke access from your Google account settings.
 
 **Removing a Gmail account:** Open **Settings → Accounts**, select the account, and press **Delete**. This removes the account from QuickMail and clears the stored credential from Windows Credential Manager.
 
