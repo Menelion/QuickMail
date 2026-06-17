@@ -1,3 +1,6 @@
+# Performance logs
+logs/
+
 # Build outputs
 bin/
 obj/
@@ -19,7 +22,7 @@ packages/
 Thumbs.db
 
 # MailGenerator credentials (contains passwords)
-MailGenerator/credentials.ini
+**/credentials.ini
 
 # Google OAuth client credentials (real values — copy from docs/GoogleOAuthService.Credentials.example)
 **/GoogleOAuthService.Credentials.cs
