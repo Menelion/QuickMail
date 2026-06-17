@@ -1,6 +1,6 @@
 // Regression and behaviour tests for GrabAddressesDialog.
 //
-// Two bugs these tests guard against:
+// Three bugs these tests guard against:
 //
 //   1. Focus ordering: FocusFirstAddress() was called *after* awaiting
 //      LoadGroupsAsync() in the Loaded handler, so the dialog appeared
@@ -11,6 +11,14 @@
 //   2. Tab cycling: TabNavigation was "Contained", so Tab was permanently
 //      trapped cycling through every address checkbox. The fix changes it
 //      to "Once". This test fails if the mode reverts to Contained.
+//
+//   3. Focus after visibility change: calling UIElement.Focus() immediately
+//      after setting Visibility=Visible in an event handler silently fails
+//      because the element hasn't been measured/arranged yet. The ComboBox
+//      then retained keyboard focus and consumed Enter key presses (to open
+//      its dropdown), preventing the Save button from firing and leaving the
+//      dialog stuck open. The fix defers Focus() via Dispatcher.BeginInvoke
+//      at DispatcherPriority.Loaded, which runs after layout (Render priority).
 
 using System;
 using System.IO;
@@ -167,6 +175,38 @@ public class GrabAddressesDialogTests
     }
 
     // ── New group name row visibility ─────────────────────────────────────────
+
+    [StaFact]
+    public void CheckingAddToGroup_FocusesNewGroupNameBox()
+    {
+        // Regression for the deferred-focus bug: Focus() called synchronously
+        // after setting Visibility=Visible silently failed (element not yet
+        // arranged). Focus stayed on the ComboBox, which consumed Enter to
+        // open its dropdown, so Save never fired and the dialog appeared stuck.
+        // The fix defers Focus() via BeginInvoke(DispatcherPriority.Loaded).
+        // DoEvents() drains down to Background priority (5), so it processes the
+        // Loaded-priority (7) focus call first.
+        EnsureApplication();
+        var dialog = new GrabAddressesDialog(TwoAddresses, new StubContactService());
+        try
+        {
+            dialog.Show();
+            dialog.UpdateLayout();
+            DoEvents(); // let async group load settle — combo now has "Create new group"
+
+            var checkBox = dialog.FindName("AddToGroupCheckBox") as CheckBox;
+            var textBox  = dialog.FindName("NewGroupNameBox") as TextBox;
+            Assert.NotNull(checkBox);
+            Assert.NotNull(textBox);
+
+            checkBox!.IsChecked = true;
+            dialog.UpdateLayout();
+            DoEvents(); // let deferred Loaded-priority Focus() fire
+
+            Assert.Same(textBox, Keyboard.FocusedElement);
+        }
+        finally { dialog.Close(); }
+    }
 
     [StaFact]
     public void NewGroupNameRow_IsHidden_Initially()

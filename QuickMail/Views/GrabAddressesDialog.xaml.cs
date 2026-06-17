@@ -87,7 +87,8 @@ public partial class GrabAddressesDialog : Window
         NewGroupNameLabel.Visibility = vis;
         NewGroupNameBox.Visibility = vis;
         if (visible)
-            NewGroupNameBox.Focus();
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                new Action(() => NewGroupNameBox.Focus()));
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
