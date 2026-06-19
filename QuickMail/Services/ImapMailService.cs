@@ -452,7 +452,7 @@ public class ImapMailService : IMailService
         try
         {
             var uidList = messageIds.Select(ToUid).ToList();
-            var trash   = await FindSpecialFolderAsync(client, ct, SpecialFolder.Trash, SpecialFolder.Junk);
+            var trash   = await FindSpecialFolderAsync(client, ct, SpecialFolder.Trash);
             if (trash != null) await folder.MoveToAsync(uidList, trash, ct);
             else               await folder.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
         }
@@ -467,7 +467,7 @@ public class ImapMailService : IMailService
         await folder.OpenAsync(FolderAccess.ReadWrite, ct);
         try
         {
-            var trash = await FindSpecialFolderAsync(client, ct, SpecialFolder.Trash, SpecialFolder.Junk);
+            var trash = await FindSpecialFolderAsync(client, ct, SpecialFolder.Trash);
             var mailKitUid = ToUid(messageId);
             if (trash != null) await folder.MoveToAsync(mailKitUid, trash, ct);
             else               await folder.AddFlagsAsync(mailKitUid, MessageFlags.Deleted, true, ct);
@@ -1285,7 +1285,7 @@ public class ImapMailService : IMailService
         var names = candidates
             .SelectMany<SpecialFolder, string>(sf => sf switch
             {
-                SpecialFolder.Trash  => ["Trash"],
+                SpecialFolder.Trash  => ["Trash", "Deleted Messages"],
                 SpecialFolder.Junk   => ["Junk", "Spam"],
                 SpecialFolder.Sent   => ["Sent"],
                 SpecialFolder.Drafts => ["Drafts"],
