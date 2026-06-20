@@ -28,13 +28,13 @@ This is not a NVDA bug or a Narrator bug. It is a documented WPF behaviour that 
 
 ## Why JAWS Doesn't Repro
 
-JAWS doesn't read the type name because Freedom Scientific built a workaround directly into JAWS for exactly this situation. When JAWS encounters a WPF list item whose UIA accessible name is unhelpful (empty, or a string that looks like a CLR type name), it walks the item's visual subtree and concatenates the readable text it finds — in effect synthesising a name from the cell content.
+JAWS protects its users from this class of developer error. When JAWS encounters a WPF list item whose UIA accessible name is unhelpful — empty, or a string that looks like a CLR type name — it walks the item's visual subtree and builds a name from the readable text it finds. The user hears the command name instead of the class name, regardless of whether the developer got the labelling right.
 
-This workaround exists because the pattern was so pervasive across real-world WPF applications that JAWS users were constantly hitting it. Glen Gordon, the original architect of JAWS and a Software Fellow at Freedom Scientific, has been deeply involved in these kinds of platform-level compensations throughout his career. Whether he personally filed or fixed this specific workaround I cannot confirm with certainty — our recollection is that there were conversations about this exact WPF pattern with folks at Freedom Scientific — but the workaround's existence is real and has been in JAWS for many years.
+This is a deliberate, user-focused decision by Freedom Scientific. The WPF `ToString()` fallback was catching developers often enough and hurting blind users consistently enough that fixing it on the screen reader side was the right call. Glen Gordon, the original architect of JAWS and a Software Fellow at Freedom Scientific, has been deeply involved in these kinds of user-protective decisions throughout his career. Whether he personally drove this specific one I cannot confirm with certainty — our recollection is that there were conversations about this exact WPF pattern with folks at Freedom Scientific — but it has been in JAWS for many years and reflects the kind of thoughtful advocacy for users that Freedom Scientific has long been known for.
 
-NVDA and Narrator take a more literal approach: they read what the UIA tree reports. They don't synthesise names from subtree text. That is arguably the more *correct* behaviour — the platform should be labelled properly and the screen reader should trust the tree — but it means NVDA and Narrator expose the bug that JAWS silently conceals.
+NVDA and Narrator don't apply the same compensation — they report what the UIA tree says. That means they surface the developer's mistake rather than working around it, which is how this bug came to light. Neither approach is wrong; they reflect different priorities. JAWS chose to protect its users from a systemic platform failure. NVDA and Narrator surface the failure so it can be fixed at the source.
 
-The practical consequence for developers is dangerous: if you test only with JAWS, this class of bug is invisible. You ship. NVDA and Narrator users hit a wall.
+The practical implication for developers is a testing gap: if you test exclusively with JAWS, this class of labelling mistake won't surface. The right answer is to label controls correctly regardless — and to test with more than one screen reader.
 
 ---
 
@@ -111,7 +111,7 @@ They are right. AI code assistants — including the one that helped fix this is
 The correct pattern — `ItemContainerStyle` with `AutomationProperties.Name` on the container — appears far less often, because:
 
 1. Developers who get the `ToString()` fix to work stop looking.
-2. They test with JAWS (the most widely used screen reader among enterprise customers), which silently covers for the mistake.
+2. They test with JAWS, which protects its users from this exact developer mistake — so the symptom never appears, and there is no signal that anything is wrong.
 3. The `ItemContainerStyle` approach requires knowing WPF's UIA layering well enough to understand *why* the container is the right target.
 
 What the AI assistant produced in an earlier draft of this fix was the `ToString()` override. It was confident. It cited plausible reasons. And it was the wrong tool, precisely because those reasons appear so frequently in the training data.
@@ -126,7 +126,7 @@ That kind of contextual reasoning — "this solution is common, but it's common 
 
 | Approach | Works in JAWS? | Works in NVDA/Narrator? | Correct? |
 |---|---|---|---|
-| No label (default) | ✅ (JAWS workaround) | ❌ reads class name | ❌ |
+| No label (default) | ✅ (JAWS protects users) | ❌ reads class name | ❌ developer error |
 | Override `ToString()` | ✅ | ✅ | ❌ wrong tool |
 | `AutomationProperties.Name` on DataTemplate root | ✅ | ✅ | ⚠️ extra UIA node |
 | `AutomationProperties.Name` via `ItemContainerStyle` | ✅ | ✅ | ✅ |
