@@ -174,6 +174,10 @@ public partial class MainWindow : Window
 
     private TutorialViewModel? _tutorialVm;
 
+    // Tracks open compose windows so they can be explicitly closed when the main window
+    // closes. Independent (unowned) windows are not auto-closed by WPF on owner close.
+    private readonly List<ComposeWindow> _openComposeWindows = new();
+
     // ── Grouped-message tree controllers ──────────────────────────────────────
     private GroupedMessageTreeController? _convTreeController;
     private GroupedMessageTreeController? _senderTreeController;
@@ -469,6 +473,13 @@ public partial class MainWindow : Window
             g => ((SenderGroup)g).Messages,
             () => GetVisibleSenderItems(_vm.ToGroups),
             TryHandleMessageTreeTypeAhead);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        foreach (var w in _openComposeWindows.ToList())
+            w.Close();
+        base.OnClosed(e);
     }
 
     // Debounced UIA notification for rapid status-text changes during sync. Multiple
@@ -3363,8 +3374,10 @@ public partial class MainWindow : Window
     {
         var composeVm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap, _templateService);
         composeVm.Seed(composeModel);
-        var window = new ComposeWindow(composeVm, _contactService, _templateService, _configService) { Owner = this };
+        var window = new ComposeWindow(composeVm, _contactService, _templateService, _configService);
         composeVm.CloseRequested += window.Close;
+        _openComposeWindows.Add(window);
+        window.Closed += (_, _) => _openComposeWindows.Remove(window);
         window.Show();
     }
 
@@ -3882,8 +3895,11 @@ public partial class MainWindow : Window
         {
             if (pending?.IsLoaded == true) return pending;
             var cvm = new ComposeViewModel(_smtp, _accountService, _credentials, _imap, _templateService);
-            pending = new ComposeWindow(cvm, _contactService, _templateService, _configService) { Owner = this };
+            pending = new ComposeWindow(cvm, _contactService, _templateService, _configService);
             cvm.CloseRequested += pending.Close;
+            var tracked = pending;
+            _openComposeWindows.Add(tracked);
+            tracked.Closed += (_, _) => _openComposeWindows.Remove(tracked);
             pending.Show();
             return pending;
         }
