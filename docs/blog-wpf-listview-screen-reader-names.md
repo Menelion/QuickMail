@@ -22,7 +22,7 @@ When you bind a `ListBox` or `ListView` to a collection of .NET objects using a 
 
 If your ViewModel doesn't override `ToString()`, you get the default .NET implementation: the fully-qualified class name. For a nested partial class like `HotkeyRowViewModel`, that becomes `QuickMail.ViewModels.SettingsViewModel+HotkeyRowViewModel` — exactly what the user was hearing.
 
-This is not a NVDA bug or a Narrator bug. It is a documented WPF behaviour that Microsoft's own accessibility engineering team wrote about in a blog post titled *"How To: Get automation working properly on data bound WPF list or combo box"* (Gautam G, MSDN). The post dates from the early WPF era, which means this trap has been catching developers for close to twenty years.
+This is not a NVDA bug or a Narrator bug. It is a documented WPF behaviour that Microsoft's own accessibility engineering team wrote about in a blog post titled [*"How To: Get automation working properly on data bound WPF list or combo box"*](https://learn.microsoft.com/en-us/archive/blogs/gautamg/how-to-get-automation-working-properly-on-data-bound-wpf-list-or-combo-box) (Gautam G, MSDN). The post dates from the early WPF era, which means this trap has been catching developers for close to twenty years.
 
 ---
 
@@ -99,6 +99,57 @@ public string AccessibleName
 The name lives exactly where the UIA tree expects it — on the container element — and it updates when the shortcut changes (via `[NotifyPropertyChangedFor(nameof(AccessibleName))]` on the underlying gesture property). The `DataTemplate` internals don't need to know about accessibility at all. The ViewModel surface is clean. `ToString()` remains available for debugging.
 
 This is also exactly the pattern WPF itself uses for controls that work correctly: `AutomationProperties.Name` on the outermost focusable element.
+
+---
+
+## It's Everywhere — Including Microsoft's Own Code
+
+This isn't a niche edge case. A quick search of large Microsoft GitHub repositories turns up the pattern in prominent, actively-maintained projects.
+
+### microsoft/WPF-Samples — the official WPF sample gallery
+
+[`WPFGallery/Views/Collections/ListViewPage.xaml`](https://github.com/microsoft/WPF-Samples/blob/master/Sample%20Applications/WPFGallery/Views/Collections/ListViewPage.xaml) is the page developers land on when they search for how to use `ListView` in WPF. It contains three `ListView` examples — a basic list, a list with selection modes, and a `GridView` — all bound to a collection of `Person` data objects via `DataTemplate`. None of them set `AutomationProperties.Name` on the `ListViewItem` container.
+
+```xml
+<ListView
+    ItemsSource="{Binding ViewModel.BasicListViewItems, Mode=TwoWay}">
+    <ListView.ItemTemplate>
+        <DataTemplate DataType="{x:Type models:Person}">
+            <TextBlock Margin="8,4" Text="{Binding Name, Mode=OneWay}" />
+        </DataTemplate>
+    </ListView.ItemTemplate>
+</ListView>
+```
+
+The `Person` type is a C# `record`, which auto-generates a `ToString()` like `Person { FirstName = John, LastName = Doe, Name = John Doe, Company = Contoso }`. So with NVDA, a user arrowing through this list would hear that verbose dump for each row rather than a clean "John Doe". It is readable — records save you from the outright type-name failure — but it is verbose, unintentional, and entirely dependent on an implementation detail of the data type. The GridView example (which mirrors the pattern in QuickMail's bug) would produce the same output for every column of every row.
+
+Developers copying this sample are learning the wrong pattern from a source that is supposed to be authoritative.
+
+### microsoft/PowerToys — the PowerLauncher (Run) result list
+
+[`PowerLauncher/ResultList.xaml`](https://github.com/microsoft/PowerToys/blob/main/src/modules/launcher/PowerLauncher/ResultList.xaml) is the WPF `ListView` that displays search results in PowerToys Run. Its `ItemContainerStyle` points to `ResultsListViewItemStyle`, defined in [`Styles/Styles.xaml`](https://github.com/microsoft/PowerToys/blob/main/src/modules/launcher/PowerLauncher/Styles/Styles.xaml). That style completely replaces the `ControlTemplate` — and sets no `AutomationProperties.Name`:
+
+```xml
+<Style x:Key="ResultsListViewItemStyle" TargetType="{x:Type ListViewItem}">
+    <Setter Property="Foreground" Value="{DynamicResource ListViewItemForeground}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="Template">
+        <Setter.Value>
+            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                <!-- visual chrome only — no AutomationProperties.Name -->
+                <Border ...>
+                    <ContentPresenter Margin="{TemplateBinding Padding}" />
+                </Border>
+            </ControlTemplate>
+        </Setter.Value>
+    </Setter>
+</Style>
+```
+
+What screen readers announce when arrowing through PowerToys Run results depends entirely on what the `Result` data class's `ToString()` returns and how NVDA constructs a name from the UIA subtree. JAWS users have likely never noticed a problem.
 
 ---
 
